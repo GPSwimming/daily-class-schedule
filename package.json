@@ -1,0 +1,16 @@
+{
+  "name": "swim-class-balance-codex",
+  "version": "2.0.0",
+  "private": true,
+  "description": "泳堂管家 Codex 可編輯分享版",
+  "scripts": {
+    "preview": "node serve.mjs",
+    "test": "node tests/app-smoke.mjs",
+    "check": "node --check dist/app.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
+
+

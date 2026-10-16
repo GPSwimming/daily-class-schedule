@@ -1,0 +1,8 @@
+.openai/hosting.json
+node_modules/
+*.zip
+*.log
+.DS_Store
+Thumbs.db
+
+
