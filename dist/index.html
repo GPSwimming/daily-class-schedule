@@ -16,8 +16,21 @@
           <span id="page-label">主頁</span>
         </button>
         <div class="header-actions">
+          <div class="people-top-actions" id="people-top-actions" hidden aria-label="個人資訊快捷操作">
+            <button class="people-top-action" type="button" data-action="add-course"><svg class="people-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h9.5A2.5 2.5 0 0 1 17 6.5V18H7a2 2 0 0 0-2 2V4Zm0 16a2 2 0 0 1 2-2h7.5M19.5 12.5v7m-3.5-3.5h7"/></svg>新增課程</button>
+            <button class="people-top-action" type="button" data-action="import-students"><svg class="people-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6V3Zm8 0v5h4M12 10v7m-3-3 3 3 3-3"/></svg>匯入</button>
+            <button class="people-top-action is-primary" type="button" data-action="add-student"><svg class="people-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>新增學生</button>
+            <button class="people-top-action" type="button" data-action="add-tutor"><svg class="people-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm-6 9c.45-4 2.45-6 6-6 1.45 0 2.65.33 3.58 1M18.5 12.5v7m-3.5-3.5h7"/></svg>新增導師</button>
+          </div>
+          <button class="header-icon people-more-button" id="people-more-button" type="button" data-action="people-menu" aria-label="個人資訊選單" aria-expanded="false" hidden>⋮</button>
+          <div class="location-top-actions" id="location-top-actions" hidden aria-label="泳班地點快捷操作">
+            <button class="people-top-action is-primary" type="button" data-action="add-pool"><svg class="people-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>新增泳池</button>
+            <button class="people-top-action" type="button" data-action="import-locations"><svg class="people-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6V3Zm8 0v5h4M12 10v7m-3-3 3 3 3-3"/></svg>匯入</button>
+            <button class="people-top-action" type="button" data-action="manage-locations"><svg class="people-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M4 12h10M4 17h7m7-11 2 2-6 6-3 1 1-3 6-6Zm-7 13h9"/></svg>更新／刪除</button>
+          </div>
+          <button class="header-icon location-more-button" id="location-more-button" type="button" data-action="location-menu" aria-label="泳班地點選單" aria-expanded="false" hidden>⋮</button>
           <button class="header-icon" id="theme-toggle" type="button" aria-label="切換深色模式" title="切換顯示模式">☾</button>
-          <button class="logout-button" type="button" data-action="logout"><span aria-hidden="true">↪</span> 登出</button>
+          <button class="logout-button" id="logout-button" type="button" data-action="logout"><span aria-hidden="true">↪</span> 登出</button>
         </div>
       </header>
 
@@ -41,7 +54,7 @@
             <ol>
               <li><b>設定</b><span>入口：主頁 → 設定</span></li>
               <li><b>課程設定</b><span>入口：主頁 → 課程設定</span></li>
-              <li><b>課室設定</b><span>入口：主頁 → 課室設定</span></li>
+              <li><b>泳班地點</b><span>入口：主頁 → 泳班地點</span></li>
               <li><b>開帳戶</b><span>入口：主頁 → 帳戶管理</span></li>
               <li><b>新增學生及新增導師</b><span>入口：個人資訊頁面</span></li>
               <li><b>記錄收款</b><span>入口：付款 → 記錄收款</span></li>
@@ -81,10 +94,12 @@
       </main>
 
       <nav class="bottom-nav" aria-label="主要導覽">
-        <button type="button" data-module="people"><span aria-hidden="true">♟</span><b>個人資訊</b></button>
-        <button type="button" data-module="schedule"><span aria-hidden="true">▦</span><b>時間表</b></button>
-        <button type="button" data-module="payments"><span aria-hidden="true">▰</span><b>付款</b></button>
-        <button type="button" data-module="manual"><span aria-hidden="true">▤</span><b>數位手冊</b></button>
+        <span class="nav-brand" aria-hidden="true">✓</span>
+        <button type="button" data-action="go-home" title="主頁"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.8 10.7 12 3l9.2 7.7a1 1 0 0 1 .3.8v8.2a1.3 1.3 0 0 1-1.3 1.3h-5.1v-6.1H8.9V21H3.8a1.3 1.3 0 0 1-1.3-1.3v-8.2a1 1 0 0 1 .3-.8Z"/></svg><b>主頁</b></button>
+        <button type="button" data-module="people" title="個人資訊"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12.1a4.4 4.4 0 1 0 0-8.8 4.4 4.4 0 0 0 0 8.8Zm0 2.1c-4.6 0-8.3 2.5-8.3 5.6 0 .5.4.9.9.9h14.8c.5 0 .9-.4.9-.9 0-3.1-3.7-5.6-8.3-5.6Z"/></svg><b>個人資訊</b></button>
+        <button type="button" data-module="schedule" title="時間表"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M7 2.5a1 1 0 0 1 1 1V5h8V3.5a1 1 0 1 1 2 0V5h1.1A2.9 2.9 0 0 1 22 7.9v11.2a2.9 2.9 0 0 1-2.9 2.9H4.9A2.9 2.9 0 0 1 2 19.1V7.9A2.9 2.9 0 0 1 4.9 5H6V3.5a1 1 0 0 1 1-1ZM4.2 10v9.1c0 .4.3.7.7.7h14.2c.4 0 .7-.3.7-.7V10H4.2Zm2.3 2.2h2.2v2.2H6.5v-2.2Zm4.4 0h2.2v2.2h-2.2v-2.2Zm4.4 0h2.2v2.2h-2.2v-2.2Zm-8.8 4h2.2v2.2H6.5v-2.2Zm4.4 0h2.2v2.2h-2.2v-2.2Z"/></svg><b>時間表</b></button>
+        <button type="button" data-module="payments" title="付款"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.4 5h17.2A2.4 2.4 0 0 1 23 7.4v9.2a2.4 2.4 0 0 1-2.4 2.4H3.4A2.4 2.4 0 0 1 1 16.6V7.4A2.4 2.4 0 0 1 3.4 5Zm-.2 4.1h17.6V7.8H3.2v1.3Zm2 5.2v1.5h6.3v-1.5H5.2Z"/></svg><b>付款</b></button>
+        <button type="button" data-module="manual" title="數位手冊"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.1 4.3c3.3-.7 6-.1 8 1.5v14.1c-2-1.4-4.6-1.8-7.6-1.2A1.2 1.2 0 0 1 2 17.5v-12a1.2 1.2 0 0 1 1.1-1.2Zm17.8 0a1.2 1.2 0 0 1 1.1 1.2v12a1.2 1.2 0 0 1-1.5 1.2c-3-.6-5.6-.2-7.6 1.2V5.8c2-1.6 4.7-2.2 8-1.5Z"/></svg><b>數位手冊</b></button>
       </nav>
     </div>
 
@@ -104,6 +119,84 @@
           <button class="button button-primary" id="form-submit" type="submit">儲存</button>
         </div>
       </form>
+    </dialog>
+
+    <dialog id="schedule-hours-dialog" class="modal modal-small schedule-hours-dialog">
+      <form id="schedule-hours-form" method="dialog">
+        <div class="modal-header">
+          <div>
+            <span class="module-kicker">時間表顯示範圍</span>
+            <h2>中心開放時間</h2>
+          </div>
+          <button class="icon-button" type="button" data-close="schedule-hours-dialog" aria-label="關閉">×</button>
+        </div>
+        <div class="hours-picker">
+          <label class="field"><span>開放</span><select name="openHour" id="schedule-open-hour" size="5" aria-label="中心開放小時"></select></label>
+          <label class="field"><span>關閉</span><select name="closeHour" id="schedule-close-hour" size="5" aria-label="中心關閉小時"></select></label>
+        </div>
+        <p class="helper-text">設定會同步日、週時間軸、月檢視顯示的開放時間，以及課堂編排的可選時間範圍。</p>
+        <p id="schedule-hours-error" class="form-error" role="alert"></p>
+        <div class="modal-actions">
+          <button class="button button-secondary" type="button" data-close="schedule-hours-dialog">取消</button>
+          <button class="button button-primary" type="submit">儲存</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="tutor-dialog" class="modal tutor-dialog">
+      <form id="tutor-form">
+        <div class="modal-header"><div><span class="module-kicker">個人資訊</span><h2 id="tutor-form-title">新增導師</h2></div><button class="icon-button" type="button" data-close="tutor-dialog" aria-label="關閉">×</button></div>
+        <input type="hidden" name="id" id="tutor-id" />
+        <div class="tutor-fields">
+          <label class="field"><span>導師姓名 <b>*</b></span><input name="name" type="text" maxlength="60" autocomplete="name" required placeholder="姓名" /></label>
+          <label class="field"><span>導師電話</span><input name="phone" type="tel" autocomplete="tel" placeholder="電話號碼" /></label>
+          <fieldset class="tutor-course-field"><legend>可負責課程</legend><div id="tutor-course-options" class="tutor-course-options"></div></fieldset>
+          <label class="field"><span>教練時薪（HKD）</span><input name="hourlyRate" type="number" min="0" max="99999" step="0.01" inputmode="decimal" placeholder="例如 250" /><small class="helper-text">本月人工＝教練時薪 × 本月已完成游泳班時數。</small></label>
+          <label class="field"><span>電郵（稍後登入用）</span><input name="email" type="email" autocomplete="email" placeholder="name@example.com" /></label>
+          <label class="field"><span>密碼（接駁 Supabase 後設定）</span><input type="password" autocomplete="new-password" placeholder="目前未啟用" disabled /><small class="helper-text">現時不會建立登入帳戶或儲存密碼。</small></label>
+        </div>
+        <fieldset class="tutor-availability"><legend>可授課時段（可選）</legend><p>選取導師通常可以授課的時段。</p><div id="tutor-availability-grid"></div></fieldset>
+        <fieldset class="tutor-permissions"><legend>日後導師權限</legend><p>以下設定會保存在本機作接駁準備；Supabase 接入前不會限制實際存取。</p><label><input type="checkbox" name="permission" value="read_assigned_students" /> 閱讀獲指派學員資料</label><label><input type="checkbox" name="permission" value="read_assigned_lessons" /> 閱讀獲指派課堂</label><label><input type="checkbox" name="permission" value="edit_assigned_lessons" /> 修改獲指派課堂紀錄</label><label><input type="checkbox" name="permission" value="edit_own_notes" /> 修改自己的教學筆記</label></fieldset>
+        <p id="tutor-form-error" class="form-error" role="alert"></p>
+        <div class="modal-actions"><button class="button button-secondary" type="button" data-close="tutor-dialog">取消</button><button class="button button-primary" type="submit">儲存導師</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="student-import-dialog" class="modal import-dialog">
+      <div class="modal-header"><div><span class="module-kicker">個人資訊</span><h2>批量匯入學員</h2></div><button class="icon-button" type="button" data-close="student-import-dialog" aria-label="關閉">×</button></div>
+      <p>先下載 Excel 範本，填寫「學生匯入」工作表，再選擇 .xlsx 或 .csv 檔案。匯入只會新增學員，不會覆蓋現有資料。</p>
+      <a class="button button-secondary" href="./students-import-template.xlsx" download="泳堂管家-學生匯入範本.xlsx">下載 Excel 範本</a>
+      <label class="field import-file-field"><span>選擇已填寫的檔案</span><input id="student-import-file" type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" /></label>
+      <div id="student-import-preview" class="import-preview" aria-live="polite"></div>
+      <p id="student-import-error" class="form-error" role="alert"></p>
+      <div class="modal-actions"><button class="button button-secondary" type="button" data-close="student-import-dialog">取消</button><button class="button button-primary" id="student-import-confirm" type="button" disabled>確認匯入</button></div>
+    </dialog>
+
+    <dialog id="course-import-dialog" class="modal import-dialog">
+      <div class="modal-header"><div><span class="module-kicker">課程設定</span><h2>匯入／更新課程</h2></div><button class="icon-button" type="button" data-close="course-import-dialog" aria-label="關閉">×</button></div>
+      <p>下載與 Google 課程表相同五欄的 CSV 範本（Excel 可開啟），修改後匯入 .csv 或 .xlsx。相同「課程名稱＋年齡組別＋課程人數」會更新時間及每位收費；其他課程不會刪除，既有學生連結會保留。</p>
+      <div class="course-import-tools"><button class="button button-secondary" type="button" data-action="download-course-template">下載課程匯入範本</button><button class="button button-secondary" type="button" data-action="course-reference-preview">選用 Google 表格 52 組</button></div>
+      <label class="field import-file-field"><span>選擇已填寫的課程表</span><input id="course-import-file" type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" /></label>
+      <div id="course-import-preview" class="import-preview" aria-live="polite"></div>
+      <p id="course-import-error" class="form-error" role="alert"></p>
+      <div class="modal-actions"><button class="button button-secondary" type="button" data-close="course-import-dialog">取消</button><button class="button button-primary" id="course-import-confirm" type="button" disabled>確認匯入／更新</button></div>
+    </dialog>
+
+    <dialog id="location-import-dialog" class="modal import-dialog">
+      <div class="modal-header"><div><span class="module-kicker">泳班地點</span><h2>匯入／更新泳班地點</h2></div><button class="icon-button" type="button" data-close="location-import-dialog" aria-label="關閉">×</button></div>
+      <p>使用五欄 CSV／XLSX 範本：課堂泳池、泳池地點、集合位置、泳池清潔日、年度維修時間。相同「課堂泳池＋泳池地點」只更新後三欄；不會刪除未列出的組合或現有學生資料。</p>
+      <div class="course-import-tools"><button class="button button-secondary" type="button" data-action="download-location-template">下載地點匯入範本</button><button class="button button-secondary" type="button" data-action="location-reference-preview">選用 Google 表格 17 組</button></div>
+      <label class="field import-file-field"><span>選擇已填寫的泳班地點表</span><input id="location-import-file" type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" /></label>
+      <div id="location-import-preview" class="import-preview" aria-live="polite"></div>
+      <p id="location-import-error" class="form-error" role="alert"></p>
+      <div class="modal-actions"><button class="button button-secondary" type="button" data-close="location-import-dialog">取消</button><button class="button button-primary" id="location-import-confirm" type="button" disabled>確認匯入／更新</button></div>
+    </dialog>
+
+    <dialog id="location-manage-dialog" class="modal import-dialog">
+      <div class="modal-header"><div><span class="module-kicker">泳班地點</span><h2>更新／刪除地點組合</h2></div><button class="icon-button" type="button" data-close="location-manage-dialog" aria-label="關閉">×</button></div>
+      <p>每一列是獨立的「課堂泳池＋泳池地點」組合。編輯或刪除只作用於該組；現有學生及課堂記錄仍保留原地點名稱。</p>
+      <div id="location-manage-list" class="location-manage-list"></div>
+      <div class="modal-actions"><button class="button button-secondary" type="button" data-close="location-manage-dialog">關閉</button></div>
     </dialog>
 
     <dialog id="message-dialog" class="modal modal-small">
@@ -146,7 +239,9 @@
 
     <input id="import-data" type="file" accept="application/json" hidden />
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="./student-import.js" defer></script>
+    <script src="./course-import.js" defer></script>
+    <script src="./location-import.js" defer></script>
     <script src="./app.js" defer></script>
   </body>
 </html>
-

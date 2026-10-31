@@ -35,4 +35,3 @@ Netlify、Cloudflare Pages、Vercel 等平台都可以把 `dist` 設為發佈目
 - 匯出備份能下載 JSON；在另一個瀏覽器測試匯入前，先使用假資料。
 - Browser console 沒有 JavaScript error。
 
-

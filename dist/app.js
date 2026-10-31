@@ -7,12 +7,12 @@
   const WEEKDAYS = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
   const FEATURES = [
     { id: "schedule", icon: "🗓️", title: "時間表/編排課堂", description: "日・週・月課堂", accent: "var(--blue-soft)" },
-    { id: "courses", icon: "🎟️", title: "課程設定", description: "課程・級別・選項", accent: "#f5e6d2" },
+    { id: "courses", icon: "🎟️", title: "課程設定", description: "課程・年齡・人數", accent: "#f5e6d2" },
     { id: "people", icon: "👤", title: "個人資訊", description: "學生資料・導師資料・學業狀態", accent: "var(--blue-soft)" },
-    { id: "rooms", icon: "🚪", title: "課室設定", description: "房間清單・預約選項", accent: "#f2ded4" },
+    { id: "rooms", icon: "🚪", title: "泳班地點", description: "泳池・地點・集合位置", accent: "#f2ded4" },
     { id: "payments", icon: "💰", title: "付款", description: "付款・收據・月結", accent: "var(--yellow-soft)" },
     { id: "manual", icon: "📖", title: "數位手冊", description: "功課・筆記・相片", accent: "var(--purple-soft)" },
-    { id: "accounts", icon: "🧑‍🏫", title: "帳戶管理", description: "家長・導師 登入資料", accent: "var(--pink-soft)" },
+    { id: "accounts", icon: "🧑‍🏫", title: "帳戶管理", description: "導師資料・時薪與人工", accent: "var(--pink-soft)" },
     { id: "products", icon: "📦", title: "產品管理", description: "上架課程・定價與產品圖片", accent: "#e1e7ea" },
     { id: "announcements", icon: "📣", title: "公告欄", description: "活動・課程・停課通告", accent: "#f9edca" },
     { id: "settings", icon: "⚙️", title: "設定", description: "帳戶類別等設定", accent: "#e1e5e7" },
@@ -29,13 +29,34 @@
     suite: loadSuite(),
     currentModule: null,
     scheduleMode: "week",
+    scheduleDisplay: "calendar",
+    scheduleZoom: 50,
+    scheduleDate: todayYmd(),
     peopleTab: "students",
+    peopleFilter: "all",
+    peopleSearch: "",
+    peopleLayout: "cards",
+    peopleMenuOpen: false,
+    selectedStudentId: null,
+    studentFormPhoto: "",
+    pendingStudentImport: null,
+    pendingCourseImport: null,
+    courseSelection: { name: "", ageGroup: "", classSize: "" },
+    pendingLocationImport: null,
+    locationSelection: { pool: "", place: "" },
+    locationMenuOpen: false,
+    locationManagePool: "",
     manualFilter: "all",
     messageStudentId: null,
     messageType: "lesson",
     formHandler: null,
     loggedIn: sessionStorage.getItem("swim-suite.logged-out") !== "1"
   };
+
+  for (const student of state.students) {
+    const match = String(student.studentNumber || "").match(/^([KA]\d{2})(\d{4})$/);
+    if (match) state.suite.studentNumberCounters[match[1]] = Math.max(Number(state.suite.studentNumberCounters[match[1]]) || 0, Number(match[2]));
+  }
 
   const elements = {
     homeView: document.querySelector("#home-view"),
@@ -49,10 +70,16 @@
     moduleKicker: document.querySelector("#module-kicker"),
     moduleTitle: document.querySelector("#module-title"),
     moduleDescription: document.querySelector("#module-description"),
+    moduleHeading: document.querySelector(".module-heading"),
     moduleActions: document.querySelector("#module-actions"),
     moduleContent: document.querySelector("#module-content"),
     bottomNav: document.querySelector(".bottom-nav"),
     themeToggle: document.querySelector("#theme-toggle"),
+    logoutButton: document.querySelector("#logout-button"),
+    peopleTopActions: document.querySelector("#people-top-actions"),
+    peopleMoreButton: document.querySelector("#people-more-button"),
+    locationTopActions: document.querySelector("#location-top-actions"),
+    locationMoreButton: document.querySelector("#location-more-button"),
     formDialog: document.querySelector("#form-dialog"),
     dynamicForm: document.querySelector("#dynamic-form"),
     formKicker: document.querySelector("#form-kicker"),
@@ -65,6 +92,20 @@
     messageText: document.querySelector("#message-text"),
     receiptDialog: document.querySelector("#receipt-dialog"),
     receiptContent: document.querySelector("#receipt-content"),
+    scheduleHoursDialog: document.querySelector("#schedule-hours-dialog"),
+    scheduleHoursForm: document.querySelector("#schedule-hours-form"),
+    tutorDialog: document.querySelector("#tutor-dialog"),
+    tutorForm: document.querySelector("#tutor-form"),
+    studentImportDialog: document.querySelector("#student-import-dialog"),
+    studentImportFile: document.querySelector("#student-import-file"),
+    studentImportConfirm: document.querySelector("#student-import-confirm"),
+    courseImportDialog: document.querySelector("#course-import-dialog"),
+    courseImportFile: document.querySelector("#course-import-file"),
+    courseImportConfirm: document.querySelector("#course-import-confirm"),
+    locationImportDialog: document.querySelector("#location-import-dialog"),
+    locationImportFile: document.querySelector("#location-import-file"),
+    locationImportConfirm: document.querySelector("#location-import-confirm"),
+    locationManageDialog: document.querySelector("#location-manage-dialog"),
     importData: document.querySelector("#import-data"),
     toast: document.querySelector("#toast")
   };
@@ -84,11 +125,14 @@
         { id: makeId(), name: "兒童游泳初階", level: "初階", duration: 60, fee: 320, active: true },
         { id: makeId(), name: "成人游泳基礎", level: "基礎", duration: 60, fee: 380, active: true }
       ],
+      hiddenReferenceCourses: [],
       rooms: [
         { id: makeId(), name: "主池 A 線", location: "主泳池", capacity: 6, active: true }
       ],
-      bookingOptions: { onlineBooking: true, preventOverlap: true, bufferMinutes: 10 },
+      poolLocations: window.SwimLocationImport.referenceRows.map((row) => ({ id: makeId(), ...row })),
+      bookingOptions: { onlineBooking: true, preventOverlap: true, bufferMinutes: 10, openHour: 7, closeHour: 22 },
       payments: [],
+      studentNumberCounters: {},
       manualItems: [],
       accounts: [],
       products: [],
@@ -104,9 +148,17 @@
       return {
         settings: { ...fallback.settings, ...(saved.settings || {}) },
         courses: Array.isArray(saved.courses) ? saved.courses : fallback.courses,
+        hiddenReferenceCourses: Array.isArray(saved.hiddenReferenceCourses) ? saved.hiddenReferenceCourses : [],
         rooms: Array.isArray(saved.rooms) ? saved.rooms : fallback.rooms,
-        bookingOptions: { ...fallback.bookingOptions, ...(saved.bookingOptions || {}) },
+        poolLocations: Array.isArray(saved.poolLocations) ? saved.poolLocations : fallback.poolLocations,
+        bookingOptions: {
+          ...fallback.bookingOptions,
+          ...(saved.bookingOptions || {}),
+          openHour: clampWhole(saved.bookingOptions && saved.bookingOptions.openHour, 0, 22, fallback.bookingOptions.openHour),
+          closeHour: clampWhole(saved.bookingOptions && saved.bookingOptions.closeHour, 1, 23, fallback.bookingOptions.closeHour)
+        },
         payments: Array.isArray(saved.payments) ? saved.payments : [],
+        studentNumberCounters: saved.studentNumberCounters && typeof saved.studentNumberCounters === "object" ? saved.studentNumberCounters : {},
         manualItems: Array.isArray(saved.manualItems) ? saved.manualItems : [],
         accounts: Array.isArray(saved.accounts) ? saved.accounts : [],
         products: Array.isArray(saved.products) ? saved.products : [],
@@ -127,13 +179,30 @@
         weekday: normalizeWeekday(item.weekday),
         time: validTime(item.time) ? item.time : "18:00",
         nextTime: validTime(item.nextTime) ? item.nextTime : validTime(item.time) ? item.time : "18:00",
-        prepaid: clampWhole(item.prepaid, 1, 999, 8),
+        prepaid: clampWhole(item.prepaid, 0, 999, 8),
         remaining: clampWhole(item.remaining, 0, 999, 0),
-        nextDate: validDate(item.nextDate) ? item.nextDate : formatYmd(nextDateForWeekday(normalizeWeekday(item.weekday))),
+        nextDate: validDate(item.nextDate) ? item.nextDate : item.enrollmentStatus ? "" : formatYmd(nextDateForWeekday(normalizeWeekday(item.weekday))),
         courseId: item.courseId || "",
         roomId: item.roomId || "",
+        roomName: item.roomName || "",
         tutorId: item.tutorId || "",
         status: item.status || "active",
+        ageGroup: String(item.ageGroup || ""),
+        gender: String(item.gender || ""),
+        recordDate: validDate(item.recordDate) ? item.recordDate : "",
+        enrollmentStatus: item.enrollmentStatus === "pending" ? "pending" : item.enrollmentStatus === "paid" ? "paid" : "legacy",
+        studentNumber: String(item.studentNumber || ""),
+        enrollmentYear: item.enrollmentYear != null && item.enrollmentYear !== "" && Number.isInteger(Number(item.enrollmentYear)) ? Number(item.enrollmentYear) :
+          /^[KA]\d{2}\d{4}$/.test(String(item.studentNumber || "")) ? 2000 + Number(String(item.studentNumber).slice(1, 3)) : null,
+        birthMonth: String(item.birthMonth || ""),
+        birthYear: String(item.birthYear || ""),
+        guardianName: String(item.guardianName || ""),
+        whatsapp: String(item.whatsapp || ""),
+        homeMtr: String(item.homeMtr || ""),
+        schoolMtr: String(item.schoolMtr || ""),
+        workMtr: String(item.workMtr || ""),
+        photo: typeof item.photo === "string" && /^data:image\/(png|jpeg|webp|gif);base64,/.test(item.photo) ? item.photo : "",
+        enrollments: Array.isArray(item.enrollments) ? item.enrollments.slice(0, 4) : [],
         history: Array.isArray(item.history) ? item.history.slice(0, 100) : [],
         createdAt: item.createdAt || new Date().toISOString()
       }));
@@ -209,8 +278,8 @@
     return new Intl.DateTimeFormat("zh-HK", { month: "numeric", day: "numeric" }).format(parseDate(value));
   }
 
-  function formatMoney(value) {
-    return new Intl.NumberFormat("zh-HK", { style: "currency", currency: "HKD", maximumFractionDigits: 0 }).format(Number(value) || 0);
+  function formatMoney(value, maximumFractionDigits = 0) {
+    return new Intl.NumberFormat("zh-HK", { style: "currency", currency: "HKD", minimumFractionDigits: 0, maximumFractionDigits }).format(Number(value) || 0);
   }
 
   function formatTime(value) {
@@ -258,6 +327,13 @@
 
   function showHome() {
     state.currentModule = null;
+    document.body.dataset.module = "";
+    elements.peopleTopActions.hidden = true;
+    elements.peopleMoreButton.hidden = true;
+    elements.locationTopActions.hidden = true;
+    elements.locationMoreButton.hidden = true;
+    elements.themeToggle.hidden = false;
+    elements.logoutButton.hidden = false;
     elements.homeView.hidden = false;
     elements.moduleView.hidden = true;
     elements.loggedOutView.hidden = true;
@@ -268,6 +344,14 @@
   }
 
   function showLoggedOut() {
+    document.body.dataset.module = "";
+    document.body.classList.remove("nav-expanded");
+    elements.peopleTopActions.hidden = true;
+    elements.peopleMoreButton.hidden = true;
+    elements.locationTopActions.hidden = true;
+    elements.locationMoreButton.hidden = true;
+    elements.themeToggle.hidden = true;
+    elements.logoutButton.hidden = true;
     elements.homeView.hidden = true;
     elements.moduleView.hidden = true;
     elements.loggedOutView.hidden = false;
@@ -288,16 +372,29 @@
   }
 
   function setActiveNav(id) {
-    document.querySelectorAll(".bottom-nav button").forEach((button) => button.classList.toggle("is-active", button.dataset.module === id));
+    document.querySelectorAll(".bottom-nav button").forEach((button) => {
+      const isHome = !id && button.dataset.action === "go-home";
+      button.classList.toggle("is-active", isHome || button.dataset.module === id);
+    });
   }
 
   function renderModule() {
     const meta = moduleMeta[state.currentModule];
     if (!meta) return showHome();
     elements.pageLabel.textContent = meta.title;
-    elements.moduleKicker.textContent = meta.description;
+    elements.moduleKicker.textContent = meta.id === "rooms" ? "泳池・地點・集合位置" : meta.description;
     elements.moduleTitle.textContent = meta.title;
     elements.moduleDescription.textContent = moduleDescription(meta.id);
+    document.body.dataset.module = meta.id;
+    elements.peopleTopActions.hidden = meta.id !== "people";
+    elements.peopleMoreButton.hidden = meta.id !== "people";
+    elements.locationTopActions.hidden = meta.id !== "rooms";
+    elements.locationMoreButton.hidden = meta.id !== "rooms";
+    elements.themeToggle.hidden = true;
+    elements.logoutButton.hidden = true;
+    elements.peopleMoreButton.setAttribute("aria-expanded", String(meta.id === "people" && state.peopleMenuOpen));
+    elements.locationMoreButton.setAttribute("aria-expanded", String(meta.id === "rooms" && state.locationMenuOpen));
+    elements.moduleHeading.hidden = meta.id === "schedule";
     elements.moduleActions.innerHTML = moduleActionHtml(meta.id);
     const renderers = {
       schedule: renderSchedule,
@@ -319,9 +416,9 @@
   function moduleDescription(id) {
     const descriptions = {
       schedule: "查看日、週、月安排，完成、取消或更改下一堂。",
-      courses: "管理課程名稱、級別、時長、收費與啟用狀態。",
+      courses: "按課程名稱、年齡組別及課程人數，查看完整課程時間與每位學生的課堂費用。",
       people: "集中管理學生及導師資料、堂數與負責安排。",
-      rooms: "建立場地清單及設定預約規則。",
+      rooms: "排程的課堂泳池篩選，預約泳班時的地點選項，以及新增學生資料時學生偏好的泳班地點選項，均會使用此清單。泳班或預約曾使用但不在清單內的課堂泳池名稱，會自動附加在清單之後。刪除泳班地點不會影響現有泳班或預約記錄。",
       payments: "記錄收款、自動增加堂數、查看收據與每月合計。",
       manual: "保存學生功課、課堂筆記與相片。",
       accounts: "管理家長及導師的本機帳戶目錄，不儲存密碼。",
@@ -338,11 +435,9 @@
     const actions = {
       schedule: ["add-lesson", "＋ 編排課堂"],
       courses: ["add-course", "＋ 新增課程"],
-      people: ["add-student", "＋ 新增學生"],
-      rooms: ["add-room", "＋ 新增課室"],
       payments: ["add-payment", "＋ 記錄收款"],
       manual: ["add-manual", "＋ 新增紀錄"],
-      accounts: ["add-account", "＋ 新增帳戶"],
+      accounts: ["add-tutor", "＋ 新增導師"],
       products: ["add-product", "＋ 新增產品"],
       announcements: ["add-announcement", "＋ 新增公告"]
     };
@@ -358,114 +453,378 @@
   }
 
   function renderSchedule() {
-    const today = todayYmd();
-    const seven = state.students.filter((student) => {
-      const distance = dateDistance(student.nextDate);
-      return distance >= 0 && distance <= 6;
-    }).length;
-    const monthKey = today.slice(0, 7);
-    const monthCount = state.students.filter((student) => student.nextDate.startsWith(monthKey)).length;
     const mode = state.scheduleMode;
-    let calendar = "";
-    if (mode === "week") calendar = weekStripHtml();
-    if (mode === "month") calendar = monthGridHtml();
-    const filtered = scheduleStudentsForMode(mode);
-    return statsHtml([
-      { label: "今日課堂", value: state.students.filter((item) => item.nextDate === today).length, unit: "堂" },
-      { label: "未來七日", value: seven, unit: "堂" },
-      { label: "本月課堂", value: monthCount, unit: "堂" },
-      { label: "需要續費", value: state.students.filter((item) => item.remaining <= lowBalance()).length, unit: "位" }
-    ]) +
-      '<section class="panel"><div class="toolbar"><div class="segmented">' +
-      ["day", "week", "month"].map((item) => '<button type="button" data-action="schedule-mode" data-value="' + item + '" class="' + (mode === item ? "is-active" : "") + '">' + ({ day: "日", week: "週", month: "月" })[item] + "</button>").join("") +
-      '</div><span class="badge neutral">' + filtered.length + " 堂</span></div>" + calendar +
-      '<div class="panel-heading" style="margin-top:14px"><div><h2>課堂安排</h2><p>按時間排序的下一堂</p></div></div>' +
-      scheduleRowsHtml(filtered) + "</section>";
+    const selected = parseDate(state.scheduleDate || todayYmd());
+    const rangeLabel = mode === "month" ? selected.getFullYear() + "年" + (selected.getMonth() + 1) + "月" :
+      mode === "week" ? calendarShortDate(mondayOf(selected)) + " – " + calendarShortDate(addDays(mondayOf(selected), 6)) :
+      calendarShortDate(selected) + " · " + WEEKDAYS[selected.getDay()];
+    const modes = [["day", "▣ 日"], ["week", "▣ 週"], ["month", "▦ 月"]];
+    const isList = state.scheduleDisplay === "list";
+    const calendar = isList ? scheduleListHtml(selected, mode) : mode === "month" ? monthGridHtml(selected) : timelineGridHtml(selected, mode);
+    const selectedLessons = lessonsForDate(state.scheduleDate);
+    const openText = String(state.suite.bookingOptions.openHour).padStart(2, "0") + ":00 – " + String(state.suite.bookingOptions.closeHour).padStart(2, "0") + ":00";
+    return '<section class="schedule-view">' +
+      '<div class="schedule-toolbar"><div class="segmented schedule-modes">' + modes.map(([value, label]) =>
+        '<button type="button" data-action="schedule-mode" data-value="' + value + '" class="' + (mode === value ? "is-active" : "") + '">' + label + "</button>").join("") +
+      '</div><button class="schedule-icon-button' + (isList ? ' is-active' : '') + '" type="button" data-action="schedule-display" aria-label="' + (isList ? '顯示日曆' : '顯示課堂列表') + '" title="' + (isList ? '日曆檢視' : '列表檢視') + '" aria-pressed="' + isList + '">' + (isList ? '▦' : '☷') + '</button>' +
+      '<button class="schedule-icon-button" type="button" data-action="schedule-hours" aria-label="設定中心開放時間" title="中心開放時間">⚙</button></div>' +
+      '<div class="schedule-navigation"><button type="button" class="schedule-nav-arrow" data-action="schedule-shift" data-delta="-1" aria-label="上一個">‹</button>' +
+      '<strong>' + escapeHtml(rangeLabel) + '</strong><button type="button" class="schedule-nav-arrow" data-action="schedule-shift" data-delta="1" aria-label="下一個">›</button>' +
+      '<label class="schedule-date-picker" title="選擇日期">▦<input id="schedule-date" type="date" value="' + escapeHtml(state.scheduleDate) + '" aria-label="選擇日期"></label>' +
+      '<button type="button" class="schedule-add-button" data-action="add-lesson" aria-label="編排課堂">＋</button></div>' +
+      calendar +
+      (isList ? '' : '<section class="schedule-agenda"><div class="schedule-agenda-heading"><div><h2>' + escapeHtml(formatYmd(selected) + " · " + WEEKDAYS[selected.getDay()]) + '</h2><p>中心開放 ' + escapeHtml(openText) + '</p></div><span>' + selectedLessons.length + ' 堂</span></div>' +
+      scheduleRowsHtml(selectedLessons) + '</section>') + '</section>';
   }
 
-  function scheduleStudentsForMode(mode) {
-    const today = startOfToday();
-    return [...state.students].filter((student) => {
-      const date = parseDate(student.nextDate);
-      if (mode === "day") return student.nextDate === formatYmd(today);
-      if (mode === "week") {
-        const distance = dateDistance(student.nextDate);
-        return distance >= 0 && distance <= 6;
-      }
-      return date.getFullYear() === today.getFullYear() && date.getMonth() === today.getMonth();
-    }).sort((a, b) => a.nextDate.localeCompare(b.nextDate) || (a.nextTime || a.time).localeCompare(b.nextTime || b.time));
+  function calendarShortDate(date) {
+    return String(date.getMonth() + 1).padStart(2, "0") + "-" + String(date.getDate()).padStart(2, "0");
   }
 
-  function weekStripHtml() {
-    const today = startOfToday();
-    return '<div class="calendar-strip">' + Array.from({ length: 7 }, (_, index) => {
-      const date = addDays(today, index);
-      const dateString = formatYmd(date);
-      const count = state.students.filter((item) => item.nextDate === dateString).length;
-      return '<div class="calendar-day ' + (index === 0 ? "is-today" : "") + '"><span>' + WEEKDAYS[date.getDay()].replace("星期", "週") +
-        "</span><strong>" + date.getDate() + "</strong><em>" + count + " 堂</em></div>";
-    }).join("") + "</div>";
+  function mondayOf(date) {
+    return addDays(date, -((date.getDay() + 6) % 7));
   }
 
-  function monthGridHtml() {
-    const today = startOfToday();
-    const first = new Date(today.getFullYear(), today.getMonth(), 1);
-    const start = addDays(first, -first.getDay());
-    return '<div class="month-grid">' + Array.from({ length: 42 }, (_, index) => {
+  function lessonsForDate(dateString) {
+    return state.students.filter((student) => student.nextDate === dateString && student.status !== "inactive" && student.enrollmentStatus !== "pending")
+      .sort((a, b) => (a.nextTime || a.time).localeCompare(b.nextTime || b.time));
+  }
+
+  function scheduleListHtml(selected, mode) {
+    const first = mode === "week" ? mondayOf(selected) : mode === "month" ? new Date(selected.getFullYear(), selected.getMonth(), 1) : selected;
+    const last = mode === "week" ? addDays(first, 6) : mode === "month" ? new Date(selected.getFullYear(), selected.getMonth() + 1, 0) : selected;
+    const groups = [];
+    for (let date = first; date <= last; date = addDays(date, 1)) {
+      const lessons = lessonsForDate(formatYmd(date));
+      if (lessons.length || mode === "day") groups.push({ date, lessons });
+    }
+    if (!groups.length) return '<section class="schedule-agenda schedule-list-empty"><div class="schedule-empty"><span aria-hidden="true">▦</span><strong>這段時間沒有課堂</strong><p>按「＋」編排課堂</p></div></section>';
+    return '<div class="schedule-date-groups">' + groups.map(({ date, lessons }) =>
+      '<section class="schedule-agenda"><div class="schedule-agenda-heading"><div><h2>' + escapeHtml(formatYmd(date) + " · " + WEEKDAYS[date.getDay()]) + '</h2><p>中心開放 ' + String(state.suite.bookingOptions.openHour).padStart(2, "0") + ':00 – ' + String(state.suite.bookingOptions.closeHour).padStart(2, "0") + ':00</p></div><span>' + lessons.length + ' 堂</span></div>' +
+      scheduleRowsHtml(lessons) + '</section>').join('') + '</div>';
+  }
+
+  function timelineGridHtml(selected, mode) {
+    const options = state.suite.bookingOptions;
+    const openHour = clampWhole(options.openHour, 0, 22, 7);
+    const closeHour = clampWhole(options.closeHour, openHour + 1, 23, 22);
+    const totalHours = closeHour - openHour;
+    const hourHeight = 32 + (state.scheduleZoom - 50) / 25 * 12;
+    const days = mode === "day" ? [selected] : Array.from({ length: 7 }, (_, index) => addDays(mondayOf(selected), index));
+    const dayHeaders = days.map((date) => {
+      const ymd = formatYmd(date);
+      return '<button class="timeline-day-heading' + (ymd === todayYmd() ? " is-today" : "") + '" type="button" data-action="schedule-select-date" data-date="' + ymd + '"><span>' + WEEKDAYS[date.getDay()].replace("星期", "週") +
+        '</span><strong>' + date.getDate() + '</strong></button>';
+    }).join("");
+    const axis = Array.from({ length: totalHours + 1 }, (_, index) => '<span class="timeline-hour' + (index === 0 ? ' is-start' : index === totalHours ? ' is-end' : '') + '" style="top:' + (index / totalHours * 100) + '%">' + String(openHour + index).padStart(2, "0") + ':00</span>').join("");
+    const columns = days.map((date) => {
+      const ymd = formatYmd(date);
+      const events = lessonsForDate(ymd).map((student) => {
+        const time = student.nextTime || student.time || "00:00";
+        const [hour, minute] = time.split(":").map(Number);
+        const course = courseForStudent(student);
+        const duration = Math.max(0.5, (course && Number(course.duration) || 60) / 60);
+        const offset = hour + minute / 60 - openHour;
+        if (offset + duration <= 0 || offset >= totalHours) return "";
+        const top = Math.max(0, offset) / totalHours * 100;
+        const height = Math.min(duration, totalHours - Math.max(0, offset)) / totalHours * 100;
+        return '<button type="button" class="timeline-event" style="top:' + top + '%;height:' + height + '%" data-action="reschedule" data-id="' + student.id + '" title="' + escapeHtml(student.name + " " + time) + '"><strong>' + escapeHtml(student.name) + '</strong><span>' + escapeHtml(time) + '</span></button>';
+      }).join("");
+      return '<div class="timeline-day-column' + (ymd === todayYmd() ? " is-today" : "") + '">' + events + '</div>';
+    }).join("");
+    return '<div class="timeline-card" style="--hour-height:' + hourHeight + 'px"><div class="timeline-head" style="grid-template-columns:48px repeat(' + days.length + ',minmax(0,1fr))"><div class="timeline-corner"></div>' + dayHeaders + '</div><div class="timeline-body" style="height:' + (totalHours * hourHeight) + 'px"><div class="timeline-axis">' + axis + '</div><div class="timeline-columns" style="grid-template-columns:repeat(' + days.length + ',minmax(0,1fr))">' + columns + '</div></div><div class="schedule-zoom" aria-label="時間格縮放"><button type="button" data-action="schedule-zoom" data-delta="-25" aria-label="縮小時間格"' + (state.scheduleZoom <= 50 ? ' disabled' : '') + '>−</button><span>' + state.scheduleZoom + '%</span><button type="button" data-action="schedule-zoom" data-delta="25" aria-label="放大時間格"' + (state.scheduleZoom >= 150 ? ' disabled' : '') + '>＋</button></div></div>';
+  }
+
+  function monthGridHtml(selected) {
+    const first = new Date(selected.getFullYear(), selected.getMonth(), 1);
+    const start = addDays(first, -((first.getDay() + 6) % 7));
+    const headings = ["一", "二", "三", "四", "五", "六", "日"].map((label) => '<span class="month-weekday">' + label + '</span>').join("");
+    const cells = Array.from({ length: 42 }, (_, index) => {
       const date = addDays(start, index);
       const ymd = formatYmd(date);
-      const count = state.students.filter((item) => item.nextDate === ymd).length;
-      const classes = [date.getMonth() !== today.getMonth() ? "is-muted" : "", ymd === todayYmd() ? "is-today" : ""].join(" ");
-      return '<div class="month-cell ' + classes + '">' + date.getDate() + (count ? '<div>' + '<span class="month-dot"></span>'.repeat(Math.min(count, 4)) + "</div>" : "") + "</div>";
-    }).join("") + "</div>";
+      const count = lessonsForDate(ymd).length;
+      const classes = [date.getMonth() !== selected.getMonth() ? "is-muted" : "", ymd === todayYmd() ? "is-today" : "", ymd === state.scheduleDate ? "is-selected" : ""].filter(Boolean).join(" ");
+      return '<button type="button" class="month-cell ' + classes + '" data-action="schedule-select-date" data-date="' + ymd + '"><span>' + date.getDate() + '</span>' +
+        (count ? '<small>' + '<i class="month-dot"></i>'.repeat(Math.min(count, 4)) + (count > 4 ? '<em>+' + (count - 4) + '</em>' : "") + '</small>' : "") + '</button>';
+    }).join("");
+    return '<div class="month-calendar"><div class="month-weekdays">' + headings + '</div><div class="month-grid">' + cells + '</div></div>';
   }
 
   function scheduleRowsHtml(students) {
-    if (!students.length) return emptyHtml("🗓️", "暫時沒有課堂", "你可以按「編排課堂」更新學生的下一堂日期。");
-    return '<div class="list-stack">' + students.map((student) => {
+    if (!students.length) return '<div class="schedule-empty"><span aria-hidden="true">▦</span><strong>這一天沒有課堂</strong><p>按「＋」編排課堂</p></div>';
+    return '<div class="schedule-lesson-list">' + students.map((student) => {
       const room = findById(state.suite.rooms, student.roomId);
-      return '<article class="list-row"><div class="row-icon">' + parseDate(student.nextDate).getDate() + '</div><div class="row-main"><strong>' +
-        escapeHtml(student.name) + "</strong><span>" + escapeHtml(formatLongDate(student.nextDate)) + " · " + escapeHtml(formatTime(student.nextTime || student.time)) +
-        (room ? " · " + escapeHtml(room.name) : "") + " · 尚餘 " + student.remaining + ' 堂</span></div><div class="row-actions">' +
+      const roomName = room ? room.name : student.roomName;
+      const tutor = findById(state.suite.accounts, student.tutorId);
+      const course = courseForStudent(student);
+      const time = student.nextTime || student.time;
+      const end = validTime(time) ? addMinutes(time, course && Number(course.duration) || 60) : "";
+      return '<article class="schedule-lesson-card"><div class="schedule-lesson-time"><strong>' + escapeHtml(time) + '</strong><span>' + escapeHtml(end) + '</span><small>' + (course && course.duration || 60) + '分鐘</small></div><div class="schedule-lesson-main"><strong>' +
+        escapeHtml(student.name) + '</strong><span>' + (tutor ? '♟ ' + escapeHtml(tutor.name) + '　' : '') + (roomName ? '⌖ ' + escapeHtml(roomName) + '　' : '') + (course ? escapeHtml(course.name) : '一般課堂') + '</span><small class="schedule-lesson-status">● 正常課堂 · 尚餘 ' + student.remaining + ' 堂</small></div><div class="row-actions">' +
         '<button class="mini-button" type="button" data-action="complete-lesson" data-id="' + student.id + '">完成</button>' +
         '<button class="mini-button" type="button" data-action="reschedule" data-id="' + student.id + '">改期</button>' +
         '<button class="mini-button danger" type="button" data-action="cancel-lesson" data-id="' + student.id + '">取消</button>' +
         '<button class="mini-button" type="button" data-action="prepare-message" data-id="' + student.id + '" data-type="lesson">提醒</button></div></article>';
-    }).join("") + "</div>";
+    }).join("") + '</div>';
+  }
+
+  function addMinutes(value, minutes) {
+    const [hour, minute] = value.split(":").map(Number);
+    const total = (hour * 60 + minute + minutes) % (24 * 60);
+    return String(Math.floor(total / 60)).padStart(2, "0") + ":" + String(total % 60).padStart(2, "0");
+  }
+
+  function openScheduleHours() {
+    const options = state.suite.bookingOptions;
+    const selectOptions = (selected) => Array.from({ length: 24 }, (_, hour) => '<option value="' + hour + '" ' + (Number(selected) === hour ? "selected" : "") + '>' + String(hour).padStart(2, "0") + '</option>').join("");
+    document.querySelector("#schedule-open-hour").innerHTML = selectOptions(options.openHour);
+    document.querySelector("#schedule-close-hour").innerHTML = selectOptions(options.closeHour);
+    document.querySelector("#schedule-hours-error").textContent = "";
+    elements.scheduleHoursDialog.showModal();
+    document.body.classList.add("modal-open");
   }
 
   function renderCourses() {
-    const active = state.suite.courses.filter((item) => item.active).length;
-    return statsHtml([
-      { label: "課程總數", value: state.suite.courses.length, unit: "個" },
-      { label: "正在招生", value: active, unit: "個" },
-      { label: "平均時長", value: average(state.suite.courses.map((item) => item.duration)), unit: "分鐘" },
-      { label: "平均單堂", value: formatMoney(average(state.suite.courses.map((item) => item.fee))) }
-    ]) + '<section class="panel"><div class="panel-heading"><div><h2>課程及級別</h2><p>停用課程不會從既有學生資料刪除</p></div></div>' +
-      (state.suite.courses.length ? '<div class="list-stack">' + state.suite.courses.map((course) =>
-        '<article class="list-row"><div class="row-icon">🎟️</div><div class="row-main"><strong>' + escapeHtml(course.name) + '</strong><span>' +
-        escapeHtml(course.level) + " · " + course.duration + " 分鐘 · " + formatMoney(course.fee) + '</span></div><span class="badge ' + (course.active ? "" : "neutral") + '">' +
-        (course.active ? "啟用" : "停用") + '</span><div class="row-actions"><button class="mini-button" type="button" data-action="toggle-course" data-id="' + course.id + '">' +
-        (course.active ? "停用" : "啟用") + '</button><button class="mini-button" type="button" data-action="edit-course" data-id="' + course.id + '">編輯</button>' +
-        '<button class="mini-button danger" type="button" data-action="delete-course" data-id="' + course.id + '">刪除</button></div></article>'
-      ).join("") + "</div>" : emptyHtml("🎟️", "未有課程", "新增第一個課程及級別。")) + "</section>";
+    const courses = displayCourses();
+    const selection = state.courseSelection;
+    const nameRows = courses;
+    const ageRows = selection.name ? courses.filter((item) => sameCourseValue(item.name, selection.name)) : courses;
+    const sizeRows = selection.ageGroup ? ageRows.filter((item) => sameCourseValue(item.ageGroup, selection.ageGroup)) : ageRows;
+    const chosen = selection.name && selection.ageGroup && selection.classSize ? courses.find((item) =>
+      sameCourseValue(item.name, selection.name) && sameCourseValue(item.ageGroup, selection.ageGroup) && sameCourseValue(item.classSize, selection.classSize)) : null;
+    const summary = [
+      ["課程名稱", selection.name || "請選擇"],
+      ["年齡組別", selection.ageGroup || "請選擇"],
+      ["課程人數", selection.classSize || "請選擇"],
+      ["課程時間 (分鐘)", chosen ? chosen.duration + " 分鐘" : "—"],
+      ["課堂費用", chosen ? formatMoney(chosen.fee, 2) + "／堂／位" : "—"]
+    ];
+    const legacy = state.suite.courses.filter((item) => !item.ageGroup || !item.classSize);
+    return '<section class="course-page"><div class="course-intro"><div><h2>課程組合</h2><p>依次選擇課程名稱、年齡組別及課程人數；每個組合對應一個完整的課堂時間和每位學生收費。</p></div><button class="button button-secondary" type="button" data-action="import-courses">↧ 匯入／更新課程</button></div>' +
+      '<p class="course-source-note">顯示 <a href="' + escapeHtml(window.SwimCourseImport.SOURCE_URL) + '" target="_blank" rel="noopener noreferrer">Google 課程表</a>的 52 組參考資料；尚未匯入的組合只作預覽，不會改動本機課程或現有學生資料。</p>' +
+      courseChipSection("name", "課程名稱", "選擇泳班課程", uniqueCourseValues(nameRows, "name"), selection.name) +
+      courseChipSection("ageGroup", "年齡組別", "6-11 代表 6 歲至未滿 12 歲", uniqueCourseValues(ageRows, "ageGroup"), selection.ageGroup) +
+      courseChipSection("classSize", "課程人數", "按課程及年齡顯示可選授課方式", uniqueCourseValues(sizeRows, "classSize"), selection.classSize) +
+      '<section class="course-summary"><div class="course-summary-heading"><h2>所選課程組合</h2><p>三項均選定後，自動顯示對應時間及每位學生價錢。</p></div><div class="course-summary-grid">' + summary.map(([label, value]) =>
+        '<article class="course-summary-card"><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(value) + '</strong></article>').join("") + '</div>' +
+      (chosen ? '<div class="course-record-actions"><span class="badge ' + (chosen.reference ? 'neutral' : chosen.active === false ? 'neutral' : '') + '">' + (chosen.reference ? '試算表參考 · 尚未匯入' : chosen.active === false ? '已停用' : '已儲存') + '</span>' +
+        (chosen.reference ? '<button class="mini-button" type="button" data-action="save-reference-course" data-id="' + escapeHtml(chosen.id) + '">＋ 加入這組課程</button>' :
+          '<button class="mini-button" type="button" data-action="toggle-course" data-id="' + escapeHtml(chosen.id) + '">' + (chosen.active === false ? '啟用' : '停用') + '</button><button class="mini-button" type="button" data-action="edit-course" data-id="' + escapeHtml(chosen.id) + '">✎ 編輯整組</button><button class="mini-button danger" type="button" data-action="delete-course" data-id="' + escapeHtml(chosen.id) + '">▤ 刪除整組</button>') + '</div>' : '<p class="course-selection-help">請由上方三個區塊選擇一組課程；更改或刪除會作用於完整五項資料。</p>') + '</section>' +
+      (legacy.length ? '<section class="course-legacy panel"><h2>待補資料的舊課程</h2><p>舊課程未有年齡組別或課程人數，仍會保留原有學生連結。編輯並補齊後即可在上方選擇。</p><div class="list-stack">' + legacy.map((course) =>
+        '<article class="list-row"><div class="row-icon">🎟️</div><div class="row-main"><strong>' + escapeHtml(course.name) + '</strong><span>' + escapeHtml(course.level || '未設定年齡及人數') + ' · ' + escapeHtml(course.duration) + ' 分鐘 · ' + escapeHtml(formatMoney(course.fee, 2)) + '</span></div><div class="row-actions"><button class="mini-button" type="button" data-action="edit-course" data-id="' + escapeHtml(course.id) + '">✎ 編輯</button><button class="mini-button danger" type="button" data-action="delete-course" data-id="' + escapeHtml(course.id) + '">刪除</button></div></article>').join('') + '</div></section>' : '') + '</section>';
+  }
+
+  function sameCourseValue(a, b) {
+    return String(a || "").trim().replace(/\s*[-–—]\s*/g, "-").toLocaleLowerCase() === String(b || "").trim().replace(/\s*[-–—]\s*/g, "-").toLocaleLowerCase();
+  }
+
+  function uniqueCourseValues(courses, field) {
+    return courses.reduce((values, item) => {
+      if (item[field] && !values.some((value) => sameCourseValue(value, item[field]))) values.push(item[field]);
+      return values;
+    }, []);
+  }
+
+  function displayCourses() {
+    const saved = state.suite.courses.filter((item) => item.ageGroup && item.classSize);
+    const present = new Set(saved.map(window.SwimCourseImport.key));
+    const hidden = new Set(state.suite.hiddenReferenceCourses || []);
+    const references = window.SwimCourseImport.referenceRows.map((row, index) => ({ ...row, id: "reference-" + index, active: true, reference: true }))
+      .filter((row) => !present.has(window.SwimCourseImport.key(row)) && !hidden.has(window.SwimCourseImport.key(row)));
+    return saved.concat(references);
+  }
+
+  function studentAgeGroups() {
+    const preferred = ["2.5 - 5", "6 - 11", "12 - 17", "18 - 29", "30 - 39", "40 - 49", "50 - 59", "60 - 69"];
+    const fromSettings = uniqueCourseValues(displayCourses(), "ageGroup");
+    return preferred.filter((age) => fromSettings.some((value) => sameCourseValue(value, age)))
+      .concat(fromSettings.filter((age) => !sameCourseValue(age, "4 - 5") && !preferred.some((value) => sameCourseValue(value, age))));
+  }
+
+  function isMinorAge(ageGroup) {
+    const lower = Number(String(ageGroup || "").trim().match(/^\d+(?:\.\d+)?/)?.[0]);
+    return Number.isFinite(lower) && lower < 18;
+  }
+
+  function fiscalYear(dateValue) {
+    if (!validDate(dateValue)) return fiscalYear(todayYmd());
+    const [year, month] = dateValue.split("-").map(Number);
+    return month >= 4 ? year : year - 1;
+  }
+
+  const STUDENT_DATE_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  function studentRecordDateYmd(value, allowIso = false) {
+    const text = String(value || "").trim();
+    const match = text.match(/^(\d{2})-([A-Za-z]{3})-(\d{4})$/);
+    const iso = allowIso ? text.match(/^(\d{4})-(\d{2})-(\d{2})$/) : null;
+    if (!match && !iso) return "";
+    const year = Number(match ? match[3] : iso[1]);
+    const month = match ? STUDENT_DATE_MONTHS.findIndex((name) => name.toLowerCase() === match[2].toLowerCase()) + 1 : Number(iso[2]);
+    const day = Number(match ? match[1] : iso[3]);
+    if (year < 1900 || month < 1 || month > 12 || day < 1 || day > 31) return "";
+    const date = new Date(year, month - 1, day);
+    if (date.getFullYear() !== year || date.getMonth() + 1 !== month || date.getDate() !== day) return "";
+    return [year, String(month).padStart(2, "0"), String(day).padStart(2, "0")].join("-");
+  }
+
+  function formatStudentRecordDate(value) {
+    const ymd = studentRecordDateYmd(value, true);
+    if (!ymd) return "";
+    const [year, month, day] = ymd.split("-");
+    return day + "-" + STUDENT_DATE_MONTHS[Number(month) - 1] + "-" + year;
+  }
+
+  function nextStudentNumber(year, ageGroup) {
+    const prefix = isMinorAge(ageGroup) ? "K" : "A";
+    const key = prefix + String(year).slice(-2);
+    const used = state.students.reduce((max, student) => {
+      const match = String(student.studentNumber || "").match(/^([KA]\d{2})(\d{4})$/);
+      return match && match[1] === key ? Math.max(max, Number(match[2])) : max;
+    }, 0);
+    const next = Math.max(used, Number(state.suite.studentNumberCounters[key]) || 0) + 1;
+    if (next > 9999) throw new Error(year + " 年度的 " + (prefix === "K" ? "未成年" : "成年") + "學生編號已用完。");
+    return { key, sequence: next, value: key + String(next).padStart(4, "0") };
+  }
+
+  function courseForStudent(student) {
+    const saved = findById(state.suite.courses, student.courseId);
+    if (saved) return saved;
+    const enrollment = (student.enrollments || [])[0];
+    if (!enrollment) return null;
+    return displayCourses().find((row) => sameCourseValue(row.name, enrollment.courseName) &&
+      sameCourseValue(row.ageGroup, enrollment.ageGroup) && sameCourseValue(row.classSize, enrollment.classSize)) ||
+      { name: enrollment.courseName, duration: enrollment.duration, fee: enrollment.originalFee };
+  }
+
+  function courseChipSection(field, title, hint, values, selected) {
+    const icon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m2 9 10-5 10 5-10 5L2 9Zm4 3v5c3.8 2.7 8.2 2.7 12 0v-5M22 9v7"/></svg>';
+    return '<section class="course-chip-panel"><div class="course-chip-heading"><span class="course-chip-icon">' + icon + '</span><div><h2>' + title + '</h2><p>' + hint + '</p></div></div><div class="course-chip-list">' + (values.length ? values.map((value) =>
+      '<button class="course-chip' + (sameCourseValue(value, selected) ? ' is-selected' : '') + '" type="button" data-action="select-course-' + field + '" data-value="' + escapeHtml(value) + '" aria-pressed="' + sameCourseValue(value, selected) + '">' + escapeHtml(value) + '</button>').join('') : '<span class="course-empty-options">未有可選項目</span>') + '</div></section>';
   }
 
   function renderPeople() {
     const tutors = state.suite.accounts.filter((item) => item.role === "tutor");
-    const tab = state.peopleTab;
-    return '<section class="panel"><div class="toolbar"><div class="segmented"><button type="button" data-action="people-tab" data-value="students" class="' +
-      (tab === "students" ? "is-active" : "") + '">學生 ' + state.students.length + '</button><button type="button" data-action="people-tab" data-value="tutors" class="' +
-      (tab === "tutors" ? "is-active" : "") + '">導師 ' + tutors.length + '</button></div><button class="button button-secondary" type="button" data-action="' +
-      (tab === "students" ? "add-student" : "add-account") + '">＋ 新增' + (tab === "students" ? "學生" : "導師") + "</button></div>" +
-      (tab === "students" ? studentGridHtml() : tutorListHtml(tutors)) + "</section>";
+    const low = state.students.filter((student) => student.enrollmentStatus !== "pending" && student.remaining <= lowBalance()).length;
+    const unassigned = state.students.filter((student) => student.enrollmentStatus !== "pending" && !validDate(student.nextDate)).length;
+    const pending = state.students.filter((student) => student.enrollmentStatus === "pending").length;
+    const metrics = [
+      ["all", "學生總數", state.students.length, "blue"],
+      ["unassigned", "未排課", unassigned, "yellow"],
+      ["low", "需繳費", low, "pink"],
+      ["pending", "待確認學員", pending, "purple"],
+      ["tutors", "導師總數", tutors.length, "sand"]
+    ];
+    return '<section class="people-page"><div class="people-mobile-menu"' + (state.peopleMenuOpen ? '' : ' hidden') + '>' +
+      peopleActionHtml("add-course", "新增課程") + peopleActionHtml("import-students", "匯入") +
+      peopleActionHtml("add-student", "新增學生", true) + peopleActionHtml("add-tutor", "新增導師") + '</div>' +
+      '<div class="people-metrics">' + metrics.map(([filter, label, value, color]) =>
+        '<button type="button" class="people-metric ' + color + (state.peopleFilter === filter ? ' is-active' : '') + '" data-action="people-filter" data-value="' + filter + '" aria-pressed="' + (state.peopleFilter === filter) + '">' + peopleMetricIconHtml(filter) + '<small>' + label + '</small><strong>' + value + '</strong>' + (state.peopleFilter === filter ? '<span class="people-metric-dismiss" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17"/></svg></span>' : '') + '</button>').join('') + '</div>' +
+      '<div class="people-tools"><label class="people-search"><span aria-hidden="true">⌕</span><input id="people-search" type="search" placeholder="' + (state.peopleTab === "tutors" ? '搜尋導師' : '搜尋學生') + '" value="' + escapeHtml(state.peopleSearch) + '" aria-label="搜尋個人資訊"></label>' +
+      '<button class="people-round-button' + (state.peopleTab === "tutors" ? ' is-active' : '') + '" type="button" data-action="people-tab" data-value="' + (state.peopleTab === "tutors" ? 'students' : 'tutors') + '">♟ <span>' + (state.peopleTab === "tutors" ? '學員' : '導師') + '</span></button>' +
+      (state.peopleTab === "students" ? '<button class="people-round-button people-table-toggle' + (state.peopleLayout === "table" ? ' is-active' : '') + '" type="button" data-action="people-layout">▦ <span>' + (state.peopleLayout === "table" ? '卡片' : '表格') + '</span></button>' : '') + '</div>' +
+      '<div id="people-results">' + peopleResultsHtml() + '</div><p class="people-footnote">本機資料只保存在此瀏覽器；導師登入及權限會在接駁 Supabase 後生效。</p></section>';
+  }
+
+  function peopleActionIconHtml(action) {
+    const paths = {
+      "add-course": '<path d="M5 4h9.5A2.5 2.5 0 0 1 17 6.5V18H7a2 2 0 0 0-2 2V4Zm0 16a2 2 0 0 1 2-2h7.5M19.5 12.5v7m-3.5-3.5h7"/>',
+      "import-students": '<path d="M6 3h8l4 4v14H6V3Zm8 0v5h4M12 10v7m-3-3 3 3 3-3"/>',
+      "add-student": '<path d="M12 5v14M5 12h14"/>',
+      "add-tutor": '<path d="M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm-6 9c.45-4 2.45-6 6-6 1.45 0 2.65.33 3.58 1M18.5 12.5v7m-3.5-3.5h7"/>'
+    };
+    return '<svg class="people-action-icon" viewBox="0 0 24 24" aria-hidden="true">' + (paths[action] || "") + '</svg>';
+  }
+
+  function peopleMetricIconHtml(filter) {
+    const paths = {
+      all: '<path d="M8.5 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm7-1a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5ZM2.5 19c.35-3.5 2.35-5.25 6-5.25s5.65 1.75 6 5.25m-.5-6.25c3.5 0 5.5 1.75 5.75 5.25"/>',
+      unassigned: '<path d="M5 4v3m10-3v3M3 9h14M4 6h12a2 2 0 0 1 2 2v5.2M8.5 13.5h.01M12 13.5h.01M8.5 17h.01M17.5 14.5v4l2.5 1.5M17.5 22a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11Z"/>',
+      low: '<path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm0-13v5m0 3.5h.01"/>',
+      pending: '<path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-8 9c.4-4 3-6 8-6 1.8 0 3.3.3 4.5 1M19 15v6m-3-3h6"/>',
+      tutors: '<path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm0-14v5h3m4.5 4.5h4m-2-2v4"/>'
+    };
+    return '<svg class="people-metric-icon" viewBox="0 0 24 24" aria-hidden="true">' + (paths[filter] || "") + '</svg>';
+  }
+
+  function peopleActionHtml(action, label, primary = false) {
+    return '<button type="button" class="people-action' + (primary ? ' is-primary' : '') + '" data-action="' + action + '">' + peopleActionIconHtml(action) + label + '</button>';
+  }
+
+  function peopleResultsHtml() {
+    const search = state.peopleSearch.trim().toLocaleLowerCase();
+    if (state.peopleTab === "tutors" || state.peopleFilter === "tutors") {
+      const tutors = state.suite.accounts.filter((item) => item.role === "tutor" && (!search || [item.name, item.email, item.phone].some((value) => String(value || "").toLocaleLowerCase().includes(search))));
+      return tutorListHtml(tutors);
+    }
+    const students = state.students.filter((student) => {
+      if (state.peopleFilter === "pending" && student.enrollmentStatus !== "pending") return false;
+      if (state.peopleFilter === "low" && (student.enrollmentStatus === "pending" || student.remaining > lowBalance())) return false;
+      if (state.peopleFilter === "unassigned" && (student.enrollmentStatus === "pending" || validDate(student.nextDate))) return false;
+      const course = courseForStudent(student);
+      return !search || [student.name, student.whatsapp, student.ageGroup, student.roomName, course && course.name].some((value) => String(value || "").toLocaleLowerCase().includes(search));
+    }).sort((a, b) => a.name.localeCompare(b.name, "zh-Hant"));
+    if (!students.length) return emptyHtml("👤", "沒有符合條件的學生", "可以調整搜尋或篩選條件。");
+    if (state.peopleFilter === "pending") return '<div class="pending-student-list">' + students.map(pendingStudentHtml).join("") + '</div>';
+    if (state.peopleLayout === "table") return studentTableHtml(students);
+    const selected = students.find((student) => student.id === state.selectedStudentId) || students[0];
+    return '<div class="people-directory"><div class="people-name-list" aria-label="學生名單">' + students.map((student) =>
+      '<button type="button" class="people-name-item' + (student.id === selected.id ? ' is-selected' : '') + '" data-action="people-select-student" data-id="' + escapeHtml(student.id) + '">' + studentAvatarHtml(student) + '<span><strong>' + escapeHtml(student.name) + '</strong><small>' + escapeHtml((courseForStudent(student) || {}).name || (student.enrollmentStatus === "pending" ? "待確認，未付款" : "未指定課程")) + '</small></span></button>').join('') + '</div><div class="people-selected-detail">' + studentDetailHtml(selected) + '</div></div>' +
+      '<div class="people-mobile-cards">' + students.map(studentMobileCardHtml).join('') + '</div>';
+  }
+
+  function studentAvatarHtml(student) {
+    return '<span class="people-avatar">' + (student.photo ? '<img src="' + escapeHtml(student.photo) + '" alt="" />' : escapeHtml([...student.name][0] || "?")) + '</span>';
+  }
+
+  function pendingStudentHtml(student) {
+    const id = escapeHtml(student.id);
+    return '<article class="people-mobile-card pending-student-card"><div class="people-person-head">' + studentAvatarHtml(student) + '<div><h2>' + escapeHtml(student.name) + '</h2><p>' + escapeHtml(student.whatsapp || "未有 WhatsApp 號碼") + '</p></div></div>' +
+      '<dl class="people-facts"><div><dt>年齡組別</dt><dd>' + escapeHtml(student.ageGroup || "未設定") + '</dd></div><div><dt>課堂地點</dt><dd>' + escapeHtml(locationNameForId(student.roomId, student.roomName) || "未設定") + '</dd></div></dl>' +
+      '<div class="people-student-actions"><button class="mini-button" type="button" data-action="edit-student" data-id="' + id + '">修改學生資訊</button><button class="mini-button danger" type="button" data-action="delete-student" data-id="' + id + '">刪除</button></div></article>';
+  }
+
+  function studentStatusHtml(student) {
+    if (student.enrollmentStatus === "pending") return '<span class="people-status is-pending">待確認，未付款</span>';
+    const low = student.remaining <= lowBalance();
+    return '<span class="people-status' + (low ? ' needs-payment' : '') + '"><span aria-hidden="true">' + (low ? '!' : '✓') + '</span>' + (student.enrollmentStatus === "paid" ? "已付款 · " : "") + (low ? '需續費' : '尚餘 ' + student.remaining + ' 堂') + '</span>';
+  }
+
+  function studentActionsHtml(student) {
+    const id = escapeHtml(student.id);
+    if (student.enrollmentStatus === "pending") return '<div class="people-student-actions"><button class="mini-button" type="button" data-action="edit-student" data-id="' + id + '">修改學生資訊</button><button class="mini-button danger" type="button" data-action="delete-student" data-id="' + id + '">刪除</button></div>';
+    const low = student.remaining <= lowBalance();
+    return '<div class="people-student-actions"><button class="mini-button" type="button" data-action="edit-student" data-id="' + id + '">編輯資料</button>' +
+      '<button class="mini-button" type="button" data-action="complete-lesson" data-id="' + id + '">完成一堂</button>' +
+      '<button class="mini-button" type="button" data-action="prepare-message" data-id="' + id + '" data-type="' + (low ? 'payment' : 'lesson') + '">準備提醒</button>' +
+      '<button class="mini-button danger" type="button" data-action="delete-student" data-id="' + id + '">刪除</button></div>';
+  }
+
+  function studentDetailHtml(student) {
+    const course = courseForStudent(student);
+    const tutor = findById(state.suite.accounts, student.tutorId);
+    return '<article class="people-detail-card"><div class="people-person-head">' + studentAvatarHtml(student) + '<div><h2>' + escapeHtml(student.name) + '</h2><p>' + escapeHtml(course ? course.name : student.enrollmentStatus === "pending" ? "待確認，未付款" : "未指定課程") + '</p></div><button class="people-edit-button" type="button" data-action="edit-student" data-id="' + escapeHtml(student.id) + '" aria-label="編輯 ' + escapeHtml(student.name) + '">✎</button></div>' + studentStatusHtml(student) + '</article>' +
+      '<article class="people-detail-card"><h3>基本資料</h3><dl class="people-facts"><div><dt>學生狀態</dt><dd>' + escapeHtml(student.enrollmentStatus === "pending" ? "待確認，未付款" : student.enrollmentStatus === "paid" ? "已付款" : "舊資料") + '</dd></div><div><dt>學生編號</dt><dd>' + escapeHtml(student.studentNumber || "未編配") + '</dd></div><div><dt>年齡組別</dt><dd>' + escapeHtml(student.ageGroup || "未設定") + '</dd></div><div><dt>WhatsApp</dt><dd>' + escapeHtml(student.whatsapp || "未設定") + '</dd></div><div><dt>課堂地點</dt><dd>' + escapeHtml(locationNameForId(student.roomId, student.roomName) || "未設定") + '</dd></div><div><dt>課程</dt><dd>' + escapeHtml(course ? course.name : "未指定") + '</dd></div><div><dt>負責導師</dt><dd>' + escapeHtml(tutor ? tutor.name : "未指定") + '</dd></div>' + (student.enrollmentStatus === "pending" ? '' : '<div><dt>下一堂</dt><dd>' + escapeHtml(student.nextDate ? student.nextDate + " " + (student.nextTime || student.time) : "未編排") + '</dd></div><div><dt>剩餘堂數</dt><dd>' + student.remaining + ' 堂</dd></div>') + '</dl>' + studentActionsHtml(student) + '</article>';
+  }
+
+  function studentMobileCardHtml(student) {
+    const course = courseForStudent(student);
+    return '<article class="people-mobile-card"><div class="people-person-head">' + studentAvatarHtml(student) + '<div><h2>' + escapeHtml(student.name) + '</h2><p>' + escapeHtml(course ? course.name : "未指定課程") + '</p><small>' + escapeHtml(student.enrollmentStatus === "pending" ? [student.whatsapp, student.ageGroup, locationNameForId(student.roomId, student.roomName)].filter(Boolean).join(" · ") : student.nextDate ? student.nextDate + " · " + (student.nextTime || student.time) : "未編排課堂") + '</small></div><button class="people-edit-button" type="button" data-action="edit-student" data-id="' + escapeHtml(student.id) + '" aria-label="編輯 ' + escapeHtml(student.name) + '">✎</button></div>' + studentStatusHtml(student) + '<details class="people-card-more"><summary>' + (student.enrollmentStatus === "pending" ? "跟進操作" : "課堂操作") + '</summary>' + studentActionsHtml(student) + '</details></article>';
+  }
+
+  function studentTableHtml(students) {
+    return '<div class="people-table-wrap"><table class="people-table"><thead><tr><th>學生</th><th>課程</th><th>負責導師</th><th>下一堂</th><th>剩餘堂數</th><th>操作</th></tr></thead><tbody>' + students.map((student) => {
+      const course = courseForStudent(student);
+      const tutor = findById(state.suite.accounts, student.tutorId);
+      return '<tr><td>' + escapeHtml(student.name) + '</td><td>' + escapeHtml(course ? course.name : "—") + '</td><td>' + escapeHtml(tutor ? tutor.name : "—") + '</td><td>' + escapeHtml(student.enrollmentStatus === "pending" ? "待確認" : student.nextDate ? student.nextDate + " " + (student.nextTime || student.time) : "未編排") + '</td><td>' + student.remaining + '</td><td><button type="button" class="mini-button" data-action="edit-student" data-id="' + escapeHtml(student.id) + '">編輯</button></td></tr>';
+    }).join('') + '</tbody></table></div>';
   }
 
   function studentGridHtml() {
     if (!state.students.length) return emptyHtml("👤", "未有學生資料", "新增學生後便可以排課、收款及準備提醒。");
     return '<div class="student-grid">' + [...state.students].sort((a, b) => a.name.localeCompare(b.name, "zh-Hant")).map((student) => {
-      const course = findById(state.suite.courses, student.courseId);
-      const low = student.remaining <= lowBalance();
+      const course = courseForStudent(student);
+      const low = student.enrollmentStatus !== "pending" && student.remaining <= lowBalance();
       const progress = Math.max(0, Math.min(100, student.remaining / Math.max(student.prepaid, 1) * 100));
       return '<article class="student-card ' + (low ? "is-low" : "") + '"><div class="student-head"><div class="student-name"><div class="avatar-small">' +
         escapeHtml([...student.name].slice(0, 2).join("")) + '</div><div><h3>' + escapeHtml(student.name) + '</h3><p>' +
@@ -480,38 +839,128 @@
 
   function tutorListHtml(tutors) {
     if (!tutors.length) return emptyHtml("🧑‍🏫", "未有導師資料", "新增導師帳戶後可指派給學生。");
-    return '<div class="list-stack">' + tutors.map((item) =>
-      '<article class="list-row"><div class="row-icon">🧑‍🏫</div><div class="row-main"><strong>' + escapeHtml(item.name) + '</strong><span>' +
-      escapeHtml(item.email || "未有電郵") + " · " + escapeHtml(item.status === "active" ? "啟用" : "停用") + '</span></div><div class="row-actions"><button class="mini-button" type="button" data-action="edit-account" data-id="' +
-      item.id + '">編輯</button></div></article>'
-    ).join("") + "</div>";
+    return '<div class="people-tutor-list">' + tutors.map((item) => {
+      const courseNames = (item.courseIds || []).map((id) => findById(state.suite.courses, id)).filter(Boolean).map((course) => course.name);
+      const payroll = tutorMonthlyPayroll(item);
+      return '<article class="people-mobile-card"><div class="people-person-head"><span class="people-avatar">' + escapeHtml([...item.name][0] || "?") + '</span><div><h2>' + escapeHtml(item.name) + '</h2><p>' + escapeHtml(item.phone || item.email || "未有聯絡資料") + '</p><small>' + escapeHtml(courseNames.join("、") || "未指定課程") + '</small></div><button class="people-edit-button" type="button" data-action="edit-account" data-id="' + escapeHtml(item.id) + '" aria-label="編輯導師 ' + escapeHtml(item.name) + '">✎</button></div><span class="people-status">登入未啟用</span>' +
+        '<div class="tutor-payroll"><span>本月 ' + payroll.lessons + ' 堂 · ' + formatHours(payroll.hours) + ' 小時</span><strong>預計人工 ' + formatMoney(payroll.amount) + '</strong></div></article>';
+    }).join('') + '</div>';
+  }
+
+  function tutorMonthlyPayroll(tutor, month = todayYmd().slice(0, 7)) {
+    let minutes = 0;
+    let lessons = 0;
+    for (const student of state.students) {
+      const course = courseForStudent(student);
+      for (const record of student.history || []) {
+        if (record.type !== "completed" || !String(record.lessonDate || "").startsWith(month)) continue;
+        if ((record.tutorId || student.tutorId || "") !== tutor.id) continue;
+        minutes += Number(record.durationMinutes) || Number(course && course.duration) || 60;
+        lessons += 1;
+      }
+    }
+    const hours = minutes / 60;
+    return { lessons, hours, amount: hours * (Number(tutor.hourlyRate) || 0) };
+  }
+
+  function formatHours(value) {
+    return Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, "");
+  }
+
+  function locationNameForId(id, fallbackName) {
+    const room = id ? findById(state.suite.rooms, id) : null;
+    if (room) return room.name;
+    const pool = state.suite.poolLocations.find((item) => poolOptionId(item.pool) === id);
+    return pool ? pool.pool : String(fallbackName || "");
+  }
+
+  function poolOptionId(name) {
+    return "pool:" + encodeURIComponent(String(name || "").trim().toLocaleLowerCase());
+  }
+
+  function uniquePoolValues(items, field) {
+    return items.reduce((values, item) => {
+      const value = String(item[field] || "").trim();
+      if (value && !values.some((other) => other.toLocaleLowerCase() === value.toLocaleLowerCase())) values.push(value);
+      return values;
+    }, []);
+  }
+
+  function usedUnlistedLocations() {
+    const poolNames = uniquePoolValues(state.suite.poolLocations, "pool");
+    const listedIds = new Set(state.suite.rooms.map((room) => room.id).concat(poolNames.map(poolOptionId)));
+    const listedNames = new Set(state.suite.rooms.map((room) => String(room.name || "").trim().toLocaleLowerCase()).concat(poolNames.map((name) => name.toLocaleLowerCase())));
+    const used = new Map();
+    const add = (id, name) => {
+      const normalizedName = String(name || "").trim();
+      if (!normalizedName || listedIds.has(id) || listedNames.has(normalizedName.toLocaleLowerCase())) return;
+      const key = id || "name:" + normalizedName.toLocaleLowerCase();
+      if (!used.has(key)) used.set(key, { id: id || "", name: normalizedName });
+    };
+    state.students.forEach((student) => {
+      add(student.roomId, student.roomName);
+      (student.history || []).forEach((record) => {
+        add(record.roomId, record.roomName);
+        add(record.newRoomId, record.newRoomName);
+      });
+    });
+    return Array.from(used.values());
+  }
+
+  function locationSelectOptions() {
+    const pools = uniquePoolValues(state.suite.poolLocations, "pool").map((name) => ({ value: poolOptionId(name), label: name }));
+    const poolNames = new Set(pools.map((item) => item.label.toLocaleLowerCase()));
+    return pools.concat(state.suite.rooms.filter((room) => !poolNames.has(String(room.name || "").trim().toLocaleLowerCase())).map((room) => ({ value: room.id, label: room.name })),
+      usedUnlistedLocations().map((room) => ({ value: room.id, label: room.name + "（使用中但未列入清單）" }))
+    );
   }
 
   function renderRooms() {
-    const options = state.suite.bookingOptions;
-    return statsHtml([
-      { label: "課室／泳線", value: state.suite.rooms.length, unit: "個" },
-      { label: "可使用", value: state.suite.rooms.filter((item) => item.active).length, unit: "個" },
-      { label: "網上預約", value: options.onlineBooking ? "開啟" : "關閉" },
-      { label: "緩衝時間", value: options.bufferMinutes, unit: "分鐘" }
-    ]) + '<div class="setting-grid"><section class="panel"><div class="panel-heading"><div><h2>房間清單</h2><p>泳池、泳線或實體課室</p></div></div>' +
-      (state.suite.rooms.length ? '<div class="list-stack">' + state.suite.rooms.map((room) =>
-        '<article class="list-row"><div class="row-icon">🚪</div><div class="row-main"><strong>' + escapeHtml(room.name) + '</strong><span>' +
-        escapeHtml(room.location) + " · 容量 " + room.capacity + " 人</span></div><span class=\"badge " + (room.active ? "" : "neutral") + '">' +
-        (room.active ? "可預約" : "停用") + '</span><div class="row-actions"><button class="mini-button" type="button" data-action="edit-room" data-id="' + room.id +
-        '">編輯</button><button class="mini-button danger" type="button" data-action="delete-room" data-id="' + room.id + '">刪除</button></div></article>'
-      ).join("") + "</div>" : emptyHtml("🚪", "未有課室", "新增泳池、泳線或課室。")) + '</section><section class="panel"><div class="panel-heading"><div><h2>預約選項</h2><p>設定排課規則</p></div></div>' +
-      '<label class="checkbox-field"><input type="checkbox" data-booking-option="onlineBooking" ' + (options.onlineBooking ? "checked" : "") + '> 允許網上預約</label>' +
-      '<label class="checkbox-field" style="margin-top:12px"><input type="checkbox" data-booking-option="preventOverlap" ' + (options.preventOverlap ? "checked" : "") + '> 防止同一課室重疊</label>' +
-      '<label class="field" style="margin-top:15px"><span>課堂之間緩衝分鐘</span><input type="number" min="0" max="120" data-booking-option="bufferMinutes" value="' +
-      options.bufferMinutes + '"></label><p class="helper-text">設定會在此瀏覽器內套用到新排課。</p></section></div>';
+    const records = state.suite.poolLocations;
+    const pools = uniquePoolValues(records, "pool");
+    const selection = state.locationSelection;
+    const places = uniquePoolValues(selection.pool ? records.filter((item) => item.pool === selection.pool) : records, "place");
+    const chosen = selection.pool && selection.place ? records.find((item) => item.pool === selection.pool && item.place === selection.place) : null;
+    const unlisted = usedUnlistedLocations();
+    const unlistedHtml = unlisted.length ? '<div class="location-unlisted-list">' + unlisted.map((room) =>
+      '<button type="button" class="location-unlisted-chip" data-action="restore-location" data-id="' + escapeHtml(room.id) + '" data-name="' + escapeHtml(room.name) + '"><span aria-hidden="true">＋</span>' + escapeHtml(room.name) + '</button>'
+    ).join("") + '</div>' : '';
+    const legacy = state.suite.rooms.filter((room) => !pools.some((name) => name.toLocaleLowerCase() === String(room.name || "").trim().toLocaleLowerCase()));
+    return '<section class="course-page location-page"><div class="location-mobile-menu"' + (state.locationMenuOpen ? '' : ' hidden') + '><button type="button" data-action="add-pool">＋ 新增泳池</button><button type="button" data-action="import-locations">↧ 匯入</button><button type="button" data-action="manage-locations">✎ 更新／刪除</button></div>' +
+      '<p class="course-source-note">內附 <a href="' + escapeHtml(window.SwimLocationImport.SOURCE_URL) + '" target="_blank" rel="noopener noreferrer">Google 泳班地點表</a>的 17 組首批資料作為初始清單。匯入新表格前可先預覽新增及更新內容。</p>' +
+      '<section class="course-chip-panel"><div class="course-chip-heading"><span class="course-chip-icon">' + locationPanelIcon() + '</span><div><h2>課堂泳池</h2><p>選擇泳班使用的泳池</p></div></div><div class="course-chip-list location-pool-list">' +
+      (pools.length ? pools.map((name, index) => '<div class="location-pool-option"><span class="location-pool-dot location-pool-dot-' + (index % 4) + '" aria-hidden="true"></span><button class="course-chip' + (selection.pool === name ? ' is-selected' : '') + '" type="button" data-action="select-location-pool" data-value="' + escapeHtml(name) + '" aria-pressed="' + (selection.pool === name) + '">' + escapeHtml(name) + '</button><button class="location-pool-manage" type="button" data-action="manage-pool" data-value="' + escapeHtml(name) + '" aria-label="管理 ' + escapeHtml(name) + ' 的地點組合" title="管理／刪除地點組合">' + trashIconHtml() + '</button></div>').join('') : '<span class="course-empty-options">尚未有課堂泳池。按右上角「新增泳池」或「匯入」。</span>') + '</div></section>' +
+      locationChipSection('泳池地點', '按課堂泳池顯示可選地點', places, selection.place, 'select-location-place') +
+      '<section class="course-summary location-summary"><div class="course-summary-heading"><h2>所選泳班地點</h2><p>選定課堂泳池及泳池地點後，自動顯示該組的集合資訊。</p></div><div class="location-summary-grid">' +
+      locationSummaryCard('課堂泳池', selection.pool || '請選擇', '') + locationSummaryCard('泳池地點', selection.place || '請選擇', '') +
+      locationSummaryCard('集合位置', chosen ? chosen.meetingPoint : '—', 'location-summary-wide') +
+      locationSummaryCard('泳池清潔日', chosen ? chosen.cleaningDay : '—', '') + locationSummaryCard('年度維修時間', chosen ? chosen.maintenanceTime : '—', '') + '</div>' +
+      (chosen ? '<div class="course-record-actions"><button class="mini-button" type="button" data-action="edit-pool-location" data-id="' + escapeHtml(chosen.id) + '">✎ 編輯這組</button><button class="mini-button danger" type="button" data-action="delete-pool-location" data-id="' + escapeHtml(chosen.id) + '">▤ 刪除這組</button></div>' : '<p class="course-selection-help">只會編輯或刪除選定的「課堂泳池＋泳池地點」組合，其他地點不受影響。</p>') + '</section>' +
+      (legacy.length ? '<section class="course-chip-panel location-legacy"><div class="course-chip-heading"><span class="course-chip-icon">' + locationPanelIcon() + '</span><div><h2>舊有地點清單</h2><p>保留原有學生及課堂連結。</p></div></div><div class="course-chip-list">' + legacy.map((room) => '<span class="course-chip">' + escapeHtml(room.name) + '</span>').join('') + '</div></section>' : '') +
+      '<section class="course-chip-panel location-unlisted"><h3>使用中但未列入的泳班地點</h3><p>以下地點已用於學生檔案或課堂，但未列入上方清單。點按地點即可重新加入舊有清單。</p>' + unlistedHtml + '</section></section>';
+  }
+
+  function locationPanelIcon() {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V7h10v14M8 10h1m3 0h1m-5 4h1m3 0h1m5 7V3h3v18M3 21h19"/></svg>';
+  }
+
+  function trashIconHtml() {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v6m4-6v6"/></svg>';
+  }
+
+  function locationChipSection(title, hint, values, selected, action) {
+    return '<section class="course-chip-panel"><div class="course-chip-heading"><span class="course-chip-icon">' + locationPanelIcon() + '</span><div><h2>' + title + '</h2><p>' + hint + '</p></div></div><div class="course-chip-list">' + (values.length ? values.map((value) => '<button class="course-chip' + (selected === value ? ' is-selected' : '') + '" type="button" data-action="' + action + '" data-value="' + escapeHtml(value) + '" aria-pressed="' + (selected === value) + '">' + escapeHtml(value) + '</button>').join('') : '<span class="course-empty-options">未有可選地點</span>') + '</div></section>';
+  }
+
+  function locationSummaryCard(label, value, extraClass) {
+    return '<article class="course-summary-card ' + extraClass + '"><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(value) + '</strong></article>';
   }
 
   function renderPayments() {
     const month = todayYmd().slice(0, 7);
     const monthPayments = state.suite.payments.filter((item) => item.date.startsWith(month));
     const total = monthPayments.reduce((sum, item) => sum + Number(item.amount || 0), 0);
-    const outstanding = state.students.filter((item) => item.remaining <= lowBalance());
+    const outstanding = state.students.filter((item) => item.enrollmentStatus !== "pending" && item.remaining <= lowBalance());
     return statsHtml([
       { label: "本月收入", value: formatMoney(total) },
       { label: "本月收款", value: monthPayments.length, unit: "筆" },
@@ -555,22 +1004,26 @@
   }
 
   function renderAccounts() {
-    const parents = state.suite.accounts.filter((item) => item.role === "parent").length;
-    const tutors = state.suite.accounts.filter((item) => item.role === "tutor").length;
+    const tutors = state.suite.accounts.filter((item) => item.role === "tutor");
+    const payrolls = tutors.map((tutor) => ({ tutor, ...tutorMonthlyPayroll(tutor) }));
+    const totalHours = payrolls.reduce((sum, item) => sum + item.hours, 0);
+    const totalLessons = payrolls.reduce((sum, item) => sum + item.lessons, 0);
+    const totalPayroll = payrolls.reduce((sum, item) => sum + item.amount, 0);
+    const preservedParents = state.suite.accounts.filter((item) => item.role === "parent").length;
     return statsHtml([
-      { label: "帳戶總數", value: state.suite.accounts.length, unit: "個" },
-      { label: "家長帳戶", value: parents, unit: "個" },
-      { label: "導師帳戶", value: tutors, unit: "個" },
-      { label: "啟用帳戶", value: state.suite.accounts.filter((item) => item.status === "active").length, unit: "個" }
-    ]) + '<section class="panel"><div class="panel-heading"><div><h2>本機帳戶目錄</h2><p>只記錄聯絡及角色資料，不儲存密碼</p></div></div>' +
-      (state.suite.accounts.length ? '<div class="list-stack">' + state.suite.accounts.map((account) =>
-        '<article class="list-row"><div class="row-icon">' + (account.role === "tutor" ? "🧑‍🏫" : "👪") + '</div><div class="row-main"><strong>' +
-        escapeHtml(account.name) + '</strong><span>' + (account.role === "tutor" ? "導師" : "家長") + " · " + escapeHtml(account.email || account.phone || "未有聯絡資料") +
-        '</span></div><span class="badge ' + (account.status === "active" ? "" : "neutral") + '">' + (account.status === "active" ? "啟用" : "停用") +
-        '</span><div class="row-actions"><button class="mini-button" type="button" data-action="toggle-account" data-id="' + account.id + '">' +
-        (account.status === "active" ? "停用" : "啟用") + '</button><button class="mini-button" type="button" data-action="edit-account" data-id="' + account.id +
-        '">編輯</button><button class="mini-button danger" type="button" data-action="delete-account" data-id="' + account.id + '">刪除</button></div></article>'
-      ).join("") + "</div>" : emptyHtml("🧑‍🏫", "未有帳戶", "新增家長或導師帳戶目錄。")) + "</section>";
+      { label: "導師總數", value: tutors.length, unit: "位" },
+      { label: "本月完成課堂", value: totalLessons, unit: "堂" },
+      { label: "本月授課時數", value: formatHours(totalHours), unit: "小時" },
+      { label: "本月預計人工", value: formatMoney(totalPayroll) }
+    ]) + '<section class="panel"><div class="panel-heading"><div><h2>導師資料及人工</h2><p>本月人工＝教練時薪 × 本月已完成游泳班時數</p></div></div>' +
+      (payrolls.length ? '<div class="list-stack">' + payrolls.map(({ tutor, lessons, hours, amount }) => {
+        const courseNames = (tutor.courseIds || []).map((id) => findById(state.suite.courses, id)).filter(Boolean).map((course) => course.name);
+        return '<article class="list-row tutor-account-row"><div class="row-icon">🧑‍🏫</div><div class="row-main"><strong>' + escapeHtml(tutor.name) + '</strong><span>' +
+          escapeHtml(courseNames.join("、") || "未指定課程") + ' · 時薪 ' + formatMoney(tutor.hourlyRate || 0) + '</span><span>本月 ' + lessons + ' 堂 · ' + formatHours(hours) +
+          ' 小時 · 預計人工 ' + formatMoney(amount) + '</span></div><div class="row-actions"><button class="mini-button" type="button" data-action="edit-account" data-id="' + tutor.id +
+          '">編輯</button><button class="mini-button danger" type="button" data-action="delete-account" data-id="' + tutor.id + '">刪除</button></div></article>';
+      }).join("") + "</div>" : emptyHtml("🧑‍🏫", "未有導師", "按「新增導師」建立第一位導師。")) +
+      (preservedParents ? '<p class="helper-text accounts-preserved-note">已有 ' + preservedParents + ' 個家長帳戶資料獲保留，但不會出現在新增導師表單。</p>' : '') + "</section>";
   }
 
   function renderProducts() {
@@ -647,7 +1100,7 @@
       ["相片儲存有甚麼限制？", "相片會轉成瀏覽器本機資料，每張限制 1MB，以免本機儲存空間過快用完。"]
     ];
     return '<section class="panel"><div class="panel-heading"><div><h2>完整開台流程</h2><p>建議按次序完成</p></div></div><div class="list-stack">' +
-      ["完成品牌及帳戶設定", "建立課程與級別", "新增課室／泳線及預約規則", "新增導師與家長帳戶目錄", "建立學生及指派課程、導師", "記錄首次收款及預繳堂數", "編排下一堂日期、時間與課室", "日常完成課堂、改期、發提醒及記筆記"].map((text, index) =>
+      ["完成品牌及帳戶設定", "建立課程與級別", "新增泳班地點", "新增導師、課程及教練時薪", "建立學生及指派課程、導師", "記錄首次收款及預繳堂數", "編排下一堂日期、時間與泳班地點", "日常完成課堂、改期、發提醒及記筆記"].map((text, index) =>
         '<div class="list-row"><div class="row-icon">' + (index + 1) + '</div><div class="row-main"><strong>' + escapeHtml(text) + '</strong></div></div>'
       ).join("") + '</div></section><section class="panel"><div class="panel-heading"><div><h2>常見問題</h2><p>Version 1 功能說明</p></div></div><div class="faq-list">' +
       faqs.map((item) => '<details><summary>' + escapeHtml(item[0]) + '</summary><p>' + escapeHtml(item[1]) + "</p></details>").join("") + "</div></section>";
@@ -672,6 +1125,8 @@
   }
 
   function openForm(config) {
+    elements.formDialog.classList.remove("student-dialog");
+    elements.formFields.classList.remove("student-form-fields");
     state.formHandler = config.onSubmit;
     elements.formKicker.textContent = config.kicker || "資料管理";
     elements.formTitle.textContent = config.title;
@@ -703,54 +1158,263 @@
       (field.help ? '<small class="helper-text">' + escapeHtml(field.help) + "</small>" : "") + "</label>";
   }
 
-  function studentFields(student) {
+  function studentFloatingField(name, label, value = "", options = {}) {
+    const type = options.type || "text";
+    const attrs = (options.required ? " required" : "") + (options.readonly ? " readonly" : "") +
+      (options.min != null ? ' min="' + options.min + '"' : "") + (options.max != null ? ' max="' + options.max + '"' : "") +
+      (options.maxlength ? ' maxlength="' + options.maxlength + '"' : "") + (options.inputmode ? ' inputmode="' + options.inputmode + '"' : "");
+    return '<label class="student-floating' + (value ? ' is-filled' : '') + (type === "date" || type === "time" ? ' student-has-native-date' : '') + (options.placeholder && !options.floatHintOnFocus ? ' student-has-hint' : '') + (options.wide ? ' student-wide' : '') + '"><input name="' + name + '" type="' + type + '" value="' + escapeHtml(value) + '" placeholder="' + escapeHtml(options.placeholder || " ") + '"' + attrs + '><span>' + escapeHtml(label) + (options.required && options.requiredMarker !== false ? ' <b>*</b>' : '') + '</span></label>';
+  }
+
+  function studentRecordDateFieldHtml(value) {
+    return '<div class="student-record-date"><label for="student-record-date-text">今日日期</label><div class="student-record-date-control">' +
+      '<input id="student-record-date-text" name="recordDate" type="text" value="' + escapeHtml(formatStudentRecordDate(value)) + '" placeholder="DD-MMM-YYYY" autocomplete="off" spellcheck="false" required aria-describedby="student-record-date-error">' +
+      '<button class="student-record-date-calendar" type="button" data-action="student-record-date-calendar" aria-label="開啟日曆選擇今日日期" title="開啟日曆選擇今日日期"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 2v4M17 2v4M4 9h16M5 5h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/><path d="M9 13h6v5H9z"/></svg></button>' +
+      '<input id="student-record-date-picker" class="student-record-date-picker" type="date" value="' + escapeHtml(value) + '" tabindex="-1" aria-hidden="true"></div><small id="student-record-date-error" class="student-record-date-error" aria-live="polite"></small></div>';
+  }
+
+  function studentChoices(name, values, selected, required = false, disabled = () => false) {
+    return '<div class="student-choice-list">' + values.map((value) => '<label class="student-choice"><input type="radio" name="' + name + '" value="' + escapeHtml(value) + '"' + (value === selected ? ' checked' : '') + (required ? ' required' : '') + (disabled(value) ? ' disabled' : '') + '><span>' + escapeHtml(value) + '</span></label>').join('') + '</div>';
+  }
+
+  function studentSelectField(name, label, selected, options) {
+    return '<label class="student-floating student-select' + (selected ? ' is-filled' : '') + '"><select name="' + name + '"><option value="">請選擇</option>' +
+      options.map((item) => '<option value="' + escapeHtml(item.value) + '"' + (item.value === selected ? ' selected' : '') + '>' + escapeHtml(item.label) + '</option>').join('') + '</select><span>' + escapeHtml(label) + '</span></label>';
+  }
+
+  function studentLocationPickerHtml(selected, options) {
+    const current = options.find((item) => item.value === selected);
+    return '<fieldset class="student-location-field"><legend>課堂地點</legend><details id="student-location-picker"><summary><span id="student-location-label">' + escapeHtml(current ? current.label : "請選擇課堂泳池") + '</span><span aria-hidden="true">⌄</span></summary><div class="student-location-options">' +
+      [{ value: "", label: "不設課堂地點" }].concat(options).map((item) => '<label><input type="radio" name="roomId" value="' + escapeHtml(item.value) + '"' + (item.value === selected ? ' checked' : '') + '><span>' + escapeHtml(item.label) + '</span></label>').join('') +
+      '</div></details></fieldset>';
+  }
+
+  function studentFormHtml(student) {
     const item = student || {};
-    const courseOptions = [{ value: "", label: "未指定課程" }].concat(state.suite.courses.map((course) => ({ value: course.id, label: course.name + "｜" + course.level })));
-    const roomOptions = [{ value: "", label: "未指定課室" }].concat(state.suite.rooms.map((room) => ({ value: room.id, label: room.name })));
-    const tutorOptions = [{ value: "", label: "未指定導師" }].concat(state.suite.accounts.filter((account) => account.role === "tutor").map((account) => ({ value: account.id, label: account.name })));
-    return [
-      { name: "id", type: "hidden", value: item.id || "" },
-      { name: "name", label: "學生姓名", type: "text", value: item.name || "", required: true, wide: true },
-      { name: "courseId", label: "課程", type: "select", value: item.courseId || "", options: courseOptions },
-      { name: "tutorId", label: "負責導師", type: "select", value: item.tutorId || "", options: tutorOptions },
-      { name: "weekday", label: "每週上課日", type: "select", value: item.weekday == null ? 1 : item.weekday, options: WEEKDAYS.map((label, value) => ({ label, value })) },
-      { name: "time", label: "固定時間", type: "time", value: item.time || "18:00", required: true },
-      { name: "prepaid", label: "預繳堂數", type: "number", value: item.prepaid == null ? 8 : item.prepaid, min: 1, max: 999, required: true },
-      { name: "remaining", label: "現時剩餘堂數", type: "number", value: item.remaining == null ? 8 : item.remaining, min: 0, max: 999, required: true },
-      { name: "nextDate", label: "下一堂日期", type: "date", value: item.nextDate || formatYmd(nextDateForWeekday(item.weekday == null ? 1 : item.weekday)), required: true },
-      { name: "roomId", label: "課室／泳線", type: "select", value: item.roomId || "", options: roomOptions }
-    ];
+    const recordDate = item.recordDate || (item.createdAt ? String(item.createdAt).slice(0, 10) : todayYmd());
+    const age = item.ageGroup || "";
+    const ageOptions = studentAgeGroups();
+    if (age && !ageOptions.some((value) => sameCourseValue(value, age))) ageOptions.push(age);
+    const legacy = item.enrollmentStatus === "legacy";
+    const paid = item.enrollmentStatus === "paid" || item.enrollmentStatus === "legacy";
+    const roomOptions = locationSelectOptions().filter((option) => option.value.startsWith("pool:"));
+    if (item.roomId && !roomOptions.some((option) => option.value === item.roomId)) roomOptions.push({ value: item.roomId, label: item.roomName || "舊有地點" });
+    return '<input type="hidden" name="id" value="' + escapeHtml(item.id || "") + '">' +
+      '<div class="student-photo-row"><span class="student-photo-preview" id="student-photo-preview">' + (item.photo ? '<img src="' + escapeHtml(item.photo) + '" alt="學生相片預覽">' : '<span aria-hidden="true">👤</span>') + '</span><label class="student-photo-upload"><input id="student-photo-file" class="sr-only" type="file" accept="image/png,image/jpeg,image/webp,image/gif">▣ 上載相片</label><small>PNG、JPG、WebP 或 GIF，最多 1MB</small></div>' +
+      studentFloatingField("name", "學生姓名(必填)", item.name || "", { required: true, requiredMarker: false, wide: true, maxlength: 60 }) +
+      '<fieldset class="student-choice-group student-segmented student-age-group student-wide"><legend>年齡組別 <b>*</b></legend>' + studentChoices("ageGroup", ageOptions, age, !legacy, (value) => Boolean(item.studentNumber) && isMinorAge(value) !== isMinorAge(age)) + '</fieldset>' +
+      '<div class="student-birth-fields student-wide" id="student-birth-fields"' + (isMinorAge(age) ? '' : ' hidden') + '>' + studentFloatingField("birthMonth", "出生月份 MM", item.birthMonth || "", { type: "number", min: 1, max: 12, inputmode: "numeric" }) + studentFloatingField("birthYear", "出生年份 YYYY", item.birthYear || "", { type: "number", min: 1900, max: new Date().getFullYear(), inputmode: "numeric" }) + '<div class="student-floating student-age-output"><output id="student-age-preview" aria-live="polite"></output><span>學生年齡</span></div></div>' +
+      '<div class="student-demographics student-wide"><fieldset class="student-choice-group student-segmented student-gender"><legend>性別 <b>*</b></legend>' + studentChoices("gender", ["男", "女"], item.gender || "", !legacy) + '</fieldset>' +
+      '<fieldset class="student-choice-group student-segmented student-status"><legend>學生狀態</legend>' + studentChoices("enrollmentStatus", ["待確認，未付款", "已付款"], paid ? "已付款" : "待確認，未付款", true, (value) => Boolean(item.studentNumber) && value === "待確認，未付款") + '</fieldset>' +
+      studentRecordDateFieldHtml(recordDate) + '</div>' +
+      '<div class="student-number-section student-wide"><div class="student-number-panel student-number-year"><h3>學生加入年份</h3><div id="student-year-choices"></div><p id="student-number-hint"></p></div>' +
+      '<div class="student-number-panel student-number-result"><h3>學生編號</h3><strong id="student-number-preview" aria-live="polite"></strong></div></div>' +
+      '<section class="student-enrollments student-wide"><div class="student-section-heading"><div><h3>報讀課程</h3><p>每位學生最多可新增四個課堂。</p></div><button class="mini-button" type="button" data-action="student-add-course" id="student-add-course">新增</button></div><div id="student-course-list"></div></section>' +
+      studentFloatingField("guardianName", isMinorAge(age) ? "監護人" : "緊急聯絡人", item.guardianName || "") +
+      studentFloatingField("whatsapp", "聯絡號碼 (WhatsApp)", item.whatsapp || "", { required: !legacy, type: "tel", inputmode: "tel", maxlength: 30 }) +
+      studentFloatingField("homeMtr", "居住地點", item.homeMtr || "", { placeholder: "請填寫鄰近港鐵站", floatHintOnFocus: true }) +
+      '<div id="student-school-field"' + (isMinorAge(age) ? '' : ' hidden') + '>' + studentFloatingField("schoolMtr", "學校地點", item.schoolMtr || "", { placeholder: "請填寫鄰近港鐵站", floatHintOnFocus: true }) + '</div>' +
+      '<div id="student-work-field"' + (age && !isMinorAge(age) ? '' : ' hidden') + '>' + studentFloatingField("workMtr", "工作地點", item.workMtr || "", { placeholder: "請填寫鄰近港鐵站" }) + '</div>' +
+      studentLocationPickerHtml(item.roomId || "", roomOptions) +
+      '<details class="student-legacy-fields student-wide"><summary>課堂排程、導師與堂數' + (student ? '（保留現有資料）' : '（選填）') + '</summary><div class="student-legacy-grid">' +
+      studentSelectField("legacyCourseId", "舊有連結課程", item.courseId || "", state.suite.courses.map((course) => ({ value: course.id, label: courseLabel(course) }))) +
+      studentSelectField("tutorId", "負責導師", item.tutorId || "", state.suite.accounts.filter((account) => account.role === "tutor").map((account) => ({ value: account.id, label: account.name }))) +
+      studentSelectField("weekday", "每週上課日", String(item.weekday == null ? 1 : item.weekday), WEEKDAYS.map((label, value) => ({ value: String(value), label }))) +
+      studentFloatingField("time", "固定時間", item.time || "18:00", { type: "time" }) +
+      studentFloatingField("prepaid", "預繳堂數", item.prepaid == null ? "0" : String(item.prepaid), { type: "number", min: 0, max: 999 }) +
+      studentFloatingField("remaining", "現時剩餘堂數", item.remaining == null ? "0" : String(item.remaining), { type: "number", min: 0, max: 999 }) +
+      studentFloatingField("nextDate", "下一堂日期", item.nextDate || "", { type: "date" }) + '</div></details>';
+  }
+
+  function studentEnrollmentDrafts(form) {
+    return [...form.querySelectorAll(".student-course-card")].map((card) => ({
+      id: card.dataset.enrollmentId || "",
+      courseName: card.querySelector("[data-course-name]").value,
+      classSize: card.querySelector("[data-course-size]").value,
+      ageGroup: card.dataset.ageGroup || "",
+      firstDate: card.querySelector("[data-course-date]").value,
+      discount: card.querySelector("[data-course-discount]").value,
+      originalFee: Number(card.querySelector('input[readonly][type="number"]').value) || 0,
+      duration: Number(card.dataset.duration) || 60
+    }));
+  }
+
+  function studentEnrollmentHtml(row, index, ageGroup) {
+    const courses = displayCourses().filter((item) => sameCourseValue(item.ageGroup, ageGroup) && item.active !== false);
+    const names = uniqueCourseValues(courses, "name");
+    if (row.courseName && !names.some((value) => sameCourseValue(value, row.courseName))) names.push(row.courseName);
+    const sizes = uniqueCourseValues(courses.filter((item) => sameCourseValue(item.name, row.courseName)), "classSize");
+    if (row.classSize && sameCourseValue(row.ageGroup, ageGroup) && !sizes.some((value) => sameCourseValue(value, row.classSize))) sizes.push(row.classSize);
+    const selected = courses.find((item) => sameCourseValue(item.name, row.courseName) && sameCourseValue(item.classSize, row.classSize));
+    const fee = selected ? Number(selected.fee) || 0 : sameCourseValue(row.ageGroup, ageGroup) ? Number(row.originalFee) || 0 : 0;
+    const hasFee = Boolean(selected || (row.courseName && row.classSize && sameCourseValue(row.ageGroup, ageGroup)));
+    const discount = Number(row.discount) || 0;
+    const dateLabel = validDate(row.firstDate) ? row.firstDate.split("-").reverse().join("/") : "";
+    return '<article class="student-course-card" data-course-index="' + index + '" data-enrollment-id="' + escapeHtml(row.id || "") + '" data-age-group="' + escapeHtml(ageGroup) + '" data-duration="' + (selected ? Number(selected.duration) || 60 : Number(row.duration) || 60) + '"><div class="student-section-heading"><h4>課堂 ' + (index + 1) + '</h4><button class="mini-button danger" type="button" data-action="student-remove-course" data-index="' + index + '">移除</button></div><div class="student-course-grid">' +
+      '<label class="student-floating student-select' + (row.courseName ? ' is-filled' : '') + '"><select data-course-name required><option value="" hidden></option>' + names.map((value) => '<option value="' + escapeHtml(value) + '"' + (sameCourseValue(value, row.courseName) ? ' selected' : '') + '>' + escapeHtml(value) + '</option>').join('') + '</select><span>課程名稱</span></label>' +
+      '<label class="student-floating student-select' + (row.classSize ? ' is-filled' : '') + '"><select data-course-size required><option value="" hidden></option>' + sizes.map((value) => '<option value="' + escapeHtml(value) + '"' + (sameCourseValue(value, row.classSize) ? ' selected' : '') + '>' + escapeHtml(value) + '</option>').join('') + '</select><span>課程人數</span></label>' +
+      '<label class="student-floating student-date-field' + (dateLabel ? ' is-filled' : '') + '"><span>首堂日期</span><input class="student-date-display" type="text" value="' + escapeHtml(dateLabel) + '" placeholder="DD/MM/YYYY" readonly aria-label="首堂日期 DD/MM/YYYY"><input data-course-date type="date" value="' + escapeHtml(row.firstDate || "") + '" aria-label="選擇首堂日期"></label>' +
+      '<label class="student-floating' + (hasFee ? ' is-filled' : '') + '"><input type="number" value="' + (hasFee ? fee : '') + '" readonly><span>課堂原價 (HK$)</span></label>' +
+      '<label class="student-floating' + (row.discount !== "" && row.discount != null ? ' is-filled' : '') + '"><input data-course-discount type="number" min="0" max="' + fee + '" step="0.01" inputmode="decimal" value="' + escapeHtml(row.discount == null ? "" : row.discount) + '" placeholder="折扣優惠"><span>折扣優惠</span></label>' +
+      '<div class="student-net-fee">每堂費用 <strong>' + escapeHtml(formatMoney(Math.max(0, fee - discount), 2)) + '</strong></div></div></article>';
+  }
+
+  function renderStudentEnrollments(form, rows) {
+    const age = form.elements.ageGroup.value;
+    document.querySelector("#student-course-list").innerHTML = rows.slice(0, 4).map((row, index) => studentEnrollmentHtml(row, index, age)).join("");
+    document.querySelector("#student-add-course").disabled = rows.length >= 4;
+  }
+
+  function renderStudentYears(form, selectedYear) {
+    const existing = findById(state.students, form.elements.id.value);
+    const year = fiscalYear(studentRecordDateYmd(form.elements.recordDate.value) || todayYmd());
+    const holder = document.querySelector("#student-year-choices");
+    if (existing && existing.studentNumber) {
+      holder.innerHTML = '<span class="student-number-locked">' + escapeHtml(String(existing.enrollmentYear || selectedYear)) + ' 年度 · 編號已鎖定</span>';
+      return;
+    }
+    const main = [year, year - 1, year - 2, year - 3];
+    if (existing && Number(selectedYear) && !main.includes(Number(selectedYear))) main.push(Number(selectedYear));
+    holder.innerHTML = studentChoices("enrollmentYear", main.map(String), String(selectedYear), true);
+  }
+
+  function updateStudentAge(form) {
+    const result = document.querySelector("#student-age-preview");
+    const monthText = form.elements.birthMonth.value.trim();
+    const yearText = form.elements.birthYear.value.trim();
+    const recordDate = studentRecordDateYmd(form.elements.recordDate.value);
+    let label = "";
+    if (recordDate && /^\d{1,2}$/.test(monthText) && /^\d{4}$/.test(yearText)) {
+      const month = Number(monthText);
+      const year = Number(yearText);
+      const elapsed = (Number(recordDate.slice(0, 4)) - year) * 12 + Number(recordDate.slice(5, 7)) - month;
+      if (month >= 1 && month <= 12 && year >= 1900 && elapsed >= 0) label = Math.floor(elapsed / 12) + " 歲 " + (elapsed % 12) + " 個月";
+    }
+    result.textContent = label;
+    result.parentElement.classList.toggle("is-filled", Boolean(label));
+  }
+
+  function updateStudentForm(form, ageChanged = false) {
+    const age = form.elements.ageGroup.value;
+    const minor = isMinorAge(age);
+    document.querySelector("#student-birth-fields").hidden = !minor;
+    form.elements.birthMonth.disabled = !minor;
+    form.elements.birthYear.disabled = !minor;
+    updateStudentAge(form);
+    document.querySelector("#student-school-field").hidden = !minor;
+    document.querySelector("#student-work-field").hidden = !age || minor;
+    const contactLabel = form.elements.guardianName.closest(".student-floating").querySelector("span");
+    contactLabel.textContent = minor ? "監護人" : "緊急聯絡人";
+    form.elements.guardianName.placeholder = " ";
+    if (ageChanged) renderStudentEnrollments(form, studentEnrollmentDrafts(form).filter((row) =>
+      !row.courseName || displayCourses().some((course) => sameCourseValue(course.ageGroup, age) && sameCourseValue(course.name, row.courseName))));
+    else document.querySelector("#student-add-course").disabled = studentEnrollmentDrafts(form).length >= 4;
+    const existing = findById(state.students, form.elements.id.value);
+    const paid = form.elements.enrollmentStatus.value === "已付款";
+    const recordDate = studentRecordDateYmd(form.elements.recordDate.value);
+    const year = Number(form.querySelector('input[name="enrollmentYear"]:checked')?.value) || fiscalYear(recordDate || todayYmd());
+    document.querySelector("#student-number-hint").textContent = existing?.enrollmentStatus === "legacy" && !existing.studentNumber ? "舊學生資料可繼續編輯；補齊年齡、性別及 WhatsApp 後，儲存為已付款會自動補編號。" : paid ? "付款確認後，儲存時依年度和年齡自動編號。已編號學生不可取消或轉換成年／未成年類別。" : "待確認學員暫不編配學生編號。";
+    let preview = "";
+    try { preview = existing && existing.studentNumber ? existing.studentNumber : !recordDate ? "請先修正今日日期" : paid && age ? nextStudentNumber(year, age).value : ""; }
+    catch (error) { preview = error.message; }
+    document.querySelector("#student-number-preview").textContent = preview;
+  }
+
+  function validateStudentRecordDate(form, showError = false, normalize = false) {
+    const input = form.elements.recordDate;
+    const ymd = studentRecordDateYmd(input.value);
+    const message = ymd ? "" : input.value.trim() ? "日期格式錯誤，請使用 DD-MMM-YYYY，例如 03-Dec-2026。" : "請輸入今日日期，格式為 DD-MMM-YYYY。";
+    input.setCustomValidity(message);
+    document.querySelector("#student-record-date-error").textContent = showError ? message : "";
+    input.closest(".student-record-date").classList.toggle("is-invalid", Boolean(showError && message));
+    if (ymd) {
+      if (normalize) input.value = formatStudentRecordDate(ymd);
+      document.querySelector("#student-record-date-picker").value = ymd;
+      if (form.dataset.recordDateYmd !== ymd) {
+        form.dataset.recordDateYmd = ymd;
+        renderStudentYears(form, fiscalYear(ymd));
+      }
+    }
+    updateStudentForm(form);
+    return ymd;
   }
 
   function openStudentForm(student) {
-    openForm({
-      kicker: "個人資訊",
-      title: student ? "編輯學生" : "新增學生",
-      fields: studentFields(student),
-      onSubmit: (data) => {
-        const existing = data.id ? findById(state.students, data.id) : null;
-        const payload = {
-          id: existing ? existing.id : makeId(),
-          name: String(data.name || "").trim(),
-          courseId: data.courseId || "",
-          tutorId: data.tutorId || "",
-          weekday: normalizeWeekday(data.weekday),
-          time: data.time,
-          nextTime: existing && existing.time === data.time ? existing.nextTime : data.time,
-          prepaid: clampWhole(data.prepaid, 1, 999, 8),
-          remaining: clampWhole(data.remaining, 0, 999, 0),
-          nextDate: data.nextDate,
-          roomId: data.roomId || "",
-          status: existing ? existing.status : "active",
-          history: existing ? existing.history : [],
-          createdAt: existing ? existing.createdAt : new Date().toISOString()
-        };
-        if (!payload.name) throw new Error("請輸入學生姓名。");
-        if (existing) Object.assign(existing, payload);
-        else state.students.push(payload);
-        commit(existing ? "學生資料已更新" : "學生已新增");
-      }
+    const item = student || null;
+    openForm({ kicker: "個人資訊", title: student ? "修改學生資訊" : "新增學生", fields: [], onSubmit: (data, form) => saveStudentProfile(data, form) });
+    elements.formDialog.classList.add("student-dialog");
+    elements.formFields.classList.add("student-form-fields");
+    elements.formFields.innerHTML = studentFormHtml(item);
+    state.studentFormPhoto = item ? item.photo || "" : "";
+    const form = elements.dynamicForm;
+    form.dataset.recordDateYmd = studentRecordDateYmd(form.elements.recordDate.value);
+    renderStudentYears(form, item && item.enrollmentYear || fiscalYear(form.dataset.recordDateYmd || todayYmd()));
+    renderStudentEnrollments(form, item && item.enrollments || []);
+    updateStudentForm(form);
+    if (student) requestAnimationFrame(() => form.elements.name.focus());
+  }
+
+  function saveStudentProfile(data, form) {
+    const existing = data.id ? findById(state.students, data.id) : null;
+    const name = String(data.name || "").trim();
+    const recordDate = studentRecordDateYmd(data.recordDate, true);
+    if (!recordDate) throw new Error("日期格式錯誤，請使用 DD-MMM-YYYY，例如 03-Dec-2026。");
+    const ageGroup = String(data.ageGroup || "");
+    const whatsapp = String(data.whatsapp || "").trim();
+    const complete = Boolean(ageGroup && data.gender && whatsapp);
+    const legacyIncomplete = existing?.enrollmentStatus === "legacy" && data.enrollmentStatus === "已付款" && !complete;
+    if (!name || (!complete && !legacyIncomplete)) throw new Error("請填妥學生姓名、年齡組別、性別及 WhatsApp 號碼。");
+    if (existing && existing.studentNumber && isMinorAge(existing.ageGroup) !== isMinorAge(ageGroup)) throw new Error("已編號學生不可轉換成年／未成年類別。");
+    const paid = data.enrollmentStatus === "已付款" && !legacyIncomplete;
+    if (existing && existing.studentNumber && !paid) throw new Error("已編配的學生編號不可取消；請維持「已付款」狀態。");
+    if (existing && !paid && !legacyIncomplete && existing.enrollmentStatus !== "pending" &&
+      (existing.remaining > 0 || state.suite.payments.some((payment) => payment.studentId === existing.id)))
+      throw new Error("這位學生已有堂數或收款紀錄，不能改為待確認學員。");
+    const year = existing && existing.studentNumber ? existing.enrollmentYear : Number(data.enrollmentYear) || fiscalYear(recordDate);
+    const rows = studentEnrollmentDrafts(form);
+    if (rows.length > 4) throw new Error("每位學生最多可新增四個課堂。");
+    const enrollments = rows.map((row) => {
+      const course = displayCourses().find((item) => sameCourseValue(item.ageGroup, ageGroup) && sameCourseValue(item.name, row.courseName) && sameCourseValue(item.classSize, row.classSize) && item.active !== false);
+      const snapshot = !course && existing?.enrollments?.find((item) => item.id === row.id && sameCourseValue(item.ageGroup, ageGroup) && sameCourseValue(item.courseName, row.courseName) && sameCourseValue(item.classSize, row.classSize));
+      if (!course && !snapshot) throw new Error("請為每個課堂選擇課程名稱和人數，並確認課程設定中有對應組合。");
+      const fee = Number(course ? course.fee : snapshot.originalFee);
+      const discount = row.discount === "" ? 0 : Number(row.discount);
+      if (!Number.isFinite(discount) || discount < 0 || discount > fee) throw new Error("折扣優惠不可超過課堂原價。");
+      return { id: row.id || makeId(), courseId: course ? course.reference ? "" : course.id : snapshot.courseId || "", courseName: course ? course.name : snapshot.courseName, ageGroup,
+        classSize: course ? course.classSize : snapshot.classSize, firstDate: validDate(row.firstDate) ? row.firstDate : "",
+        duration: Number(course ? course.duration : snapshot.duration) || 60, originalFee: fee, discount,
+        netFee: Math.round((fee - discount) * 100) / 100 };
     });
+    const first = enrollments[0];
+    const assigned = paid && !(existing && existing.studentNumber) ? nextStudentNumber(year, ageGroup) : null;
+    const dateValue = validDate(data.nextDate) ? data.nextDate : (!existing || existing.enrollmentStatus === "pending") && first && first.firstDate && paid ? first.firstDate : existing?.nextDate || "";
+    const roomId = data.roomId || "";
+    const payload = { id: existing ? existing.id : makeId(), name, ageGroup, gender: data.gender, recordDate,
+      enrollmentStatus: legacyIncomplete ? "legacy" : paid ? "paid" : "pending", studentNumber: existing?.studentNumber || assigned?.value || "", enrollmentYear: year,
+      birthMonth: isMinorAge(ageGroup) ? String(data.birthMonth || "") : "", birthYear: isMinorAge(ageGroup) ? String(data.birthYear || "") : "",
+      guardianName: String(data.guardianName || "").trim(), whatsapp, homeMtr: String(data.homeMtr || "").trim(),
+      schoolMtr: isMinorAge(ageGroup) ? String(data.schoolMtr || "").trim() : "", workMtr: isMinorAge(ageGroup) ? "" : String(data.workMtr || "").trim(),
+      photo: state.studentFormPhoto, enrollments, courseId: first ? first.courseId : data.legacyCourseId || existing?.courseId || "",
+      tutorId: data.tutorId || "", weekday: normalizeWeekday(data.weekday), time: validTime(data.time) ? data.time : "18:00",
+      nextTime: existing?.nextTime || (validTime(data.time) ? data.time : "18:00"), prepaid: clampWhole(data.prepaid, 0, 999, 0),
+      remaining: clampWhole(data.remaining, 0, 999, 0), nextDate: paid || legacyIncomplete ? dateValue : "", roomId,
+      roomName: locationNameForId(roomId, existing && existing.roomId === roomId ? existing.roomName : ""),
+      status: existing?.status || "active", history: existing?.history || [], createdAt: existing?.createdAt || new Date().toISOString() };
+    const before = existing ? { ...existing } : null;
+    const oldCounter = assigned ? state.suite.studentNumberCounters[assigned.key] : undefined;
+    if (assigned) state.suite.studentNumberCounters[assigned.key] = assigned.sequence;
+    if (existing) Object.assign(existing, payload);
+    else state.students.push(payload);
+    try { commit(existing ? "學生資料已更新" : "學生已新增"); }
+    catch (error) {
+      if (existing) Object.assign(existing, before);
+      else state.students = state.students.filter((item) => item.id !== payload.id);
+      if (assigned) {
+        if (oldCounter == null) delete state.suite.studentNumberCounters[assigned.key];
+        else state.suite.studentNumberCounters[assigned.key] = oldCounter;
+      }
+      throw new Error("未能儲存學生資料；請檢查瀏覽器儲存空間。" + (error.message || ""));
+    }
   }
 
   function openCourseForm(course) {
@@ -760,21 +1424,137 @@
       fields: [
         { name: "id", type: "hidden", value: course ? course.id : "" },
         { name: "name", label: "課程名稱", type: "text", value: course ? course.name : "", required: true, wide: true },
-        { name: "level", label: "級別", type: "text", value: course ? course.level : "初階", required: true },
-        { name: "duration", label: "每堂分鐘", type: "number", value: course ? course.duration : 60, min: 15, max: 240, required: true },
-        { name: "fee", label: "參考單堂收費（HKD）", type: "number", value: course ? course.fee : 350, min: 0, max: 99999, required: true },
-        { name: "active", label: "狀態", type: "select", value: course ? String(course.active) : "true", options: [{ value: "true", label: "啟用" }, { value: "false", label: "停用" }] }
+        { name: "ageGroup", label: "年齡組別", type: "text", value: course ? course.ageGroup || "" : "", required: true, help: "例如 6-11：6 歲至未滿 12 歲。" },
+        { name: "classSize", label: "課程人數", type: "text", value: course ? course.classSize || "" : "", required: true, help: "例如 1:1、1:2 或小組。" },
+        { name: "duration", label: "課堂時間（分鐘）", type: "number", value: course ? course.duration : 60, min: 15, max: 240, required: true },
+        { name: "fee", label: "原價（HK$，每位學生）", type: "number", value: course ? course.fee : 350, min: 0, max: 99999, step: "0.01", required: true }
       ],
-      onSubmit: (data) => upsertCollection("courses", data, {
-        name: String(data.name).trim(), level: String(data.level).trim(), duration: Number(data.duration), fee: Number(data.fee), active: data.active === "true"
-      }, "課程")
+      onSubmit: (data) => {
+        const payload = { name: String(data.name).trim(), ageGroup: String(data.ageGroup).trim(), classSize: String(data.classSize).trim(), duration: Number(data.duration), fee: Number(data.fee) };
+        if (!/^\d+(?:\.\d+)?\s*[-–—]\s*\d+(?:\.\d+)?$/.test(payload.ageGroup)) throw new Error("年齡組別請用「6-11」格式。");
+        if (!Number.isInteger(payload.duration) || payload.duration < 15 || payload.duration > 240 || !Number.isFinite(payload.fee) || payload.fee < 0 || payload.fee > 99999) throw new Error("請檢查課堂時間及原價。");
+        const existing = data.id ? findById(state.suite.courses, data.id) : null;
+        const recordKey = window.SwimCourseImport.key(payload);
+        if (state.suite.courses.some((item) => item.id !== data.id && item.ageGroup && item.classSize && window.SwimCourseImport.key(item) === recordKey)) throw new Error("這個課程名稱、年齡組別及課程人數組合已存在。");
+        if (existing) {
+          const oldKey = window.SwimCourseImport.key(existing);
+          if (oldKey !== recordKey && window.SwimCourseImport.referenceRows.some((item) => window.SwimCourseImport.key(item) === oldKey) && !state.suite.hiddenReferenceCourses.includes(oldKey)) state.suite.hiddenReferenceCourses.push(oldKey);
+          Object.assign(existing, payload);
+        } else state.suite.courses.push({ id: makeId(), ...payload, active: true });
+        state.courseSelection = { name: payload.name, ageGroup: payload.ageGroup, classSize: payload.classSize };
+        commit(existing ? "整組課程已更新" : "整組課程已新增");
+      }
     });
+  }
+
+  function courseLabel(course) {
+    return course.name + "｜" + (course.ageGroup && course.classSize ? course.ageGroup + "｜" + course.classSize : course.level || "待補資料");
+  }
+
+  function openCourseImport() {
+    state.pendingCourseImport = null;
+    elements.courseImportFile.value = "";
+    elements.courseImportConfirm.disabled = true;
+    document.querySelector("#course-import-preview").innerHTML = "";
+    document.querySelector("#course-import-error").textContent = "";
+    elements.courseImportDialog.showModal();
+    document.body.classList.add("modal-open");
+  }
+
+  function previewCourseImport(records) {
+    const preview = document.querySelector("#course-import-preview");
+    const errorNode = document.querySelector("#course-import-error");
+    errorNode.textContent = "";
+    try {
+      const plan = window.SwimCourseImport.plan(records, state.suite.courses);
+      state.pendingCourseImport = plan;
+      elements.courseImportConfirm.disabled = !plan.add && !plan.update;
+      preview.innerHTML = '<p class="preview-good">共 ' + records.length + ' 組：新增 ' + plan.add + '、更新 ' + plan.update + '、未變更 ' + plan.same + '。</p>' +
+        '<p>只更新相同組合的課堂時間與每位學生原價；不刪除未列出的課程，不改變現有課程編號或學生連結。</p>' +
+        '<ul>' + plan.changes.slice(0, 6).map((item) => '<li>' + escapeHtml(item.record.name + ' · ' + item.record.ageGroup + ' · ' + item.record.classSize + ' · ' + item.record.duration + ' 分鐘 · ' + formatMoney(item.record.fee, 2)) + '</li>').join('') + '</ul>';
+    } catch (error) {
+      state.pendingCourseImport = null;
+      elements.courseImportConfirm.disabled = true;
+      preview.innerHTML = "";
+      errorNode.textContent = error.message || "無法預覽課程表。";
+    }
+  }
+
+  async function previewCourseFile(file) {
+    const errorNode = document.querySelector("#course-import-error");
+    try { previewCourseImport(await window.SwimCourseImport.parse(file)); }
+    catch (error) {
+      state.pendingCourseImport = null;
+      elements.courseImportConfirm.disabled = true;
+      document.querySelector("#course-import-preview").innerHTML = "";
+      errorNode.textContent = error.message || "無法讀取課程表。";
+    }
+  }
+
+  function applyCourseImport() {
+    const plan = state.pendingCourseImport;
+    if (!plan || (!plan.add && !plan.update)) return;
+    const previous = state.suite.courses;
+    const previousHidden = state.suite.hiddenReferenceCourses;
+    const next = previous.map((item) => ({ ...item }));
+    for (const change of plan.changes) {
+      if (change.type === "add") next.push({ id: makeId(), ...change.record, active: true });
+      if (change.type === "update") Object.assign(next.find((item) => item.id === change.id), change.record);
+    }
+    state.suite.courses = next;
+    const imported = new Set(plan.changes.map((item) => window.SwimCourseImport.key(item.record)));
+    state.suite.hiddenReferenceCourses = previousHidden.filter((item) => !imported.has(item));
+    try { saveAll(); }
+    catch {
+      state.suite.courses = previous;
+      state.suite.hiddenReferenceCourses = previousHidden;
+      document.querySelector("#course-import-error").textContent = "瀏覽器儲存空間不足；未有匯入或更新課程。請先備份現有資料。";
+      return;
+    }
+    state.pendingCourseImport = null;
+    elements.courseImportDialog.close();
+    document.body.classList.remove("modal-open");
+    renderModule();
+    showToast("課程已新增 " + plan.add + " 組、更新 " + plan.update + " 組");
+  }
+
+  function downloadCourseTemplate() {
+    const blob = new Blob([window.SwimCourseImport.toCsv()], { type: "text/csv;charset=utf-8" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "泳堂管家-課程匯入範本.csv";
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  }
+
+  function saveReferenceCourse(id) {
+    const index = Number(String(id).replace("reference-", ""));
+    const record = window.SwimCourseImport.referenceRows[index];
+    if (!String(id).startsWith("reference-") || !record) return;
+    if (state.suite.courses.some((item) => item.ageGroup && item.classSize && window.SwimCourseImport.key(item) === window.SwimCourseImport.key(record))) return showToast("這組課程已在本機清單內");
+    if (!window.confirm("將「" + courseLabel(record) + "」加入本機課程？現有課程不會被覆蓋。")) return;
+    state.suite.courses.push({ id: makeId(), ...record, active: true });
+    commit("整組課程已加入");
+  }
+
+  function deleteCourse(id) {
+    const course = findById(state.suite.courses, id);
+    if (!course) return;
+    const linked = state.students.some((student) => student.courseId === id || (student.history || []).some((record) => record.courseId === id)) ||
+      state.suite.accounts.some((account) => (account.courseIds || []).includes(id)) || state.suite.products.some((product) => product.courseId === id);
+    if (linked) return showToast("這組課程仍連結學生、導師、產品或課堂紀錄；請先解除連結。");
+    if (!window.confirm("確定刪除「" + courseLabel(course) + "」的完整五項設定？此操作不能復原，其他組合不會受影響。")) return;
+    const key = window.SwimCourseImport.key(course);
+    if (window.SwimCourseImport.referenceRows.some((item) => window.SwimCourseImport.key(item) === key) && !state.suite.hiddenReferenceCourses.includes(key)) state.suite.hiddenReferenceCourses.push(key);
+    state.suite.courses = state.suite.courses.filter((item) => item.id !== id);
+    state.courseSelection = { name: "", ageGroup: "", classSize: "" };
+    commit("整組課程已刪除");
   }
 
   function openRoomForm(room) {
     openForm({
-      kicker: "課室設定",
-      title: room ? "編輯課室" : "新增課室",
+      kicker: "泳班地點",
+      title: room ? "編輯泳班地點" : "新增泳班地點",
       fields: [
         { name: "id", type: "hidden", value: room ? room.id : "" },
         { name: "name", label: "名稱", type: "text", value: room ? room.name : "", required: true, wide: true },
@@ -784,28 +1564,185 @@
       ],
       onSubmit: (data) => upsertCollection("rooms", data, {
         name: String(data.name).trim(), location: String(data.location).trim(), capacity: Number(data.capacity), active: data.active === "true"
-      }, "課室")
+      }, "泳班地點")
     });
   }
 
+  function openPoolForm(record) {
+    state.locationMenuOpen = false;
+    if (elements.locationManageDialog.open) elements.locationManageDialog.close();
+    if (state.currentModule === "rooms") renderModule();
+    openForm({
+      kicker: "泳班地點",
+      title: record ? "編輯泳池地點" : "新增泳池",
+      fields: [
+        { name: "id", type: "hidden", value: record ? record.id : "" },
+        { name: "pool", label: "課堂泳池", type: "text", value: record ? record.pool : "", required: true, wide: true },
+        { name: "place", label: "泳池地點", type: "text", value: record ? record.place : "", required: true },
+        { name: "meetingPoint", label: "集合位置", type: "textarea", value: record ? record.meetingPoint : "", required: true, wide: true },
+        { name: "cleaningDay", label: "泳池清潔日", type: "text", value: record ? record.cleaningDay : "", required: true },
+        { name: "maintenanceTime", label: "年度維修時間", type: "text", value: record ? record.maintenanceTime : "", required: true }
+      ],
+      onSubmit: (data) => {
+        const payload = Object.fromEntries(["pool", "place", "meetingPoint", "cleaningDay", "maintenanceTime"].map((field) => [field, String(data[field] || "").trim()]));
+        if (Object.values(payload).some((value) => !value)) throw new Error("請填妥五個欄位。");
+        if (payload.pool.length > 80 || payload.place.length > 80 || payload.meetingPoint.length > 500 || payload.cleaningDay.length > 100 || payload.maintenanceTime.length > 100) throw new Error("資料過長，請縮短文字。");
+        const existing = data.id ? findById(state.suite.poolLocations, data.id) : null;
+        if (state.suite.poolLocations.some((item) => item.id !== (existing && existing.id) && window.SwimLocationImport.key(item) === window.SwimLocationImport.key(payload))) throw new Error("這個課堂泳池與泳池地點的組合已存在。");
+        const previous = state.suite.poolLocations;
+        state.suite.poolLocations = previous.map((item) => item.id === (existing && existing.id) ? { ...item, ...payload } : item);
+        if (!existing) state.suite.poolLocations.push({ id: makeId(), ...payload });
+        try { saveAll(); }
+        catch {
+          state.suite.poolLocations = previous;
+          throw new Error("瀏覽器儲存空間不足；泳班地點未有儲存。請先備份資料。");
+        }
+        state.locationSelection = { pool: payload.pool, place: payload.place };
+        closeForm();
+        renderModule();
+        showToast(existing ? "這組泳班地點已更新" : "這組泳班地點已新增");
+      }
+    });
+  }
+
+  function locationManageHtml() {
+    const records = state.locationManagePool ? state.suite.poolLocations.filter((item) => item.pool === state.locationManagePool) : state.suite.poolLocations;
+    return records.length ? records.map((item) => '<article class="location-manage-item"><div><strong>' + escapeHtml(item.pool) + '</strong><span>' + escapeHtml(item.place) + '</span></div><div class="row-actions"><button class="mini-button" type="button" data-action="edit-pool-location" data-id="' + escapeHtml(item.id) + '">✎ 編輯</button><button class="mini-button danger" type="button" data-action="delete-pool-location" data-id="' + escapeHtml(item.id) + '">' + trashIconHtml() + '<span>刪除</span></button></div></article>').join('') : '<p class="location-empty">沒有可管理的泳班地點組合。</p>';
+  }
+
+  function openLocationManage(pool = "") {
+    state.locationMenuOpen = false;
+    if (state.currentModule === "rooms") renderModule();
+    state.locationManagePool = pool;
+    document.querySelector("#location-manage-list").innerHTML = locationManageHtml();
+    elements.locationManageDialog.showModal();
+    document.body.classList.add("modal-open");
+  }
+
+  function deletePoolLocation(record) {
+    if (!record || !window.confirm("確定刪除「" + record.pool + "／" + record.place + "」這一組泳班地點資料？其他組合不會刪除；現有學生及課堂所記錄的泳池名稱會保留。")) return;
+    const previous = state.suite.poolLocations;
+    state.suite.poolLocations = previous.filter((item) => item.id !== record.id);
+    try { saveAll(); }
+    catch {
+      state.suite.poolLocations = previous;
+      return showToast("瀏覽器儲存空間不足；未有刪除資料");
+    }
+    if (state.locationSelection.pool === record.pool && state.locationSelection.place === record.place) {
+      state.locationSelection.place = "";
+      if (!state.suite.poolLocations.some((item) => item.pool === record.pool)) state.locationSelection.pool = "";
+    }
+    if (elements.locationManageDialog.open) document.querySelector("#location-manage-list").innerHTML = locationManageHtml();
+    renderModule();
+    showToast("只刪除了選定的泳班地點組合");
+  }
+
+  function openLocationImport() {
+    state.locationMenuOpen = false;
+    if (state.currentModule === "rooms") renderModule();
+    state.pendingLocationImport = null;
+    elements.locationImportFile.value = "";
+    elements.locationImportConfirm.disabled = true;
+    document.querySelector("#location-import-preview").innerHTML = "";
+    document.querySelector("#location-import-error").textContent = "";
+    elements.locationImportDialog.showModal();
+    document.body.classList.add("modal-open");
+  }
+
+  function previewLocationImport(records) {
+    const preview = document.querySelector("#location-import-preview");
+    const errorNode = document.querySelector("#location-import-error");
+    errorNode.textContent = "";
+    try {
+      const plan = window.SwimLocationImport.plan(records, state.suite.poolLocations);
+      state.pendingLocationImport = plan;
+      elements.locationImportConfirm.disabled = !plan.add && !plan.update;
+      preview.innerHTML = '<p class="preview-good">共 ' + records.length + ' 組：新增 ' + plan.add + '、更新 ' + plan.update + '、未變更 ' + plan.same + '。</p><p>只更新相同「課堂泳池＋泳池地點」的集合位置、清潔日與年度維修時間；未列出的組合及舊學生資料都不會刪除。</p><ul>' + plan.changes.slice(0, 6).map((item) => '<li>' + escapeHtml(item.record.pool + ' · ' + item.record.place + ' · ' + (item.type === 'add' ? '新增' : item.type === 'update' ? '更新' : '未變更')) + '</li>').join('') + '</ul>';
+    } catch (error) {
+      state.pendingLocationImport = null;
+      elements.locationImportConfirm.disabled = true;
+      preview.innerHTML = "";
+      errorNode.textContent = error.message || "無法預覽泳班地點表。";
+    }
+  }
+
+  async function previewLocationFile(file) {
+    try { previewLocationImport(await window.SwimLocationImport.parse(file)); }
+    catch (error) {
+      state.pendingLocationImport = null;
+      elements.locationImportConfirm.disabled = true;
+      document.querySelector("#location-import-preview").innerHTML = "";
+      document.querySelector("#location-import-error").textContent = error.message || "無法讀取泳班地點表。";
+    }
+  }
+
+  function applyLocationImport() {
+    const plan = state.pendingLocationImport;
+    if (!plan || (!plan.add && !plan.update)) return;
+    const previous = state.suite.poolLocations;
+    const next = previous.map((item) => ({ ...item }));
+    for (const change of plan.changes) {
+      if (change.type === "add") next.push({ id: makeId(), ...change.record });
+      if (change.type === "update") Object.assign(next.find((item) => item.id === change.id), change.record);
+    }
+    state.suite.poolLocations = next;
+    try { saveAll(); }
+    catch {
+      state.suite.poolLocations = previous;
+      document.querySelector("#location-import-error").textContent = "瀏覽器儲存空間不足；未有匯入或更新資料。請先備份。";
+      return;
+    }
+    state.pendingLocationImport = null;
+    elements.locationImportDialog.close();
+    document.body.classList.remove("modal-open");
+    renderModule();
+    showToast("泳班地點已新增 " + plan.add + " 組、更新 " + plan.update + " 組");
+  }
+
+  function downloadLocationTemplate() {
+    const blob = new Blob([window.SwimLocationImport.toCsv()], { type: "text/csv;charset=utf-8" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "泳堂管家-泳班地點匯入範本.csv";
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  }
+
   function openLessonForm(student) {
-    if (!state.students.length) return showToast("請先新增學生");
+    const eligible = state.students.filter((item) => item.enrollmentStatus !== "pending");
+    if (!eligible.length) return showToast("請先新增已付款學生");
+    const opening = clampWhole(state.suite.bookingOptions.openHour, 0, 22, 7);
+    const closing = clampWhole(state.suite.bookingOptions.closeHour, opening + 1, 23, 22);
+    const defaultCourse = courseForStudent(student || eligible[0]);
+    const defaultDuration = defaultCourse && Number(defaultCourse.duration) || 60;
+    const latestStart = Math.max(opening * 60, closing * 60 - defaultDuration);
+    const defaultTimeMinutes = Math.min(latestStart, Math.max(opening * 60, 18 * 60));
     openForm({
       kicker: "時間表",
       title: "編排下一堂",
       fields: [
-        { name: "studentId", label: "學生", type: "select", value: student ? student.id : state.students[0].id, required: true, wide: true, options: state.students.map((item) => ({ value: item.id, label: item.name })) },
-        { name: "date", label: "日期", type: "date", value: student ? student.nextDate : todayYmd(), required: true },
-        { name: "time", label: "時間", type: "time", value: student ? student.nextTime || student.time : "18:00", required: true },
-        { name: "roomId", label: "課室／泳線", type: "select", value: student ? student.roomId : "", options: [{ value: "", label: "未指定" }].concat(state.suite.rooms.map((room) => ({ value: room.id, label: room.name }))) }
+        { name: "studentId", label: "學生", type: "select", value: student ? student.id : eligible[0].id, required: true, wide: true, options: eligible.map((item) => ({ value: item.id, label: item.name })) },
+        { name: "date", label: "日期", type: "date", value: student ? student.nextDate : state.scheduleDate || todayYmd(), required: true },
+        { name: "time", label: "時間", type: "time", value: student ? student.nextTime || student.time : String(Math.floor(defaultTimeMinutes / 60)).padStart(2, "0") + ":" + String(defaultTimeMinutes % 60).padStart(2, "0"), min: String(opening).padStart(2, "0") + ":00", max: String(closing).padStart(2, "0") + ":00", required: true },
+        { name: "roomId", label: "泳班地點", type: "select", value: student ? student.roomId : "", options: [{ value: "", label: "未指定泳班地點" }].concat(locationSelectOptions()) }
       ],
       onSubmit: (data) => {
         const target = findById(state.students, data.studentId);
         if (!target) throw new Error("找不到學生。");
-        target.history.unshift({ id: makeId(), type: "rescheduled", lessonDate: target.nextDate, lessonTime: target.nextTime || target.time, newDate: data.date, newTime: data.time, createdAt: new Date().toISOString() });
+        const targetCourse = courseForStudent(target);
+        const duration = targetCourse && Number(targetCourse.duration) || 60;
+        const [hour, minute] = data.time.split(":").map(Number);
+        const startMinutes = hour * 60 + minute;
+        if (startMinutes < opening * 60 || startMinutes + duration > closing * 60) throw new Error("課堂時間必須完整位於中心開放時間內。");
+        const oldRoomName = locationNameForId(target.roomId, target.roomName);
+        const newRoomName = locationNameForId(data.roomId, target.roomId === data.roomId ? target.roomName : "");
+        target.history.unshift({ id: makeId(), type: "rescheduled", lessonDate: target.nextDate, lessonTime: target.nextTime || target.time,
+          roomId: target.roomId || "", roomName: oldRoomName, newDate: data.date, newTime: data.time,
+          newRoomId: data.roomId || "", newRoomName, createdAt: new Date().toISOString() });
         target.nextDate = data.date;
         target.nextTime = data.time;
         target.roomId = data.roomId || "";
+        target.roomName = newRoomName;
         target.history = target.history.slice(0, 100);
         commit("下一堂已編排");
       }
@@ -828,6 +1765,7 @@
       onSubmit: (data) => {
         const target = findById(state.students, data.studentId);
         if (!target) throw new Error("找不到學生。");
+        const assigned = target.enrollmentStatus === "pending" ? nextStudentNumber(target.enrollmentYear || fiscalYear(target.recordDate || data.date), target.ageGroup) : null;
         const lessons = clampWhole(data.lessons, 1, 999, 1);
         const payment = {
           id: makeId(), studentId: target.id, studentName: target.name, amount: Number(data.amount), lessons,
@@ -835,6 +1773,12 @@
           receiptNo: "R-" + data.date.replaceAll("-", "") + "-" + String(state.suite.payments.length + 1).padStart(3, "0")
         };
         state.suite.payments.push(payment);
+        if (assigned) {
+          target.studentNumber = assigned.value;
+          target.enrollmentStatus = "paid";
+          state.suite.studentNumberCounters[assigned.key] = assigned.sequence;
+          target.nextDate = target.nextDate || target.enrollments?.[0]?.firstDate || "";
+        }
         target.remaining += lessons;
         target.prepaid += lessons;
         target.history.unshift({ id: makeId(), type: "payment", lessons, amount: payment.amount, createdAt: new Date().toISOString() });
@@ -844,21 +1788,127 @@
   }
 
   function openAccountForm(account, forceTutor) {
-    openForm({
-      kicker: "帳戶管理",
-      title: account ? "編輯帳戶" : "新增帳戶",
-      fields: [
-        { name: "id", type: "hidden", value: account ? account.id : "" },
-        { name: "name", label: "姓名", type: "text", value: account ? account.name : "", required: true, wide: true },
-        { name: "role", label: "角色", type: "select", value: account ? account.role : forceTutor ? "tutor" : "parent", options: [{ value: "parent", label: "家長" }, { value: "tutor", label: "導師" }] },
-        { name: "status", label: "狀態", type: "select", value: account ? account.status : "active", options: [{ value: "active", label: "啟用" }, { value: "inactive", label: "停用" }] },
-        { name: "email", label: "電郵", type: "email", value: account ? account.email : "" },
-        { name: "phone", label: "電話", type: "tel", value: account ? account.phone : "" }
-      ],
-      onSubmit: (data) => upsertCollection("accounts", data, {
-        name: String(data.name).trim(), role: data.role, status: data.status, email: String(data.email || "").trim(), phone: String(data.phone || "").trim()
-      }, "帳戶")
-    });
+    return openTutorForm(account && account.role === "tutor" ? account : null);
+  }
+
+  function openTutorForm(account) {
+    const form = elements.tutorForm;
+    form.reset();
+    document.querySelector("#tutor-form-title").textContent = account ? "編輯導師" : "新增導師";
+    document.querySelector("#tutor-form-error").textContent = "";
+    for (const name of ["id", "name", "phone", "hourlyRate", "email"]) {
+      form.elements.namedItem(name).value = account && account[name] != null ? account[name] : "";
+    }
+    const selectedCourses = new Set(account && Array.isArray(account.courseIds) ? account.courseIds : []);
+    document.querySelector("#tutor-course-options").innerHTML = state.suite.courses.length ? state.suite.courses.map((course) =>
+      '<label class="tutor-course-option"><input type="checkbox" name="courseIds" value="' + escapeHtml(course.id) + '"' + (selectedCourses.has(course.id) ? ' checked' : '') + '><span>' + escapeHtml(course.name) + '</span></label>').join('') : '<p>未有課程；可以先建立導師，之後再指派課程。</p>';
+    const availability = new Set(account && Array.isArray(account.availability) ? account.availability : []);
+    document.querySelector("#tutor-availability-grid").innerHTML = '<table><thead><tr><th></th>' + ["一", "二", "三", "四", "五", "六", "日"].map((day) => '<th>' + day + '</th>').join('') + '</tr></thead><tbody>' +
+      [["上午", "am"], ["下午", "pm"], ["晚上", "evening"]].map(([label, slot]) => '<tr><th>' + label + '</th>' + Array.from({ length: 7 }, (_, index) => {
+        const value = (index + 1) + ':' + slot;
+        return '<td><label><input type="checkbox" name="availability" value="' + value + '"' + (availability.has(value) ? ' checked' : '') + '><span aria-hidden="true">×</span><span class="sr-only">' + label + '星期' + ["一", "二", "三", "四", "五", "六", "日"][index] + '</span></label></td>';
+      }).join('') + '</tr>').join('') + '</tbody></table>';
+    const permissions = new Set(account && Array.isArray(account.permissions) ? account.permissions : ["read_assigned_students", "read_assigned_lessons", "edit_assigned_lessons", "edit_own_notes"]);
+    form.querySelectorAll('input[name="permission"]').forEach((input) => { input.checked = permissions.has(input.value); });
+    elements.tutorDialog.showModal();
+    document.body.classList.add("modal-open");
+  }
+
+  function openStudentImport() {
+    state.pendingStudentImport = null;
+    elements.studentImportFile.value = "";
+    elements.studentImportConfirm.disabled = true;
+    document.querySelector("#student-import-error").textContent = "";
+    document.querySelector("#student-import-preview").innerHTML = "";
+    elements.studentImportDialog.showModal();
+    document.body.classList.add("modal-open");
+  }
+
+  function importDate(value) {
+    const text = String(value || "").trim();
+    if (/^\d+(?:\.\d+)?$/.test(text) && Number(text) > 1000) {
+      const date = new Date(Date.UTC(1899, 11, 30) + Math.round(Number(text)) * 86400000);
+      return date.toISOString().slice(0, 10);
+    }
+    return text;
+  }
+
+  function importTime(value) {
+    const text = String(value || "").trim();
+    if (/^0?\.\d+$/.test(text)) {
+      const minutes = Math.round(Number(text) * 1440);
+      return String(Math.floor(minutes / 60)).padStart(2, "0") + ":" + String(minutes % 60).padStart(2, "0");
+    }
+    const match = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(text);
+    return match ? match[1].padStart(2, "0") + ":" + match[2] : text;
+  }
+
+  function importWeekday(value) {
+    const text = String(value || "").trim();
+    if (!text) return 1;
+    const match = /^(?:星期|週|周)?([日天一二三四五六])$/.exec(text);
+    if (match) return "日一二三四五六".indexOf(match[1] === "天" ? "日" : match[1]);
+    if (/^[0-6]$/.test(text)) return Number(text);
+    return -1;
+  }
+
+  function prepareStudentImport(records) {
+    const students = [];
+    const errors = [];
+    const seen = new Set(state.students.map((student) => student.name.trim().toLocaleLowerCase()));
+    let skipped = 0;
+    for (const { rowNumber, values } of records) {
+      const [name, courseName, tutorName, weekdayText, timeText, prepaidText, remainingText, dateText, roomName] = values;
+      const cleanName = String(name || "").trim();
+      const key = cleanName.toLocaleLowerCase();
+      if (!cleanName) { errors.push("第 " + rowNumber + " 行：學生姓名不能留空。"); continue; }
+      if (seen.has(key)) { skipped += 1; continue; }
+      seen.add(key);
+      const exactCourses = courseName ? state.suite.courses.filter((item) => courseLabel(item) === courseName) : [];
+      const namedCourses = courseName && !exactCourses.length ? state.suite.courses.filter((item) => item.name === courseName) : [];
+      const courseMatches = exactCourses.length ? exactCourses : namedCourses;
+      const course = courseMatches.length === 1 ? courseMatches[0] : null;
+      const tutor = tutorName ? state.suite.accounts.find((item) => item.role === "tutor" && item.name === tutorName) : null;
+      const room = roomName ? state.suite.rooms.find((item) => item.name === roomName) : null;
+      const weekday = importWeekday(weekdayText);
+      const time = importTime(timeText || "18:00");
+      const prepaid = prepaidText === "" ? 8 : Number(prepaidText);
+      const remaining = remainingText === "" ? prepaid : Number(remainingText);
+      const nextDate = dateText ? importDate(dateText) : formatYmd(nextDateForWeekday(weekday));
+      const problems = [];
+      if (courseName && courseMatches.length > 1) problems.push("課程名稱有多個年齡／人數組合，請使用「課程名稱｜年齡組別｜課程人數」填寫");
+      else if (courseName && !course) problems.push("找不到課程「" + courseName + "」");
+      if (tutorName && !tutor) problems.push("找不到導師「" + tutorName + "」");
+      if (roomName && !room) problems.push("找不到泳班地點「" + roomName + "」");
+      if (weekday < 0) problems.push("上課日必須為星期一至日或 0 至 6");
+      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) problems.push("固定時間格式應為 HH:MM");
+      if (!Number.isInteger(prepaid) || prepaid < 1 || prepaid > 999) problems.push("預繳堂數須為 1–999");
+      if (!Number.isInteger(remaining) || remaining < 0 || remaining > 999) problems.push("剩餘堂數須為 0–999");
+      if (!validDate(nextDate) || formatYmd(parseDate(nextDate)) !== nextDate) problems.push("下一堂日期須為有效的 YYYY-MM-DD");
+      if (problems.length) { errors.push("第 " + rowNumber + " 行：" + problems.join("；") + "。"); continue; }
+      students.push({ id: makeId(), name: cleanName, courseId: course ? course.id : "", tutorId: tutor ? tutor.id : "", weekday,
+        time, nextTime: time, prepaid, remaining, nextDate, roomId: room ? room.id : "", roomName: room ? room.name : "", status: "active", history: [], createdAt: new Date().toISOString() });
+    }
+    return { students, errors, skipped };
+  }
+
+  async function previewStudentImport(file) {
+    const preview = document.querySelector("#student-import-preview");
+    const errorNode = document.querySelector("#student-import-error");
+    errorNode.textContent = "";
+    preview.innerHTML = "";
+    elements.studentImportConfirm.disabled = true;
+    state.pendingStudentImport = null;
+    try {
+      const records = await window.SwimStudentImport.parse(file);
+      const result = prepareStudentImport(records);
+      preview.innerHTML = '<p class="preview-good">可新增 ' + result.students.length + ' 位學員' + (result.skipped ? '；同名略過 ' + result.skipped + ' 位' : '') + '</p>' +
+        (result.students.length ? '<p>預覽：' + result.students.slice(0, 5).map((item) => escapeHtml(item.name)).join('、') + '</p>' : '') +
+        (result.errors.length ? '<ul class="preview-warning">' + result.errors.slice(0, 12).map((item) => '<li>' + escapeHtml(item) + '</li>').join('') + '</ul>' : '');
+      if (result.errors.length > 12) preview.innerHTML += '<p>另外還有 ' + (result.errors.length - 12) + ' 個錯誤。</p>';
+      if (result.errors.length) errorNode.textContent = "請先修正檔案錯誤後重新選擇。";
+      if (result.students.length && !result.errors.length) { state.pendingStudentImport = result.students; elements.studentImportConfirm.disabled = false; }
+    } catch (error) { errorNode.textContent = error.message || "未能讀取檔案。"; }
   }
 
   function openManualForm(item) {
@@ -940,6 +1990,36 @@
     commit(label + (existing ? "已更新" : "已新增"));
   }
 
+  function addLocation(name, preferredId) {
+    const cleanName = String(name || "").trim();
+    if (!cleanName) return showToast("請輸入泳班地點名稱");
+    if (state.suite.rooms.some((room) => String(room.name || "").trim().toLocaleLowerCase() === cleanName.toLocaleLowerCase())) {
+      return showToast("這個泳班地點已在清單內");
+    }
+    const id = preferredId && !findById(state.suite.rooms, preferredId) ? preferredId : makeId();
+    state.suite.rooms.push({ id, name: cleanName, location: cleanName, capacity: 1, active: true });
+    state.students.forEach((student) => {
+      if ((!student.roomId && student.roomName === cleanName) || student.roomId === id) {
+        student.roomId = id;
+        student.roomName = cleanName;
+      }
+    });
+    commit("泳班地點已新增");
+  }
+
+  function deleteLocation(room) {
+    if (!room || !window.confirm("確定從清單刪除「" + room.name + "」？現有泳班及預約記錄不會受影響。")) return;
+    state.students.forEach((student) => {
+      if (student.roomId === room.id) student.roomName = room.name;
+      (student.history || []).forEach((record) => {
+        if (record.roomId === room.id) record.roomName = record.roomName || room.name;
+        if (record.newRoomId === room.id) record.newRoomName = record.newRoomName || room.name;
+      });
+    });
+    state.suite.rooms = state.suite.rooms.filter((item) => item.id !== room.id);
+    commit("泳班地點已從清單刪除；現有記錄已保留");
+  }
+
   async function imageFileToDataUrl(file) {
     if (file.size > 1024 * 1024) throw new Error("圖片超過 1MB，請先縮小圖片。");
     return new Promise((resolve, reject) => {
@@ -957,7 +2037,14 @@
     }
     if (!window.confirm("確認 " + student.name + " 已完成 " + formatLongDate(student.nextDate) + " 的課堂並扣一堂？")) return;
     student.remaining -= 1;
-    student.history.unshift({ id: makeId(), type: "completed", lessonDate: student.nextDate, lessonTime: student.nextTime || student.time, createdAt: new Date().toISOString() });
+    const course = courseForStudent(student);
+    const tutor = findById(state.suite.accounts, student.tutorId);
+    student.history.unshift({
+      id: makeId(), type: "completed", lessonDate: student.nextDate, lessonTime: student.nextTime || student.time,
+      tutorId: student.tutorId || "", courseId: student.courseId || "", durationMinutes: Number(course && course.duration) || 60,
+      roomId: student.roomId || "", roomName: locationNameForId(student.roomId, student.roomName),
+      hourlyRateAtCompletion: Number(tutor && tutor.hourlyRate) || 0, createdAt: new Date().toISOString()
+    });
     student.nextDate = nextRecurringAfter(student.nextDate, student.weekday);
     student.nextTime = student.time;
     student.history = student.history.slice(0, 100);
@@ -966,7 +2053,8 @@
 
   function cancelLesson(student) {
     if (!window.confirm("確認取消 " + student.name + " 的下一堂？本次不會扣堂。")) return;
-    student.history.unshift({ id: makeId(), type: "cancelled", lessonDate: student.nextDate, lessonTime: student.nextTime || student.time, createdAt: new Date().toISOString() });
+    student.history.unshift({ id: makeId(), type: "cancelled", lessonDate: student.nextDate, lessonTime: student.nextTime || student.time,
+      roomId: student.roomId || "", roomName: locationNameForId(student.roomId, student.roomName), createdAt: new Date().toISOString() });
     student.nextDate = nextRecurringAfter(student.nextDate, student.weekday);
     student.nextTime = student.time;
     student.history = student.history.slice(0, 100);
@@ -1016,6 +2104,8 @@
 
   function closeForm() {
     if (elements.formDialog.open) elements.formDialog.close();
+    elements.formDialog.classList.remove("student-dialog");
+    elements.formFields.classList.remove("student-form-fields");
     state.formHandler = null;
     document.body.classList.remove("modal-open");
   }
@@ -1084,6 +2174,12 @@
 
     const action = button.dataset.action;
     const id = button.dataset.id;
+    if (action === "student-record-date-calendar") {
+      const picker = document.querySelector("#student-record-date-picker");
+      try { picker.showPicker(); }
+      catch { picker.focus(); picker.click(); }
+      return;
+    }
     if (action === "go-home") return showHome();
     if (action === "logout") {
       state.loggedIn = false;
@@ -1096,13 +2192,49 @@
       return showHome();
     }
     if (action === "schedule-mode") { state.scheduleMode = button.dataset.value; return renderModule(); }
-    if (action === "people-tab") { state.peopleTab = button.dataset.value; return renderModule(); }
+    if (action === "schedule-display") { state.scheduleDisplay = state.scheduleDisplay === "list" ? "calendar" : "list"; return renderModule(); }
+    if (action === "schedule-zoom") { state.scheduleZoom = Math.max(50, Math.min(150, state.scheduleZoom + Number(button.dataset.delta))); return renderModule(); }
+    if (action === "schedule-hours") return openScheduleHours();
+    if (action === "schedule-select-date") { state.scheduleDate = button.dataset.date; return renderModule(); }
+    if (action === "schedule-shift") {
+      const current = parseDate(state.scheduleDate || todayYmd());
+      const amount = Number(button.dataset.delta);
+      if (state.scheduleMode === "month") { current.setDate(1); current.setMonth(current.getMonth() + amount); }
+      else current.setDate(current.getDate() + amount * (state.scheduleMode === "week" ? 7 : 1));
+      state.scheduleDate = formatYmd(current);
+      return renderModule();
+    }
+    if (action === "people-menu") { state.peopleMenuOpen = !state.peopleMenuOpen; return renderModule(); }
+    if (action === "location-menu") { state.locationMenuOpen = !state.locationMenuOpen; return renderModule(); }
+    if (action === "people-filter") { state.peopleFilter = button.dataset.value; state.peopleTab = state.peopleFilter === "tutors" ? "tutors" : "students"; state.peopleMenuOpen = false; return renderModule(); }
+    if (action === "people-tab") { state.peopleTab = button.dataset.value; state.peopleFilter = state.peopleTab === "tutors" ? "tutors" : "all"; return renderModule(); }
+    if (action === "people-layout") { state.peopleLayout = state.peopleLayout === "table" ? "cards" : "table"; return renderModule(); }
+    if (action === "people-select-student") { state.selectedStudentId = id; return renderModule(); }
+    if (state.currentModule === "people" && state.peopleMenuOpen) {
+      state.peopleMenuOpen = false;
+      document.querySelector(".people-mobile-menu")?.setAttribute("hidden", "");
+      elements.peopleMoreButton.setAttribute("aria-expanded", "false");
+    }
     if (action === "manual-filter") { state.manualFilter = button.dataset.value; return renderModule(); }
+    if (action === "student-add-course") {
+      const form = elements.dynamicForm;
+      const rows = studentEnrollmentDrafts(form);
+      if (rows.length < 4) renderStudentEnrollments(form, rows.concat({ courseName: "", classSize: "", firstDate: "", discount: "" }));
+      return;
+    }
+    if (action === "student-remove-course") {
+      const rows = studentEnrollmentDrafts(elements.dynamicForm);
+      rows.splice(Number(button.dataset.index), 1);
+      renderStudentEnrollments(elements.dynamicForm, rows);
+      return;
+    }
     if (action === "add-student") return openStudentForm();
+    if (action === "add-tutor") return openTutorForm();
+    if (action === "import-students") return openStudentImport();
     if (action === "edit-student") return openStudentForm(findById(state.students, id));
     if (action === "delete-student") {
       const student = findById(state.students, id);
-      if (student && window.confirm("確定刪除 " + student.name + " 及其課堂紀錄？")) {
+      if (student && window.confirm("確定永久刪除 " + student.name + " 的學生資料及課堂紀錄？此操作不會刪除已存在的收款或收據。")) {
         state.students = state.students.filter((item) => item.id !== id);
         commit("學生已刪除");
       }
@@ -1113,15 +2245,51 @@
     if (action === "reschedule") return openLessonForm(findById(state.students, id));
     if (action === "prepare-message") return openMessage(findById(state.students, id), button.dataset.type);
     if (action === "add-lesson") return openLessonForm();
+    if (action === "select-course-name") {
+      state.courseSelection = { name: sameCourseValue(state.courseSelection.name, button.dataset.value) ? "" : button.dataset.value, ageGroup: "", classSize: "" };
+      return renderModule();
+    }
+    if (action === "select-course-ageGroup") {
+      state.courseSelection.ageGroup = sameCourseValue(state.courseSelection.ageGroup, button.dataset.value) ? "" : button.dataset.value;
+      state.courseSelection.classSize = "";
+      return renderModule();
+    }
+    if (action === "select-course-classSize") {
+      state.courseSelection.classSize = sameCourseValue(state.courseSelection.classSize, button.dataset.value) ? "" : button.dataset.value;
+      return renderModule();
+    }
     if (action === "add-course") return openCourseForm();
+    if (action === "import-courses") return openCourseImport();
+    if (action === "download-course-template") return downloadCourseTemplate();
+    if (action === "course-reference-preview") return previewCourseImport(window.SwimCourseImport.referenceRows);
+    if (action === "save-reference-course") return saveReferenceCourse(id);
     if (action === "edit-course") return openCourseForm(findById(state.suite.courses, id));
     if (action === "toggle-course") {
-      const item = findById(state.suite.courses, id); item.active = !item.active; return commit("課程狀態已更新");
+      const item = findById(state.suite.courses, id); if (!item) return;
+      item.active = item.active === false; return commit("課程狀態已更新");
     }
-    if (action === "delete-course") return deleteFrom("courses", id, "課程");
+    if (action === "delete-course") return deleteCourse(id);
+    if (action === "select-location-pool") {
+      state.locationSelection = { pool: state.locationSelection.pool === button.dataset.value ? "" : button.dataset.value, place: "" };
+      return renderModule();
+    }
+    if (action === "select-location-place") {
+      state.locationSelection.place = state.locationSelection.place === button.dataset.value ? "" : button.dataset.value;
+      return renderModule();
+    }
+    if (action === "add-pool") return openPoolForm();
+    if (action === "import-locations") return openLocationImport();
+    if (action === "manage-locations") return openLocationManage();
+    if (action === "manage-pool") return openLocationManage(button.dataset.value);
+    if (action === "edit-pool-location") return openPoolForm(findById(state.suite.poolLocations, id));
+    if (action === "delete-pool-location") return deletePoolLocation(findById(state.suite.poolLocations, id));
+    if (action === "download-location-template") return downloadLocationTemplate();
+    if (action === "location-reference-preview") return previewLocationImport(window.SwimLocationImport.referenceRows);
+    if (action === "restore-location") return addLocation(button.dataset.name, id);
+    if (action === "delete-location") return deleteLocation(findById(state.suite.rooms, id));
     if (action === "add-room") return openRoomForm();
     if (action === "edit-room") return openRoomForm(findById(state.suite.rooms, id));
-    if (action === "delete-room") return deleteFrom("rooms", id, "課室");
+    if (action === "delete-room") return deleteLocation(findById(state.suite.rooms, id));
     if (action === "add-payment") return openPaymentForm();
     if (action === "payment-for-student") return openPaymentForm(findById(state.students, id));
     if (action === "view-receipt") return showReceipt(findById(state.suite.payments, id));
@@ -1129,7 +2297,7 @@
     if (action === "add-manual") return openManualForm();
     if (action === "edit-manual") return openManualForm(findById(state.suite.manualItems, id));
     if (action === "delete-manual") return deleteFrom("manualItems", id, "手冊紀錄");
-    if (action === "add-account") return openAccountForm(null, state.currentModule === "people");
+    if (action === "add-account") return openAccountForm(null, false);
     if (action === "edit-account") return openAccountForm(findById(state.suite.accounts, id));
     if (action === "toggle-account") {
       const item = findById(state.suite.accounts, id); item.status = item.status === "active" ? "inactive" : "active"; return commit("帳戶狀態已更新");
@@ -1158,6 +2326,7 @@
 
   elements.dynamicForm.addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (elements.formDialog.classList.contains("student-dialog")) validateStudentRecordDate(elements.dynamicForm, true, true);
     if (!elements.dynamicForm.reportValidity() || !state.formHandler) return;
     elements.formError.textContent = "";
     elements.formSubmit.disabled = true;
@@ -1171,7 +2340,120 @@
     }
   });
 
+  elements.tutorForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (!elements.tutorForm.reportValidity()) return;
+    const data = new FormData(elements.tutorForm);
+    const name = String(data.get("name") || "").trim();
+    const email = String(data.get("email") || "").trim();
+    const hourlyRate = data.get("hourlyRate") === "" ? null : Number(data.get("hourlyRate"));
+    const errorNode = document.querySelector("#tutor-form-error");
+    if (!name || (hourlyRate !== null && (!Number.isFinite(hourlyRate) || hourlyRate < 0))) { errorNode.textContent = "請檢查導師姓名及時薪。"; return; }
+    const existing = data.get("id") ? findById(state.suite.accounts, data.get("id")) : null;
+    if (email && state.suite.accounts.some((account) => account.id !== (existing && existing.id) && String(account.email || "").toLowerCase() === email.toLowerCase())) {
+      errorNode.textContent = "這個電郵已用於另一個帳戶。"; return;
+    }
+    const payload = { id: existing ? existing.id : makeId(), role: "tutor", name, phone: String(data.get("phone") || "").trim(), email,
+      hourlyRate, courseIds: data.getAll("courseIds"), availability: data.getAll("availability"), permissions: data.getAll("permission"),
+      status: existing ? existing.status : "active" };
+    if (existing) Object.assign(existing, payload);
+    else state.suite.accounts.push(payload);
+    saveAll();
+    elements.tutorDialog.close();
+    document.body.classList.remove("modal-open");
+    renderModule();
+    showToast(existing ? "導師資料已更新" : "導師已新增；登入尚未啟用");
+  });
+
+  document.addEventListener("input", (event) => {
+    if (elements.formDialog.open && elements.formDialog.classList.contains("student-dialog")) {
+      const field = event.target.closest(".student-floating");
+      if (field) field.classList.toggle("is-filled", Boolean(event.target.value));
+      if (event.target.name === "birthMonth" || event.target.name === "birthYear") updateStudentAge(elements.dynamicForm);
+      if (event.target.matches("[data-course-discount]")) {
+        const card = event.target.closest(".student-course-card");
+        const fee = Number(card.querySelector('input[readonly][type="number"]').value) || 0;
+        card.querySelector(".student-net-fee strong").textContent = formatMoney(Math.max(0, fee - (Number(event.target.value) || 0)), 2);
+      }
+    }
+    if (event.target.id === "location-name") {
+      const submit = event.target.closest("form")?.querySelector('button[type="submit"]');
+      if (submit) submit.disabled = !event.target.value.trim();
+      return;
+    }
+    if (event.target.id === "people-search") {
+      state.peopleSearch = event.target.value;
+      document.querySelector("#people-results").innerHTML = peopleResultsHtml();
+    }
+  });
+
+  document.addEventListener("focusin", (event) => {
+    if (event.target.matches?.("[data-course-discount]")) event.target.placeholder = "HK$";
+  });
+  document.addEventListener("focusout", (event) => {
+    if (event.target.matches?.("[data-course-discount]")) event.target.placeholder = "折扣優惠";
+  });
+
+  elements.studentImportFile.addEventListener("change", () => {
+    const file = elements.studentImportFile.files[0];
+    if (file) previewStudentImport(file);
+  });
+
+  elements.courseImportFile.addEventListener("change", () => {
+    const file = elements.courseImportFile.files[0];
+    if (file) previewCourseFile(file);
+  });
+
+  elements.locationImportFile.addEventListener("change", () => {
+    const file = elements.locationImportFile.files[0];
+    if (file) previewLocationFile(file);
+  });
+
+  elements.courseImportConfirm.addEventListener("click", applyCourseImport);
+  elements.locationImportConfirm.addEventListener("click", applyLocationImport);
+
+  elements.studentImportConfirm.addEventListener("click", () => {
+    if (!state.pendingStudentImport || !state.pendingStudentImport.length) return;
+    const count = state.pendingStudentImport.length;
+    state.students.push(...state.pendingStudentImport);
+    try { saveAll(); }
+    catch {
+      state.students.splice(-count, count);
+      document.querySelector("#student-import-error").textContent = "瀏覽器儲存空間不足；未有匯入任何學員。請先備份現有資料。";
+      return;
+    }
+    state.pendingStudentImport = null;
+    elements.studentImportDialog.close();
+    document.body.classList.remove("modal-open");
+    renderModule();
+    showToast("已匯入 " + count + " 位學員");
+  });
+
   document.addEventListener("submit", (event) => {
+    if (event.target.id === "location-add-form") {
+      event.preventDefault();
+      const input = event.target.querySelector("#location-name");
+      addLocation(input && input.value);
+      return;
+    }
+    if (event.target.id === "schedule-hours-form") {
+      event.preventDefault();
+      const data = Object.fromEntries(new FormData(event.target).entries());
+      const openHour = Number(data.openHour);
+      const closeHour = Number(data.closeHour);
+      if (!Number.isInteger(openHour) || !Number.isInteger(closeHour) || closeHour <= openHour) {
+        document.querySelector("#schedule-hours-error").textContent = "關閉時間必須遲於開放時間。";
+        return;
+      }
+      state.suite.bookingOptions.openHour = openHour;
+      state.suite.bookingOptions.closeHour = closeHour;
+      saveAll();
+      elements.scheduleHoursDialog.close();
+      document.body.classList.remove("modal-open");
+      renderModule();
+      showToast("中心開放時間已儲存");
+      return;
+    }
     if (event.target.id !== "settings-form") return;
     event.preventDefault();
     const data = Object.fromEntries(new FormData(event.target).entries());
@@ -1189,7 +2471,81 @@
     showToast("設定已儲存");
   });
 
+  document.addEventListener("input", (event) => {
+    if (event.target.name === "recordDate" && elements.formDialog.open && elements.formDialog.classList.contains("student-dialog")) {
+      const value = event.target.value.trim();
+      validateStudentRecordDate(elements.dynamicForm, value.length >= 10 || value.includes("/"));
+    }
+  });
+
+  document.addEventListener("focusout", (event) => {
+    if (event.target.name === "recordDate" && elements.formDialog.open && elements.formDialog.classList.contains("student-dialog")) {
+      validateStudentRecordDate(elements.dynamicForm, true, true);
+    }
+  });
+
+  document.addEventListener("invalid", (event) => {
+    if (event.target.name === "recordDate" && elements.formDialog.classList.contains("student-dialog")) {
+      validateStudentRecordDate(elements.dynamicForm, true);
+    }
+  }, true);
+
   document.addEventListener("change", (event) => {
+    if (elements.formDialog.open && elements.formDialog.classList.contains("student-dialog") && elements.dynamicForm.contains(event.target)) {
+      const form = elements.dynamicForm;
+      if (event.target.id === "student-photo-file") {
+        const file = event.target.files[0];
+        if (file) {
+          if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type)) { elements.formError.textContent = "請選擇 PNG、JPG、WebP 或 GIF 圖片。"; return; }
+          const input = event.target;
+          elements.formSubmit.disabled = true;
+          imageFileToDataUrl(file).then((url) => {
+            if (!elements.formDialog.open || !elements.dynamicForm.contains(input)) return;
+            state.studentFormPhoto = url;
+            document.querySelector("#student-photo-preview").innerHTML = '<img src="' + escapeHtml(url) + '" alt="學生相片預覽">';
+            elements.formError.textContent = "";
+          }).catch((error) => { elements.formError.textContent = error.message; })
+            .finally(() => { elements.formSubmit.disabled = false; });
+        }
+        return;
+      }
+      if (event.target.id === "student-record-date-picker") {
+        form.elements.recordDate.value = formatStudentRecordDate(event.target.value);
+        validateStudentRecordDate(form, true, true);
+        return;
+      }
+      if (event.target.name === "recordDate") { validateStudentRecordDate(form, true, true); return; }
+      if (event.target.name === "roomId") {
+        document.querySelector("#student-location-label").textContent = event.target.nextElementSibling.textContent;
+        document.querySelector("#student-location-picker").open = false;
+        return;
+      }
+      if (event.target.name === "ageGroup") { updateStudentForm(form, true); return; }
+      if (event.target.name === "enrollmentStatus" || event.target.name === "enrollmentYear") { updateStudentForm(form); return; }
+      if (event.target.matches("[data-course-name]")) {
+        const rows = studentEnrollmentDrafts(form);
+        const row = rows[Number(event.target.closest(".student-course-card").dataset.courseIndex)];
+        row.classSize = "";
+        row.originalFee = 0;
+        row.discount = "";
+        renderStudentEnrollments(form, rows);
+        return;
+      }
+      if (event.target.matches("[data-course-size]")) { renderStudentEnrollments(form, studentEnrollmentDrafts(form)); return; }
+      if (event.target.matches("[data-course-date]")) {
+        const field = event.target.closest(".student-date-field");
+        field.querySelector(".student-date-display").value = validDate(event.target.value) ? event.target.value.split("-").reverse().join("/") : "";
+        field.classList.toggle("is-filled", Boolean(event.target.value));
+        return;
+      }
+    }
+    if (event.target.id === "schedule-date") {
+      if (validDate(event.target.value)) {
+        state.scheduleDate = event.target.value;
+        renderModule();
+      }
+      return;
+    }
     const option = event.target.dataset.bookingOption;
     if (!option) return;
     state.suite.bookingOptions[option] = event.target.type === "checkbox" ? event.target.checked : clampWhole(event.target.value, 0, 120, 0);
@@ -1201,6 +2557,13 @@
     state.suite.settings.theme = state.suite.settings.theme === "dark" ? "light" : "dark";
     saveAll();
     renderShell();
+  });
+
+  elements.bottomNav.addEventListener("mouseenter", () => document.body.classList.add("nav-expanded"));
+  elements.bottomNav.addEventListener("mouseleave", () => document.body.classList.remove("nav-expanded"));
+  elements.bottomNav.addEventListener("focusin", () => document.body.classList.add("nav-expanded"));
+  elements.bottomNav.addEventListener("focusout", (event) => {
+    if (!elements.bottomNav.contains(event.relatedTarget)) document.body.classList.remove("nav-expanded");
   });
 
   document.querySelector("#copy-message").addEventListener("click", async () => {
@@ -1227,4 +2590,3 @@
 
   renderShell();
 })();
-
