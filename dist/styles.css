@@ -1276,11 +1276,11 @@ body[data-module="rooms"] .module-heading p { max-width: 78ch; line-height: 1.65
 .student-record-date-control:focus-within { border-color: #2c7cae; outline: 2px solid #b9d9e8; outline-offset: 1px; }
 .student-record-date-control input[type=text] { width: 100%; min-width: 0; height: 40px; flex: 1; padding: 7px 4px 7px 10px; color: var(--ink); background: transparent; border: 0; outline: 0; font: inherit; font-size: .875rem; }
 .student-record-date-control input[type=text]::placeholder { color: var(--muted); opacity: 1; }
-.student-record-date-calendar { display: grid; width: 38px; min-width: 38px; height: 40px; place-items: center; padding: 0; color: #585851; background: transparent; border: 0; cursor: pointer; }
+.student-record-date-calendar { position: relative; display: grid; width: 38px; min-width: 38px; height: 40px; place-items: center; padding: 0; color: #585851; background: transparent; border: 0; cursor: pointer; }
 .student-record-date-calendar:hover { color: #2879a9; }
-.student-record-date-calendar:focus-visible { outline: 2px solid #2c7cae; outline-offset: -3px; }
+.student-record-date-calendar:focus-within { outline: 2px solid #2c7cae; outline-offset: -3px; }
 .student-record-date-calendar svg { width: 22px; height: 22px; }
-.student-record-date-picker { position: absolute; top: 0; right: 38px; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.student-record-date-calendar input[type=date] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
 .student-record-date.is-invalid .student-record-date-control { border-color: var(--coral); }
 .student-record-date-error { display: block; margin-top: 5px; color: var(--coral); font-size: .68rem; font-weight: 700; line-height: 1.3; }
 .student-record-date-error:empty { display: none; }

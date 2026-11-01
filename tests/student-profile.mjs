@@ -54,6 +54,8 @@ assert.ok(studentAgeGroups().some((age) => age === "2.5 - 5"));
 assert.ok(studentAgeGroups().some((age) => age === "60 - 69"));
 assert.match(studentFormHtml(null), /name="birthDate" type="date"/, "birth date uses the same native date control as the next lesson date");
 assert.match(studentFormHtml(null), /出生日期（選填）/, "birth date keeps its optional label");
+assert.match(studentFormHtml(null), /<label class="student-record-date-calendar"[^>]*>[\s\S]*?<input id="student-record-date-picker" type="date"/, "today date icon directly contains the native date input for mobile tapping");
+assert.doesNotMatch(studentFormHtml(null), /data-action="student-record-date-calendar"/, "today date no longer relies on a scripted click of a hidden picker");
 assert.equal(state.students[0].enrollmentStatus, "legacy", "old records remain distinguishable and are not auto-numbered");
 assert.equal(state.students[0].enrollmentYear, null, "missing legacy year stays empty");
 assert.equal(state.students[0].prepaid, 8, "old balance remains unchanged");

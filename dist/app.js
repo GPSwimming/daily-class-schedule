@@ -1170,8 +1170,7 @@
   function studentRecordDateFieldHtml(value) {
     return '<div class="student-record-date"><label for="student-record-date-text">今日日期</label><div class="student-record-date-control">' +
       '<input id="student-record-date-text" name="recordDate" type="text" value="' + escapeHtml(formatStudentRecordDate(value)) + '" placeholder="DD-MMM-YYYY" autocomplete="off" spellcheck="false" required aria-describedby="student-record-date-error">' +
-      '<button class="student-record-date-calendar" type="button" data-action="student-record-date-calendar" aria-label="開啟日曆選擇今日日期" title="開啟日曆選擇今日日期"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 2v4M17 2v4M4 9h16M5 5h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/><path d="M9 13h6v5H9z"/></svg></button>' +
-      '<input id="student-record-date-picker" class="student-record-date-picker" type="date" value="' + escapeHtml(value) + '" tabindex="-1" aria-hidden="true"></div><small id="student-record-date-error" class="student-record-date-error" aria-live="polite"></small></div>';
+      '<label class="student-record-date-calendar" title="開啟日曆選擇今日日期"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 2v4M17 2v4M4 9h16M5 5h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/><path d="M9 13h6v5H9z"/></svg><input id="student-record-date-picker" type="date" value="' + escapeHtml(value) + '" aria-label="開啟日曆選擇今日日期"></label></div><small id="student-record-date-error" class="student-record-date-error" aria-live="polite"></small></div>';
   }
 
   function studentChoices(name, values, selected, required = false, disabled = () => false) {
@@ -2186,12 +2185,6 @@
 
     const action = button.dataset.action;
     const id = button.dataset.id;
-    if (action === "student-record-date-calendar") {
-      const picker = document.querySelector("#student-record-date-picker");
-      try { picker.showPicker(); }
-      catch { picker.focus(); picker.click(); }
-      return;
-    }
     if (action === "go-home") return showHome();
     if (action === "logout") {
       state.loggedIn = false;
