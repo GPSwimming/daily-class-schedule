@@ -1284,7 +1284,8 @@ body[data-module="rooms"] .module-heading p { max-width: 78ch; line-height: 1.65
 .student-record-date.is-invalid .student-record-date-control { border-color: var(--coral); }
 .student-record-date-error { display: block; margin-top: 5px; color: var(--coral); font-size: .68rem; font-weight: 700; line-height: 1.3; }
 .student-record-date-error:empty { display: none; }
-.student-birth-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.student-birth-fields { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 10px; }
+.student-birth-fields > input[type=hidden] { display: none; }
 .student-age-output { min-width: 0; }
 .student-age-output output { display: flex; min-height: 50px; align-items: center; padding: 15px 13px 7px; color: var(--ink); background: var(--paper-strong); border: 1px solid #d4cec1; border-radius: 10px; font-size: .94rem; white-space: nowrap; }
 .student-birth-fields[hidden], .student-form-fields > [hidden] { display: none; }

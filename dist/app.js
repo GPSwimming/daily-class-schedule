@@ -194,6 +194,7 @@
         studentNumber: String(item.studentNumber || ""),
         enrollmentYear: item.enrollmentYear != null && item.enrollmentYear !== "" && Number.isInteger(Number(item.enrollmentYear)) ? Number(item.enrollmentYear) :
           /^[KA]\d{2}\d{4}$/.test(String(item.studentNumber || "")) ? 2000 + Number(String(item.studentNumber).slice(1, 3)) : null,
+        birthDate: validDate(item.birthDate) ? item.birthDate : "",
         birthMonth: String(item.birthMonth || ""),
         birthYear: String(item.birthYear || ""),
         guardianName: String(item.guardianName || ""),
@@ -1197,13 +1198,14 @@
     if (age && !ageOptions.some((value) => sameCourseValue(value, age))) ageOptions.push(age);
     const legacy = item.enrollmentStatus === "legacy";
     const paid = item.enrollmentStatus === "paid" || item.enrollmentStatus === "legacy";
+    const birthDate = validDate(item.birthDate) ? item.birthDate : "";
     const roomOptions = locationSelectOptions().filter((option) => option.value.startsWith("pool:"));
     if (item.roomId && !roomOptions.some((option) => option.value === item.roomId)) roomOptions.push({ value: item.roomId, label: item.roomName || "舊有地點" });
     return '<input type="hidden" name="id" value="' + escapeHtml(item.id || "") + '">' +
       '<div class="student-photo-row"><span class="student-photo-preview" id="student-photo-preview">' + (item.photo ? '<img src="' + escapeHtml(item.photo) + '" alt="學生相片預覽">' : '<span aria-hidden="true">👤</span>') + '</span><label class="student-photo-upload"><input id="student-photo-file" class="sr-only" type="file" accept="image/png,image/jpeg,image/webp,image/gif">▣ 上載相片</label><small>PNG、JPG、WebP 或 GIF，最多 1MB</small></div>' +
       studentFloatingField("name", "學生姓名(必填)", item.name || "", { required: true, requiredMarker: false, wide: true, maxlength: 60 }) +
       '<fieldset class="student-choice-group student-segmented student-age-group student-wide"><legend>年齡組別 <b>*</b></legend>' + studentChoices("ageGroup", ageOptions, age, !legacy, (value) => Boolean(item.studentNumber) && isMinorAge(value) !== isMinorAge(age)) + '</fieldset>' +
-      '<div class="student-birth-fields student-wide" id="student-birth-fields"' + (isMinorAge(age) ? '' : ' hidden') + '>' + studentFloatingField("birthMonth", "出生月份 MM", item.birthMonth || "", { type: "number", min: 1, max: 12, inputmode: "numeric" }) + studentFloatingField("birthYear", "出生年份 YYYY", item.birthYear || "", { type: "number", min: 1900, max: new Date().getFullYear(), inputmode: "numeric" }) + '<div class="student-floating student-age-output"><output id="student-age-preview" aria-live="polite"></output><span>學生年齡</span></div></div>' +
+      '<div class="student-birth-fields student-wide" id="student-birth-fields"' + (isMinorAge(age) ? '' : ' hidden') + '><input type="hidden" name="birthMonth" value="' + escapeHtml(item.birthMonth || "") + '"><input type="hidden" name="birthYear" value="' + escapeHtml(item.birthYear || "") + '">' + studentFloatingField("birthDate", "出生日期（選填）", birthDate, { type: "date", max: todayYmd() }) + '<div class="student-floating student-age-output"><output id="student-age-preview" aria-live="polite"></output><span>學生年齡</span></div></div>' +
       '<div class="student-demographics student-wide"><fieldset class="student-choice-group student-segmented student-gender"><legend>性別 <b>*</b></legend>' + studentChoices("gender", ["男", "女"], item.gender || "", !legacy) + '</fieldset>' +
       '<fieldset class="student-choice-group student-segmented student-status"><legend>學生狀態</legend>' + studentChoices("enrollmentStatus", ["待確認，未付款", "已付款"], paid ? "已付款" : "待確認，未付款", true, (value) => Boolean(item.studentNumber) && value === "待確認，未付款") + '</fieldset>' +
       studentRecordDateFieldHtml(recordDate) + '</div>' +
@@ -1280,8 +1282,9 @@
 
   function updateStudentAge(form) {
     const result = document.querySelector("#student-age-preview");
-    const monthText = form.elements.birthMonth.value.trim();
-    const yearText = form.elements.birthYear.value.trim();
+    const birthDate = validDate(form.elements.birthDate.value) ? form.elements.birthDate.value : "";
+    const monthText = birthDate ? String(Number(birthDate.slice(5, 7))) : form.elements.birthMonth.value.trim();
+    const yearText = birthDate ? birthDate.slice(0, 4) : form.elements.birthYear.value.trim();
     const recordDate = studentRecordDateYmd(form.elements.recordDate.value);
     let label = "";
     if (recordDate && /^\d{1,2}$/.test(monthText) && /^\d{4}$/.test(yearText)) {
@@ -1294,10 +1297,18 @@
     result.parentElement.classList.toggle("is-filled", Boolean(label));
   }
 
+  function syncStudentBirthDate(form) {
+    const birthDate = validDate(form.elements.birthDate.value) ? form.elements.birthDate.value : "";
+    form.elements.birthMonth.value = birthDate ? String(Number(birthDate.slice(5, 7))) : "";
+    form.elements.birthYear.value = birthDate ? birthDate.slice(0, 4) : "";
+    updateStudentAge(form);
+  }
+
   function updateStudentForm(form, ageChanged = false) {
     const age = form.elements.ageGroup.value;
     const minor = isMinorAge(age);
     document.querySelector("#student-birth-fields").hidden = !minor;
+    form.elements.birthDate.disabled = !minor;
     form.elements.birthMonth.disabled = !minor;
     form.elements.birthYear.disabled = !minor;
     updateStudentAge(form);
@@ -1391,6 +1402,7 @@
     const roomId = data.roomId || "";
     const payload = { id: existing ? existing.id : makeId(), name, ageGroup, gender: data.gender, recordDate,
       enrollmentStatus: legacyIncomplete ? "legacy" : paid ? "paid" : "pending", studentNumber: existing?.studentNumber || assigned?.value || "", enrollmentYear: year,
+      birthDate: isMinorAge(ageGroup) && validDate(data.birthDate) ? data.birthDate : "",
       birthMonth: isMinorAge(ageGroup) ? String(data.birthMonth || "") : "", birthYear: isMinorAge(ageGroup) ? String(data.birthYear || "") : "",
       guardianName: String(data.guardianName || "").trim(), whatsapp, homeMtr: String(data.homeMtr || "").trim(),
       schoolMtr: isMinorAge(ageGroup) ? String(data.schoolMtr || "").trim() : "", workMtr: isMinorAge(ageGroup) ? "" : String(data.workMtr || "").trim(),
@@ -2369,7 +2381,7 @@
     if (elements.formDialog.open && elements.formDialog.classList.contains("student-dialog")) {
       const field = event.target.closest(".student-floating");
       if (field) field.classList.toggle("is-filled", Boolean(event.target.value));
-      if (event.target.name === "birthMonth" || event.target.name === "birthYear") updateStudentAge(elements.dynamicForm);
+      if (event.target.name === "birthDate") syncStudentBirthDate(elements.dynamicForm);
       if (event.target.matches("[data-course-discount]")) {
         const card = event.target.closest(".student-course-card");
         const fee = Number(card.querySelector('input[readonly][type="number"]').value) || 0;
@@ -2514,6 +2526,7 @@
         validateStudentRecordDate(form, true, true);
         return;
       }
+      if (event.target.name === "birthDate") { syncStudentBirthDate(form); return; }
       if (event.target.name === "recordDate") { validateStudentRecordDate(form, true, true); return; }
       if (event.target.name === "roomId") {
         document.querySelector("#student-location-label").textContent = event.target.nextElementSibling.textContent;

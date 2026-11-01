@@ -34,9 +34,9 @@ const context = {
 };
 vm.runInNewContext(locationSource, context);
 vm.runInNewContext(courseSource, context);
-const instrumented = appSource.replace(/\n\}\)\(\);\s*$/, "\n  globalThis.studentTest = { fiscalYear, isMinorAge, nextStudentNumber, studentAgeGroups, studentRecordDateYmd, formatStudentRecordDate, saveStudentProfile, renderPeople, state };\n})();");
+const instrumented = appSource.replace(/\n\}\)\(\);\s*$/, "\n  globalThis.studentTest = { fiscalYear, isMinorAge, nextStudentNumber, studentAgeGroups, studentRecordDateYmd, formatStudentRecordDate, studentFormHtml, saveStudentProfile, renderPeople, state };\n})();");
 vm.runInNewContext(instrumented, context);
-const { fiscalYear, isMinorAge, nextStudentNumber, studentAgeGroups, studentRecordDateYmd, formatStudentRecordDate, saveStudentProfile, renderPeople, state } = context.studentTest;
+const { fiscalYear, isMinorAge, nextStudentNumber, studentAgeGroups, studentRecordDateYmd, formatStudentRecordDate, studentFormHtml, saveStudentProfile, renderPeople, state } = context.studentTest;
 
 assert.equal(fiscalYear("2026-03-31"), 2025);
 assert.equal(fiscalYear("2026-04-01"), 2026);
@@ -52,6 +52,8 @@ assert.equal(nextStudentNumber(2026, "6 - 11").value, "K260013", "counter preven
 assert.equal(nextStudentNumber(2025, "18 - 29").value, "A250009", "adult sequence is separate");
 assert.ok(studentAgeGroups().some((age) => age === "2.5 - 5"));
 assert.ok(studentAgeGroups().some((age) => age === "60 - 69"));
+assert.match(studentFormHtml(null), /name="birthDate" type="date"/, "birth date uses the same native date control as the next lesson date");
+assert.match(studentFormHtml(null), /出生日期（選填）/, "birth date keeps its optional label");
 assert.equal(state.students[0].enrollmentStatus, "legacy", "old records remain distinguishable and are not auto-numbered");
 assert.equal(state.students[0].enrollmentYear, null, "missing legacy year stays empty");
 assert.equal(state.students[0].prepaid, 8, "old balance remains unchanged");
@@ -64,10 +66,11 @@ saveStudentProfile({ id: "legacy", name: "舊學生", enrollmentStatus: "已付�
 assert.equal(state.students[0].enrollmentStatus, "legacy", "editing incomplete legacy profile does not force an ID");
 assert.equal(state.students[0].remaining, 4, "editing incomplete legacy profile preserves balance");
 assert.equal(state.students[0].nextDate, "2026-10-30", "editing incomplete legacy profile preserves schedule");
-saveStudentProfile({ name: "候補學生", ageGroup: "6 - 11", gender: "女", whatsapp: "91234567", recordDate: "2026-10-30", enrollmentYear: "2026", enrollmentStatus: "待確認，未付款" }, emptyForm);
+saveStudentProfile({ name: "候補學生", ageGroup: "6 - 11", gender: "女", whatsapp: "91234567", recordDate: "2026-10-30", enrollmentYear: "2026", enrollmentStatus: "待確認，未付款", birthDate: "2018-09-03", birthMonth: "9", birthYear: "2018" }, emptyForm);
 const pending = state.students.at(-1);
 assert.equal(pending.studentNumber, "", "pending student has no ID");
 assert.equal(pending.remaining, 0, "new student is not credited with lessons");
+assert.equal(pending.birthDate, "2018-09-03", "selected birth date is stored without breaking legacy birth month and year fields");
 state.peopleFilter = "pending";
 assert.match(renderPeople(), /候補學生[\s\S]*91234567[\s\S]*6 - 11[\s\S]*修改學生資訊[\s\S]*刪除/, "pending list exposes contact, age and follow-up actions");
 saveStudentProfile({ id: pending.id, name: pending.name, ageGroup: pending.ageGroup, gender: pending.gender, whatsapp: pending.whatsapp, recordDate: pending.recordDate, enrollmentYear: "2026", enrollmentStatus: "已付款" }, emptyForm);
