@@ -1193,9 +1193,9 @@
 
   function studentLocationPickerHtml(selected, options) {
     const current = options.find((item) => item.value === selected);
-    return '<fieldset class="student-location-field"><legend>課堂地點</legend><details id="student-location-picker"><summary><span id="student-location-label">' + escapeHtml(current ? current.label : "請選擇課堂泳池") + '</span>' + studentDropdownArrowHtml() + '</summary><div class="student-location-options">' +
+    return '<div class="student-floating student-location-field' + (current ? ' is-filled' : '') + '"><details id="student-location-picker"><summary aria-labelledby="student-location-floating student-location-label"><span id="student-location-label">' + escapeHtml(current ? current.label : "") + '</span>' + studentDropdownArrowHtml() + '</summary><div class="student-location-options">' +
       [{ value: "", label: "不設課堂地點" }].concat(options).map((item) => '<label><input type="radio" name="roomId" value="' + escapeHtml(item.value) + '"' + (item.value === selected ? ' checked' : '') + '><span>' + escapeHtml(item.label) + '</span></label>').join('') +
-      '</div></details></fieldset>';
+      '</div></details><span id="student-location-floating">課堂地點</span></div>';
   }
 
   function studentFormHtml(student) {
@@ -1270,7 +1270,7 @@
     return '<article class="student-course-card" data-course-index="' + index + '" data-enrollment-id="' + escapeHtml(row.id || "") + '" data-age-group="' + escapeHtml(ageGroup) + '" data-duration="' + (selected ? Number(selected.duration) || 60 : Number(row.duration) || 60) + '"><div class="student-section-heading"><h4>課堂 ' + (index + 1) + '</h4><button class="mini-button danger" type="button" data-action="student-remove-course" data-index="' + index + '">移除</button></div><div class="student-course-grid">' +
       '<label class="student-floating student-select' + (row.courseName ? ' is-filled' : '') + '"><select data-course-name required><option value="" hidden></option>' + names.map((value) => '<option value="' + escapeHtml(value) + '"' + (sameCourseValue(value, row.courseName) ? ' selected' : '') + '>' + escapeHtml(value) + '</option>').join('') + '</select>' + studentDropdownArrowHtml() + '<span>課程名稱</span></label>' +
       '<label class="student-floating student-select' + (row.classSize ? ' is-filled' : '') + '"><select data-course-size required><option value="" hidden></option>' + sizes.map((value) => '<option value="' + escapeHtml(value) + '"' + (sameCourseValue(value, row.classSize) ? ' selected' : '') + '>' + escapeHtml(value) + '</option>').join('') + '</select>' + studentDropdownArrowHtml() + '<span>課程人數</span></label>' +
-      '<label class="student-floating student-date-field' + (dateLabel ? ' is-filled' : '') + '"><span>首堂日期</span><input class="student-date-display" type="text" value="' + escapeHtml(dateLabel) + '" placeholder="DD/MM/YYYY" readonly aria-label="首堂日期 DD/MM/YYYY"><input data-course-date type="date" value="' + escapeHtml(row.firstDate || "") + '" aria-label="選擇首堂日期"></label>' +
+      '<div class="student-floating student-date-field' + (dateLabel ? ' is-filled' : '') + '"><input class="student-date-display" type="text" value="' + escapeHtml(dateLabel) + '" placeholder="DD/MM/YYYY" readonly aria-label="首堂日期 DD/MM/YYYY"><label class="student-date-calendar" title="開啟日曆選擇首堂日期"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 2v4M17 2v4M4 9h16M5 5h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/><path d="M9 13h6v5H9z"/></svg><input data-course-date type="date" value="' + escapeHtml(row.firstDate || "") + '" aria-label="選擇首堂日期"></label><span>首堂日期</span></div>' +
       '<label class="student-floating' + (hasFee ? ' is-filled' : '') + '"><input type="number" value="' + (hasFee ? fee : '') + '" readonly><span>課堂原價 (HK$)</span></label>' +
       '<label class="student-floating' + (row.discount !== "" && row.discount != null ? ' is-filled' : '') + '"><input data-course-discount type="number" min="0" max="' + fee + '" step="0.01" inputmode="decimal" value="' + escapeHtml(row.discount == null ? "" : row.discount) + '" placeholder="折扣優惠"><span>折扣優惠</span></label>' +
       '<div class="student-net-fee">每堂費用 <strong>' + escapeHtml(formatMoney(Math.max(0, fee - discount), 2)) + '</strong></div></div></article>';
@@ -2530,7 +2530,8 @@
       if (event.target.name === "birthMonth" || event.target.name === "birthYear") { updateStudentAge(form); return; }
       if (event.target.name === "recordDate") { validateStudentRecordDate(form, true, true); return; }
       if (event.target.name === "roomId") {
-        document.querySelector("#student-location-label").textContent = event.target.nextElementSibling.textContent;
+        document.querySelector("#student-location-label").textContent = event.target.value ? event.target.nextElementSibling.textContent : "";
+        event.target.closest(".student-location-field").classList.toggle("is-filled", Boolean(event.target.value));
         document.querySelector("#student-location-picker").open = false;
         return;
       }

@@ -1313,23 +1313,26 @@ body[data-module="rooms"] .module-heading p { max-width: 78ch; line-height: 1.65
 .student-course-card h4 { margin: 0; font-size: 1rem; }
 .student-course-card [data-action="student-remove-course"] { min-width: 68px; min-height: 38px; padding-inline: 15px; font-size: .95rem; }
 .student-course-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 12px; margin-top: 15px; }
-.student-date-field { display: flex; align-items: center; gap: 2px; }
-.student-date-field .student-date-display { min-width: 0; flex: 1; }
-.student-date-field input[type=date] { width: 42px; min-width: 42px; padding: 6px; color: transparent; }
-.student-date-field input[type=date]::-webkit-calendar-picker-indicator { margin: 0; opacity: 1; cursor: pointer; }
+.student-date-field { display: flex; min-height: 50px; align-items: center; background: var(--paper-strong); border: 1px solid #d4cec1; border-radius: 10px; }
+.student-date-field:focus-within { border-color: #2c7cae; outline: 2px solid #b9d9e8; outline-offset: 1px; }
+.student-date-field .student-date-display { width: 0; min-width: 0; min-height: 48px; flex: 1; background: transparent; border: 0; outline: 0; }
+.student-date-field .student-date-display:focus { border: 0; outline: 0; }
+.student-date-calendar { position: relative; display: grid; width: 42px; min-width: 42px; height: 48px; place-items: center; color: #585851; cursor: pointer; }
+.student-date-calendar:hover { color: #2879a9; }
+.student-date-calendar svg { width: 22px; height: 22px; }
+.student-date-calendar input[type=date] { position: absolute; inset: 0; width: 100%; min-height: 0; height: 100%; padding: 0; border: 0; opacity: 0; cursor: pointer; }
 .student-net-fee { display: flex; align-items: center; gap: 8px; padding: 10px 12px; color: var(--muted); font-size: .78rem; }
 .student-net-fee strong { color: var(--ink); font-size: .95rem; }
 .student-location-field { min-width: 0; margin: 0; padding: 0; border: 0; }
-.student-location-field legend { margin-bottom: 6px; font-size: .78rem; font-weight: 800; }
 .student-location-field details { position: relative; }
-.student-location-field summary { display: flex; min-height: 50px; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 14px; background: var(--paper-strong); border: 1px solid #d4cec1; border-radius: 10px; font-size: .94rem; cursor: pointer; list-style: none; }
+.student-location-field summary { display: flex; min-height: 50px; align-items: center; justify-content: space-between; gap: 10px; padding: 15px 13px 7px; background: var(--paper-strong); border: 1px solid #d4cec1; border-radius: 10px; font-size: .94rem; cursor: pointer; list-style: none; }
 .student-location-field summary .student-dropdown-arrow { position: static; flex: 0 0 34px; }
 .student-location-field summary::-webkit-details-marker { display: none; }
-.student-location-field details[open] summary { border-color: #2c7cae; outline: 2px solid #b9d9e8; }
+.student-location-field details[open] summary, .student-location-field summary:focus-visible { border-color: #2c7cae; outline: 2px solid #b9d9e8; outline-offset: 1px; }
 .student-location-options { position: relative; z-index: 2; display: grid; max-height: 225px; overflow: auto; padding: 5px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); }
 .student-location-options label { display: flex; align-items: center; gap: 9px; min-height: 38px; padding: 6px 7px; border-radius: 7px; font-size: .79rem; cursor: pointer; }
 .student-location-options label:hover { background: var(--blue-soft); }
-.student-location-options input { accent-color: #2879a9; }
+.student-location-options input[type=radio] { width: auto; min-width: 13px; min-height: 0; flex: 0 0 auto; margin: 0; padding: 0; background: transparent; border: 0; accent-color: #2879a9; }
 .student-legacy-fields { padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
 .student-legacy-fields summary { color: #2879a9; font-size: .78rem; font-weight: 750; cursor: pointer; }
 .student-legacy-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 17px 12px; padding-top: 18px; }

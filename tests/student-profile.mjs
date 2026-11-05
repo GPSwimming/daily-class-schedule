@@ -34,9 +34,9 @@ const context = {
 };
 vm.runInNewContext(locationSource, context);
 vm.runInNewContext(courseSource, context);
-const instrumented = appSource.replace(/\n\}\)\(\);\s*$/, "\n  globalThis.studentTest = { fiscalYear, isMinorAge, nextStudentNumber, studentAgeGroups, studentRecordDateYmd, formatStudentRecordDate, studentFormHtml, saveStudentProfile, renderPeople, state };\n})();");
+const instrumented = appSource.replace(/\n\}\)\(\);\s*$/, "\n  globalThis.studentTest = { fiscalYear, isMinorAge, nextStudentNumber, studentAgeGroups, studentRecordDateYmd, formatStudentRecordDate, studentFormHtml, studentEnrollmentHtml, studentLocationPickerHtml, saveStudentProfile, renderPeople, state };\n})();");
 vm.runInNewContext(instrumented, context);
-const { fiscalYear, isMinorAge, nextStudentNumber, studentAgeGroups, studentRecordDateYmd, formatStudentRecordDate, studentFormHtml, saveStudentProfile, renderPeople, state } = context.studentTest;
+const { fiscalYear, isMinorAge, nextStudentNumber, studentAgeGroups, studentRecordDateYmd, formatStudentRecordDate, studentFormHtml, studentEnrollmentHtml, studentLocationPickerHtml, saveStudentProfile, renderPeople, state } = context.studentTest;
 
 assert.equal(fiscalYear("2026-03-31"), 2025);
 assert.equal(fiscalYear("2026-04-01"), 2026);
@@ -58,11 +58,19 @@ assert.doesNotMatch(studentFormHtml(null), /name="birthDate"/, "new student form
 assert.match(studentFormHtml(null), /<span>出生月份<\/span>/, "birth month floating label is concise");
 assert.match(studentFormHtml(null), /<span>出生年份<\/span>/, "birth year floating label is concise");
 assert.match(studentFormHtml(null), /student-dropdown-arrow/, "student selects use the shared arrow icon");
+const unselectedLocation = studentLocationPickerHtml("", [{ value: "pool:1", label: "堅尼地城游泳池" }]);
+assert.match(unselectedLocation, /class="student-floating student-location-field"/, "unselected lesson location uses the shared floating field");
+assert.match(unselectedLocation, /<span id="student-location-label"><\/span>[\s\S]*?<span id="student-location-floating">課堂地點<\/span>/, "location hint sits inside the box and leaves it empty after focus");
+assert.doesNotMatch(unselectedLocation, /<legend>|請選擇課堂泳池/, "location has no separate heading or extra placeholder");
+assert.match(studentLocationPickerHtml("pool:1", [{ value: "pool:1", label: "堅尼地城游泳池" }]), /class="student-floating student-location-field is-filled"[\s\S]*?<span id="student-location-label">堅尼地城游泳池<\/span>/, "a selected pool keeps the floating label and value");
 const oldBirthDateForm = studentFormHtml({ ageGroup: "6 - 11", birthDate: "2018-09-03" });
 assert.match(oldBirthDateForm, /name="birthMonth"[\s\S]*?<option value="9" selected>9 月<\/option>/, "old birth date populates the month select");
 assert.match(oldBirthDateForm, /name="birthYear"[\s\S]*?<option value="2018" selected>2018<\/option>/, "old birth date populates the year select");
 assert.match(studentFormHtml(null), /<label class="student-record-date-calendar"[^>]*>[\s\S]*?<input id="student-record-date-picker" type="date"/, "today date icon directly contains the native date input for mobile tapping");
 assert.doesNotMatch(studentFormHtml(null), /data-action="student-record-date-calendar"/, "today date no longer relies on a scripted click of a hidden picker");
+const enrollmentHtml = studentEnrollmentHtml({ firstDate: "2026-11-02", discount: 0 }, 0, "6 - 11");
+assert.match(enrollmentHtml, /class="student-floating student-date-field is-filled"[\s\S]*?value="02\/11\/2026"[\s\S]*?placeholder="DD\/MM\/YYYY"/, "first lesson date keeps its day/month/year display and floating label");
+assert.match(enrollmentHtml, /<label class="student-date-calendar"[^>]*><svg[\s\S]*?<input data-course-date type="date"[^>]*><\/label><span>首堂日期<\/span>/, "first lesson calendar icon and native picker share one date box");
 assert.equal(state.students[0].enrollmentStatus, "legacy", "old records remain distinguishable and are not auto-numbered");
 assert.equal(state.students[0].enrollmentYear, null, "missing legacy year stays empty");
 assert.equal(state.students[0].prepaid, 8, "old balance remains unchanged");
