@@ -9,9 +9,10 @@ const saved = new Map([
 ]);
 const nodes = new Map();
 const handlers = new Map();
+const nodeHandlers = new Map();
 const classList = () => ({ add() {}, remove() {}, toggle() {} });
 const node = (selector) => {
-  if (!nodes.has(selector)) nodes.set(selector, { innerHTML: "", textContent: "", hidden: false, classList: classList(), addEventListener() {}, setAttribute() {}, showModal() { this.open = true; }, close() { this.open = false; } });
+  if (!nodes.has(selector)) nodes.set(selector, { innerHTML: "", textContent: "", hidden: false, classList: classList(), addEventListener(name, handler) { nodeHandlers.set(selector + ":" + name, handler); }, setAttribute() {}, showModal() { this.open = true; }, close() { this.open = false; } });
   return nodes.get(selector);
 };
 const document = {
@@ -44,8 +45,18 @@ await click({ module: "schedule" });
 assert.match(content(), /timeline-body/, "week timeline renders");
 assert.match(content(), /50%/, "zoom starts at 50%");
 
-await click({ action: "schedule-zoom", delta: "25" });
-assert.match(content(), /75%/, "zoom button changes the grid scale");
+await click({ action: "schedule-zoom", delta: "10" });
+assert.match(content(), /60%/, "desktop zoom button changes the grid by ten percent");
+assert.doesNotMatch(content(), /07:30/, "50–70 percent uses one-hour slots");
+for (let index = 0; index < 2; index++) await click({ action: "schedule-zoom", delta: "10" });
+assert.match(content(), /07:30/, "71–120 percent uses half-hour slots");
+for (let index = 0; index < 5; index++) await click({ action: "schedule-zoom", delta: "10" });
+assert.match(content(), /07:15/, "121–200 percent uses quarter-hour slots");
+for (let index = 0; index < 7; index++) await click({ action: "schedule-zoom", delta: "10" });
+assert.match(content(), /200%/, "zoom reaches 200 percent");
+assert.match(content(), /aria-label="放大時間格" disabled/, "zoom cannot pass 200 percent");
+for (let index = 0; index < 12; index++) await click({ action: "schedule-zoom", delta: "-10" });
+assert.match(content(), /80%/, "zoom returns to half-hour scale");
 
 handlers.get("change")({ target: { id: "schedule-date", value: "2026-10-18", dataset: {} } });
 await click({ action: "schedule-mode", value: "month" });
@@ -67,9 +78,32 @@ await click({ action: "schedule-display" });
 await click({ action: "schedule-mode", value: "day" });
 assert.match(content(), /08:00/, "day grid begins at the new opening hour");
 assert.match(content(), /20:00/, "day grid ends at the new closing hour");
-assert.match(content(), /height:528px/, "day timeline height uses saved hours and 75% zoom");
+assert.match(content(), /height:739\.2px/, "day timeline height uses saved hours and 80% zoom");
 await click({ action: "schedule-mode", value: "week" });
-assert.match(content(), /height:528px/, "week timeline uses the same saved hour range");
+assert.match(content(), /height:739\.2px/, "week timeline uses the same saved hour range");
+const pinchBody = { style: {} }, pinchLabel = { textContent: "" };
+const pinchCard = { dataset: { totalHours: "12" }, style: { setProperty() {} }, querySelector: (selector) => selector === ".timeline-body" ? pinchBody : pinchLabel };
+const pinchTarget = { closest: () => pinchCard };
+nodeHandlers.get("#module-content:touchstart")({ target: pinchTarget, touches: [{ clientX: 0, clientY: 0 }, { clientX: 100, clientY: 0 }] });
+nodeHandlers.get("#module-content:touchmove")({ touches: [{ clientX: 0, clientY: 0 }, { clientX: 104, clientY: 0 }], preventDefault() {} });
+assert.equal(pinchLabel.textContent, "81%", "four-pixel pinch changes zoom by one percent");
+nodeHandlers.get("#module-content:touchend")({ touches: [] });
+assert.match(content(), /81%/, "pinch zoom redraws the grid at the final value");
+let pinchZoom = 81;
+const pinchTo = (nextZoom) => {
+  nodeHandlers.get("#module-content:touchstart")({ target: pinchTarget, touches: [{ clientX: 0, clientY: 0 }, { clientX: 100, clientY: 0 }] });
+  nodeHandlers.get("#module-content:touchmove")({ touches: [{ clientX: 0, clientY: 0 }, { clientX: 100 + (nextZoom - pinchZoom) * 4, clientY: 0 }], preventDefault() {} });
+  nodeHandlers.get("#module-content:touchend")({ touches: [] });
+  pinchZoom = nextZoom;
+};
+pinchTo(70);
+assert.doesNotMatch(content(), /08:30/, "70 percent keeps one-hour slots");
+pinchTo(71);
+assert.match(content(), /08:30/, "71 percent switches to half-hour slots");
+pinchTo(120);
+assert.doesNotMatch(content(), /08:15/, "120 percent keeps half-hour slots");
+pinchTo(121);
+assert.match(content(), /08:15/, "121 percent switches to quarter-hour slots");
 
 await click({ module: "people" });
 assert.match(content(), /新增課程/, "people header has course action");

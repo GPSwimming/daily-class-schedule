@@ -32,6 +32,9 @@
     scheduleDisplay: "calendar",
     scheduleZoom: 50,
     scheduleDate: todayYmd(),
+    quickLesson: null,
+    bookingDraft: null,
+    timePicker: null,
     peopleTab: "students",
     peopleFilter: "all",
     peopleSearch: "",
@@ -52,6 +55,7 @@
     formHandler: null,
     loggedIn: sessionStorage.getItem("swim-suite.logged-out") !== "1"
   };
+  let suppressTimelineClickUntil = 0;
 
   for (const student of state.students) {
     const match = String(student.studentNumber || "").match(/^([KA]\d{2})(\d{4})$/);
@@ -94,6 +98,9 @@
     receiptContent: document.querySelector("#receipt-content"),
     scheduleHoursDialog: document.querySelector("#schedule-hours-dialog"),
     scheduleHoursForm: document.querySelector("#schedule-hours-form"),
+    quickLessonDialog: document.querySelector("#quick-lesson-dialog"),
+    bookingDialog: document.querySelector("#booking-dialog"),
+    timePickerDialog: document.querySelector("#lesson-time-dialog"),
     tutorDialog: document.querySelector("#tutor-dialog"),
     tutorForm: document.querySelector("#tutor-form"),
     studentImportDialog: document.querySelector("#student-import-dialog"),
@@ -131,6 +138,7 @@
       ],
       poolLocations: window.SwimLocationImport.referenceRows.map((row) => ({ id: makeId(), ...row })),
       bookingOptions: { onlineBooking: true, preventOverlap: true, bufferMinutes: 10, openHour: 7, closeHour: 22 },
+      lessonBookings: [],
       payments: [],
       studentNumberCounters: {},
       manualItems: [],
@@ -157,6 +165,7 @@
           openHour: clampWhole(saved.bookingOptions && saved.bookingOptions.openHour, 0, 22, fallback.bookingOptions.openHour),
           closeHour: clampWhole(saved.bookingOptions && saved.bookingOptions.closeHour, 1, 23, fallback.bookingOptions.closeHour)
         },
+        lessonBookings: Array.isArray(saved.lessonBookings) ? saved.lessonBookings : [],
         payments: Array.isArray(saved.payments) ? saved.payments : [],
         studentNumberCounters: saved.studentNumberCounters && typeof saved.studentNumberCounters === "object" ? saved.studentNumberCounters : {},
         manualItems: Array.isArray(saved.manualItems) ? saved.manualItems : [],
@@ -182,6 +191,9 @@
         prepaid: clampWhole(item.prepaid, 0, 999, 8),
         remaining: clampWhole(item.remaining, 0, 999, 0),
         nextDate: validDate(item.nextDate) ? item.nextDate : item.enrollmentStatus ? "" : formatYmd(nextDateForWeekday(normalizeWeekday(item.weekday))),
+        bookingManaged: Boolean(item.bookingManaged),
+        bookingFallbackDate: validDate(item.bookingFallbackDate) ? item.bookingFallbackDate : "",
+        bookingFallbackTime: validTime(item.bookingFallbackTime) ? item.bookingFallbackTime : "",
         courseId: item.courseId || "",
         roomId: item.roomId || "",
         roomName: item.roomName || "",
@@ -461,13 +473,15 @@
       calendarShortDate(selected) + " · " + WEEKDAYS[selected.getDay()];
     const modes = [["day", "▣ 日"], ["week", "▣ 週"], ["month", "▦ 月"]];
     const isList = state.scheduleDisplay === "list";
+    const listIcon = '<svg class="schedule-view-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="1" stroke="currentColor" stroke-width="1.5"/><path d="M3 9.33h18M3 14.67h18M9 4v16" stroke="currentColor" stroke-width="1.4"/><path d="M5.2 6h1.6v1.6H5.2zM5.2 11.2h1.6v1.6H5.2zM5.2 16.4h1.6V18H5.2z" fill="currentColor"/></svg>';
+    const calendarIcon = '<svg class="schedule-view-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="1.5" stroke="currentColor" stroke-width="1.7"/><path d="M7.5 3v4M16.5 3v4M3 9h18" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M6.2 11.5h2.3v2.3H6.2zM10.9 11.5h2.3v2.3h-2.3zM15.6 11.5h2.3v2.3h-2.3zM6.2 16h2.3v2.3H6.2zM10.9 16h2.3v2.3h-2.3zM15.6 16h2.3v2.3h-2.3z" fill="currentColor"/></svg>';
     const calendar = isList ? scheduleListHtml(selected, mode) : mode === "month" ? monthGridHtml(selected) : timelineGridHtml(selected, mode);
     const selectedLessons = lessonsForDate(state.scheduleDate);
     const openText = String(state.suite.bookingOptions.openHour).padStart(2, "0") + ":00 – " + String(state.suite.bookingOptions.closeHour).padStart(2, "0") + ":00";
     return '<section class="schedule-view">' +
       '<div class="schedule-toolbar"><div class="segmented schedule-modes">' + modes.map(([value, label]) =>
         '<button type="button" data-action="schedule-mode" data-value="' + value + '" class="' + (mode === value ? "is-active" : "") + '">' + label + "</button>").join("") +
-      '</div><button class="schedule-icon-button' + (isList ? ' is-active' : '') + '" type="button" data-action="schedule-display" aria-label="' + (isList ? '顯示日曆' : '顯示課堂列表') + '" title="' + (isList ? '日曆檢視' : '列表檢視') + '" aria-pressed="' + isList + '">' + (isList ? '▦' : '☷') + '</button>' +
+      '</div><button class="schedule-icon-button' + (isList ? ' is-active' : '') + '" type="button" data-action="schedule-display" aria-label="' + (isList ? '顯示日曆' : '顯示課堂列表') + '" title="' + (isList ? '日曆檢視' : '列表檢視') + '" aria-pressed="' + isList + '">' + (isList ? calendarIcon : listIcon) + '</button>' +
       '<button class="schedule-icon-button" type="button" data-action="schedule-hours" aria-label="設定中心開放時間" title="中心開放時間">⚙</button></div>' +
       '<div class="schedule-navigation"><button type="button" class="schedule-nav-arrow" data-action="schedule-shift" data-delta="-1" aria-label="上一個">‹</button>' +
       '<strong>' + escapeHtml(rangeLabel) + '</strong><button type="button" class="schedule-nav-arrow" data-action="schedule-shift" data-delta="1" aria-label="下一個">›</button>' +
@@ -487,8 +501,11 @@
   }
 
   function lessonsForDate(dateString) {
-    return state.students.filter((student) => student.nextDate === dateString && student.status !== "inactive" && student.enrollmentStatus !== "pending")
-      .sort((a, b) => (a.nextTime || a.time).localeCompare(b.nextTime || b.time));
+    const legacy = state.students.filter((student) => !student.bookingManaged && student.nextDate === dateString && student.status !== "inactive" && student.enrollmentStatus !== "pending")
+      .map((student) => ({ kind: "legacy", student, time: student.nextTime || student.time }));
+    const booked = state.suite.lessonBookings.filter((booking) => booking.date === dateString)
+      .map((booking) => ({ kind: "booking", booking, time: booking.start }));
+    return legacy.concat(booked).sort((a, b) => a.time.localeCompare(b.time));
   }
 
   function scheduleListHtml(selected, mode) {
@@ -507,34 +524,47 @@
 
   function timelineGridHtml(selected, mode) {
     const options = state.suite.bookingOptions;
-    const openHour = clampWhole(options.openHour, 0, 22, 7);
-    const closeHour = clampWhole(options.closeHour, openHour + 1, 23, 22);
-    const totalHours = closeHour - openHour;
-    const hourHeight = 32 + (state.scheduleZoom - 50) / 25 * 12;
     const days = mode === "day" ? [selected] : Array.from({ length: 7 }, (_, index) => addDays(mondayOf(selected), index));
+    const visibleBookings = days.flatMap((date) => state.suite.lessonBookings.filter((booking) => booking.date === formatYmd(date)));
+    const openHour = Math.min(clampWhole(options.openHour, 0, 22, 7), ...visibleBookings.map((booking) => Math.floor(timeMinutes(booking.start) / 60)));
+    const closeHour = Math.max(clampWhole(options.closeHour, openHour + 1, 24, 22), ...visibleBookings.map((booking) => Math.ceil(timeMinutes(booking.end) / 60)));
+    const totalHours = closeHour - openHour;
+    const hourHeight = timelineHourHeight(state.scheduleZoom);
+    const slotMinutes = timelineSlotMinutes(state.scheduleZoom);
     const dayHeaders = days.map((date) => {
       const ymd = formatYmd(date);
       return '<button class="timeline-day-heading' + (ymd === todayYmd() ? " is-today" : "") + '" type="button" data-action="schedule-select-date" data-date="' + ymd + '"><span>' + WEEKDAYS[date.getDay()].replace("星期", "週") +
         '</span><strong>' + date.getDate() + '</strong></button>';
     }).join("");
-    const axis = Array.from({ length: totalHours + 1 }, (_, index) => '<span class="timeline-hour' + (index === 0 ? ' is-start' : index === totalHours ? ' is-end' : '') + '" style="top:' + (index / totalHours * 100) + '%">' + String(openHour + index).padStart(2, "0") + ':00</span>').join("");
+    const totalSlots = totalHours * 60 / slotMinutes;
+    const axis = Array.from({ length: totalSlots + 1 }, (_, index) => {
+      const minutes = openHour * 60 + index * slotMinutes;
+      const minute = minutes % 60;
+      return '<span class="timeline-hour' + (minute ? ' is-minor' : ' is-major') + (minute === 30 ? ' is-half' : '') + (index === 0 ? ' is-start' : index === totalSlots ? ' is-end' : '') + '" style="top:' + (index / totalSlots * 100) + '%">' + String(Math.floor(minutes / 60)).padStart(2, "0") + ':' + String(minute).padStart(2, "0") + '</span>';
+    }).join("");
     const columns = days.map((date) => {
       const ymd = formatYmd(date);
-      const events = lessonsForDate(ymd).map((student) => {
-        const time = student.nextTime || student.time || "00:00";
+      const events = lessonsForDate(ymd).map((entry) => {
+        const student = entry.student;
+        const booking = entry.booking;
+        const time = entry.time || "00:00";
         const [hour, minute] = time.split(":").map(Number);
-        const course = courseForStudent(student);
-        const duration = Math.max(0.5, (course && Number(course.duration) || 60) / 60);
+        const course = student ? courseForStudent(student) : null;
+        const duration = Math.max(0.5, (booking ? timeMinutes(booking.end) - timeMinutes(booking.start) : course && Number(course.duration) || 60) / 60);
         const offset = hour + minute / 60 - openHour;
         if (offset + duration <= 0 || offset >= totalHours) return "";
         const top = Math.max(0, offset) / totalHours * 100;
         const height = Math.min(duration, totalHours - Math.max(0, offset)) / totalHours * 100;
-        return '<button type="button" class="timeline-event" style="top:' + top + '%;height:' + height + '%" data-action="reschedule" data-id="' + student.id + '" title="' + escapeHtml(student.name + " " + time) + '"><strong>' + escapeHtml(student.name) + '</strong><span>' + escapeHtml(time) + '</span></button>';
+        const title = booking ? booking.studentIds.map((id) => findById(state.students, id)?.name).filter(Boolean).join("、") : student.name;
+        return '<button type="button" class="timeline-event" style="top:' + top + '%;height:' + height + '%" data-action="' + (booking ? 'edit-booking' : 'reschedule') + '" data-id="' + (booking ? booking.id : student.id) + '" title="' + escapeHtml(title + " " + time) + '"><strong>' + escapeHtml(title) + '</strong><span>' + escapeHtml(time) + '</span></button>';
       }).join("");
-      return '<div class="timeline-day-column' + (ymd === todayYmd() ? " is-today" : "") + '">' + events + '</div>';
+      return '<div class="timeline-day-column' + (ymd === todayYmd() ? " is-today" : "") + '" data-date="' + ymd + '">' + events + '</div>';
     }).join("");
-    return '<div class="timeline-card" style="--hour-height:' + hourHeight + 'px"><div class="timeline-head" style="grid-template-columns:48px repeat(' + days.length + ',minmax(0,1fr))"><div class="timeline-corner"></div>' + dayHeaders + '</div><div class="timeline-body" style="height:' + (totalHours * hourHeight) + 'px"><div class="timeline-axis">' + axis + '</div><div class="timeline-columns" style="grid-template-columns:repeat(' + days.length + ',minmax(0,1fr))">' + columns + '</div></div><div class="schedule-zoom" aria-label="時間格縮放"><button type="button" data-action="schedule-zoom" data-delta="-25" aria-label="縮小時間格"' + (state.scheduleZoom <= 50 ? ' disabled' : '') + '>−</button><span>' + state.scheduleZoom + '%</span><button type="button" data-action="schedule-zoom" data-delta="25" aria-label="放大時間格"' + (state.scheduleZoom >= 150 ? ' disabled' : '') + '>＋</button></div></div>';
+    return '<div class="timeline-card" data-open-hour="' + openHour + '" data-total-hours="' + totalHours + '" style="--hour-height:' + hourHeight + 'px;--slot-height:' + (hourHeight * slotMinutes / 60) + 'px"><div class="timeline-head" style="grid-template-columns:var(--axis-width) repeat(' + days.length + ',minmax(0,1fr))"><div class="timeline-corner"></div>' + dayHeaders + '</div><div class="timeline-body" style="height:' + (totalHours * hourHeight) + 'px"><div class="timeline-axis">' + axis + '</div><div class="timeline-columns" style="grid-template-columns:repeat(' + days.length + ',minmax(0,1fr))">' + columns + '</div></div><div class="schedule-zoom" aria-label="時間格縮放"><button type="button" data-action="schedule-zoom" data-delta="-10" aria-label="縮小時間格"' + (state.scheduleZoom <= 50 ? ' disabled' : '') + '>−</button><span>' + state.scheduleZoom + '%</span><button type="button" data-action="schedule-zoom" data-delta="10" aria-label="放大時間格"' + (state.scheduleZoom >= 200 ? ' disabled' : '') + '>＋</button></div></div>';
   }
+
+  function timelineHourHeight(zoom) { return Math.round((40 + (zoom - 50) * 0.72) * 10) / 10; }
+  function timelineSlotMinutes(zoom) { return zoom <= 70 ? 60 : zoom <= 120 ? 30 : 15; }
 
   function monthGridHtml(selected) {
     const first = new Date(selected.getFullYear(), selected.getMonth(), 1);
@@ -553,7 +583,15 @@
 
   function scheduleRowsHtml(students) {
     if (!students.length) return '<div class="schedule-empty"><span aria-hidden="true">▦</span><strong>這一天沒有課堂</strong><p>按「＋」編排課堂</p></div>';
-    return '<div class="schedule-lesson-list">' + students.map((student) => {
+    return '<div class="schedule-lesson-list">' + students.map((entry) => {
+      if (entry.kind === "booking") {
+        const booking = entry.booking;
+        const names = booking.studentIds.map((id) => findById(state.students, id)?.name).filter(Boolean).join("、");
+        const tutors = booking.tutorIds.map((id) => findById(state.suite.accounts, id)?.name).filter(Boolean).join("、");
+        const pool = locationNameForId(booking.roomId, booking.roomName);
+        return '<article class="schedule-lesson-card"><div class="schedule-lesson-time"><strong>' + escapeHtml(booking.start) + '</strong><span>' + escapeHtml(booking.end) + '</span><small>' + (timeMinutes(booking.end) - timeMinutes(booking.start)) + '分鐘</small></div><div class="schedule-lesson-main"><strong>' + escapeHtml(names || "未指定學生") + '</strong><span>' + escapeHtml((tutors ? '♟ ' + tutors + '　' : '') + (pool ? '⌖ ' + pool + '　' : '') + booking.courseName) + '</span><small class="schedule-lesson-status">● 預約課堂</small></div><div class="row-actions"><button class="mini-button" type="button" data-action="complete-booking" data-id="' + booking.id + '">完成</button><button class="mini-button" type="button" data-action="edit-booking" data-id="' + booking.id + '">改期</button><button class="mini-button danger" type="button" data-action="cancel-booking" data-id="' + booking.id + '">取消</button><button class="mini-button" type="button" data-action="booking-message" data-id="' + booking.id + '">提醒</button></div></article>';
+      }
+      const student = entry.student;
       const room = findById(state.suite.rooms, student.roomId);
       const roomName = room ? room.name : student.roomName;
       const tutor = findById(state.suite.accounts, student.tutorId);
@@ -633,6 +671,27 @@
     const references = window.SwimCourseImport.referenceRows.map((row, index) => ({ ...row, id: "reference-" + index, active: true, reference: true }))
       .filter((row) => !present.has(window.SwimCourseImport.key(row)) && !hidden.has(window.SwimCourseImport.key(row)));
     return saved.concat(references);
+  }
+
+  function studentCoursesForAge(ageGroup) {
+    const available = displayCourses().filter((item) => item.active !== false);
+    const exact = available.filter((item) => sameCourseValue(item.ageGroup, ageGroup));
+    if (!sameCourseValue(ageGroup, "2.5 - 5")) return exact;
+    const agesFourToFive = available.filter((item) => sameCourseValue(item.ageGroup, "4 - 5"));
+    return exact.concat(agesFourToFive.filter((item) => !exact.some((row) =>
+      sameCourseValue(row.name, item.name) && sameCourseValue(row.classSize, item.classSize))));
+  }
+
+  function tutorCourseForId(id) {
+    const saved = findById(state.suite.courses, id);
+    if (saved) return saved;
+    const match = /^reference-(\d+)$/.exec(String(id || ""));
+    const reference = match && window.SwimCourseImport.referenceRows[Number(match[1])];
+    return reference ? { ...reference, id } : null;
+  }
+
+  function tutorCourseNames(account) {
+    return uniqueCourseValues((account.courseIds || []).map(tutorCourseForId).filter(Boolean), "name");
   }
 
   function studentAgeGroups() {
@@ -841,7 +900,7 @@
   function tutorListHtml(tutors) {
     if (!tutors.length) return emptyHtml("🧑‍🏫", "未有導師資料", "新增導師帳戶後可指派給學生。");
     return '<div class="people-tutor-list">' + tutors.map((item) => {
-      const courseNames = (item.courseIds || []).map((id) => findById(state.suite.courses, id)).filter(Boolean).map((course) => course.name);
+      const courseNames = tutorCourseNames(item);
       const payroll = tutorMonthlyPayroll(item);
       return '<article class="people-mobile-card"><div class="people-person-head"><span class="people-avatar">' + escapeHtml([...item.name][0] || "?") + '</span><div><h2>' + escapeHtml(item.name) + '</h2><p>' + escapeHtml(item.phone || item.email || "未有聯絡資料") + '</p><small>' + escapeHtml(courseNames.join("、") || "未指定課程") + '</small></div><button class="people-edit-button" type="button" data-action="edit-account" data-id="' + escapeHtml(item.id) + '" aria-label="編輯導師 ' + escapeHtml(item.name) + '">✎</button></div><span class="people-status">登入未啟用</span>' +
         '<div class="tutor-payroll"><span>本月 ' + payroll.lessons + ' 堂 · ' + formatHours(payroll.hours) + ' 小時</span><strong>預計人工 ' + formatMoney(payroll.amount) + '</strong></div></article>';
@@ -855,7 +914,7 @@
       const course = courseForStudent(student);
       for (const record of student.history || []) {
         if (record.type !== "completed" || !String(record.lessonDate || "").startsWith(month)) continue;
-        if ((record.tutorId || student.tutorId || "") !== tutor.id) continue;
+        if (Array.isArray(record.tutorIds) ? !record.tutorIds.includes(tutor.id) : (record.tutorId || student.tutorId || "") !== tutor.id) continue;
         minutes += Number(record.durationMinutes) || Number(course && course.duration) || 60;
         lessons += 1;
       }
@@ -1018,7 +1077,7 @@
       { label: "本月預計人工", value: formatMoney(totalPayroll) }
     ]) + '<section class="panel"><div class="panel-heading"><div><h2>導師資料及人工</h2><p>本月人工＝教練時薪 × 本月已完成游泳班時數</p></div></div>' +
       (payrolls.length ? '<div class="list-stack">' + payrolls.map(({ tutor, lessons, hours, amount }) => {
-        const courseNames = (tutor.courseIds || []).map((id) => findById(state.suite.courses, id)).filter(Boolean).map((course) => course.name);
+        const courseNames = tutorCourseNames(tutor);
         return '<article class="list-row tutor-account-row"><div class="row-icon">🧑‍🏫</div><div class="row-main"><strong>' + escapeHtml(tutor.name) + '</strong><span>' +
           escapeHtml(courseNames.join("、") || "未指定課程") + ' · 時薪 ' + formatMoney(tutor.hourlyRate || 0) + '</span><span>本月 ' + lessons + ' 堂 · ' + formatHours(hours) +
           ' 小時 · 預計人工 ' + formatMoney(amount) + '</span></div><div class="row-actions"><button class="mini-button" type="button" data-action="edit-account" data-id="' + tutor.id +
@@ -1257,7 +1316,7 @@
   }
 
   function studentEnrollmentHtml(row, index, ageGroup) {
-    const courses = displayCourses().filter((item) => sameCourseValue(item.ageGroup, ageGroup) && item.active !== false);
+    const courses = studentCoursesForAge(ageGroup);
     const names = uniqueCourseValues(courses, "name");
     if (row.courseName && !names.some((value) => sameCourseValue(value, row.courseName))) names.push(row.courseName);
     const sizes = uniqueCourseValues(courses.filter((item) => sameCourseValue(item.name, row.courseName)), "classSize");
@@ -1273,7 +1332,8 @@
       '<div class="student-floating student-date-field' + (dateLabel ? ' is-filled' : '') + '"><input class="student-date-display" type="text" value="' + escapeHtml(dateLabel) + '" placeholder="DD/MM/YYYY" readonly aria-label="首堂日期 DD/MM/YYYY"><label class="student-date-calendar" title="開啟日曆選擇首堂日期"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 2v4M17 2v4M4 9h16M5 5h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/><path d="M9 13h6v5H9z"/></svg><input data-course-date type="date" value="' + escapeHtml(row.firstDate || "") + '" aria-label="選擇首堂日期"></label><span>首堂日期</span></div>' +
       '<label class="student-floating' + (hasFee ? ' is-filled' : '') + '"><input type="number" value="' + (hasFee ? fee : '') + '" readonly><span>課堂原價 (HK$)</span></label>' +
       '<label class="student-floating' + (row.discount !== "" && row.discount != null ? ' is-filled' : '') + '"><input data-course-discount type="number" min="0" max="' + fee + '" step="0.01" inputmode="decimal" value="' + escapeHtml(row.discount == null ? "" : row.discount) + '" placeholder="折扣優惠"><span>折扣優惠</span></label>' +
-      '<div class="student-net-fee">每堂費用 <strong>' + escapeHtml(formatMoney(Math.max(0, fee - discount), 2)) + '</strong></div></div></article>';
+      '<div class="student-net-fee">每堂費用 <strong>' + escapeHtml(formatMoney(Math.max(0, fee - discount), 2)) + '</strong></div></div>' +
+      (selected && !sameCourseValue(selected.ageGroup, ageGroup) ? '<p class="student-course-age-note">課堂時間及原價按課程設定「' + escapeHtml(selected.ageGroup) + '」組合計算。</p>' : '') + '</article>';
   }
 
   function renderStudentEnrollments(form, rows) {
@@ -1324,7 +1384,7 @@
     contactLabel.textContent = minor ? "監護人" : "緊急聯絡人";
     form.elements.guardianName.placeholder = " ";
     if (ageChanged) renderStudentEnrollments(form, studentEnrollmentDrafts(form).filter((row) =>
-      !row.courseName || displayCourses().some((course) => sameCourseValue(course.ageGroup, age) && sameCourseValue(course.name, row.courseName))));
+      !row.courseName || studentCoursesForAge(age).some((course) => sameCourseValue(course.name, row.courseName))));
     else document.querySelector("#student-add-course").disabled = studentEnrollmentDrafts(form).length >= 4;
     const existing = findById(state.students, form.elements.id.value);
     const paid = form.elements.enrollmentStatus.value === "已付款";
@@ -1391,13 +1451,14 @@
     const rows = studentEnrollmentDrafts(form);
     if (rows.length > 4) throw new Error("每位學生最多可新增四個課堂。");
     const enrollments = rows.map((row) => {
-      const course = displayCourses().find((item) => sameCourseValue(item.ageGroup, ageGroup) && sameCourseValue(item.name, row.courseName) && sameCourseValue(item.classSize, row.classSize) && item.active !== false);
+      const course = studentCoursesForAge(ageGroup).find((item) => sameCourseValue(item.name, row.courseName) && sameCourseValue(item.classSize, row.classSize));
       const snapshot = !course && existing?.enrollments?.find((item) => item.id === row.id && sameCourseValue(item.ageGroup, ageGroup) && sameCourseValue(item.courseName, row.courseName) && sameCourseValue(item.classSize, row.classSize));
       if (!course && !snapshot) throw new Error("請為每個課堂選擇課程名稱和人數，並確認課程設定中有對應組合。");
       const fee = Number(course ? course.fee : snapshot.originalFee);
       const discount = row.discount === "" ? 0 : Number(row.discount);
       if (!Number.isFinite(discount) || discount < 0 || discount > fee) throw new Error("折扣優惠不可超過課堂原價。");
       return { id: row.id || makeId(), courseId: course ? course.reference ? "" : course.id : snapshot.courseId || "", courseName: course ? course.name : snapshot.courseName, ageGroup,
+        pricingAgeGroup: course ? course.ageGroup : snapshot.pricingAgeGroup || ageGroup,
         classSize: course ? course.classSize : snapshot.classSize, firstDate: validDate(row.firstDate) ? row.firstDate : "",
         duration: Number(course ? course.duration : snapshot.duration) || 60, originalFee: fee, discount,
         netFee: Math.round((fee - discount) * 100) / 100 };
@@ -1416,8 +1477,10 @@
       photo: state.studentFormPhoto, enrollments, courseId: first ? first.courseId : data.legacyCourseId || existing?.courseId || "",
       tutorId: data.tutorId || "", weekday: normalizeWeekday(data.weekday), time: validTime(data.time) ? data.time : "18:00",
       nextTime: existing?.nextTime || (validTime(data.time) ? data.time : "18:00"), prepaid: clampWhole(data.prepaid, 0, 999, 0),
-      remaining: clampWhole(data.remaining, 0, 999, 0), nextDate: paid || legacyIncomplete ? dateValue : "", roomId,
+      remaining: clampWhole(data.remaining, 0, 999, 0), nextDate: existing?.bookingManaged ? existing.nextDate : paid || legacyIncomplete ? dateValue : "", roomId,
       roomName: locationNameForId(roomId, existing && existing.roomId === roomId ? existing.roomName : ""),
+      bookingManaged: existing?.bookingManaged || false, bookingFallbackDate: existing?.bookingFallbackDate || "",
+      bookingFallbackTime: existing?.bookingFallbackTime || "",
       status: existing?.status || "active", history: existing?.history || [], createdAt: existing?.createdAt || new Date().toISOString() };
     const before = existing ? { ...existing } : null;
     const oldCounter = assigned ? state.suite.studentNumberCounters[assigned.key] : undefined;
@@ -1727,6 +1790,333 @@
     setTimeout(() => URL.revokeObjectURL(link.href), 1000);
   }
 
+  function timeMinutes(value) {
+    if (value === "24:00") return 1440;
+    return validTime(value) ? Number(value.slice(0, 2)) * 60 + Number(value.slice(3)) : NaN;
+  }
+
+  function minutesText(minutes) {
+    return String(Math.floor(minutes / 60)).padStart(2, "0") + ":" + String(minutes % 60).padStart(2, "0");
+  }
+
+  function lessonOfficeBounds(date) {
+    const settings = state.suite.bookingOptions.officeHours;
+    const parsed = parseDate(date);
+    const daily = settings && parsed && (settings[parsed.getDay()] || settings.default);
+    const opening = daily && timeMinutes(daily.open || daily.start);
+    const closing = daily && timeMinutes(daily.close || daily.end);
+    return Number.isFinite(opening) && Number.isFinite(closing) && closing > opening ? [opening, closing] : [0, 1440];
+  }
+
+  function slotError(date, start, end) {
+    if (!validDate(date) || formatYmd(parseDate(date)) !== date) return "請選擇有效日期。";
+    const first = timeMinutes(start), last = timeMinutes(end);
+    if (!Number.isFinite(first) || !Number.isFinite(last) || first >= last) return "結束時間必須遲於開始時間，請使用 HH:MM。";
+    const [open, close] = lessonOfficeBounds(date);
+    if (first < open || last > close) return "課堂時間必須位於當日辦公時間內。";
+    return "";
+  }
+
+  function nextQuickSlot() {
+    const now = new Date();
+    const date = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    let candidate = (now.getHours() + 1) * 60;
+    for (let offset = 0; offset < 8; offset += 1) {
+      if (candidate >= 1440) { date.setDate(date.getDate() + 1); candidate = 0; }
+      const ymd = formatYmd(date);
+      const [open, close] = lessonOfficeBounds(ymd);
+      const start = Math.max(candidate, Math.ceil(open / 60) * 60);
+      if (start + 60 <= close) return { date: ymd, start: minutesText(start), end: minutesText(start + 60) };
+      date.setDate(date.getDate() + 1);
+      candidate = 0;
+    }
+    return { date: formatYmd(date), start: "09:00", end: "10:00" };
+  }
+
+  function openQuickLesson(slot = null) {
+    state.quickLesson = slot || nextQuickSlot();
+    const date = document.querySelector("#quick-lesson-date");
+    date.value = formatStudentRecordDate(state.quickLesson.date);
+    document.querySelector("#quick-lesson-date-picker").value = state.quickLesson.date;
+    document.querySelector("#quick-lesson-start").value = state.quickLesson.start;
+    document.querySelector("#quick-lesson-end").value = state.quickLesson.end;
+    document.querySelector("#quick-lesson-date-error").textContent = "";
+    document.querySelector("#quick-lesson-error").textContent = "";
+    elements.quickLessonDialog.showModal();
+    document.body.classList.add("modal-open");
+  }
+
+  function updateQuickEndFromStart(value) {
+    const start = timeMinutes(String(value || "").trim());
+    if (!Number.isFinite(start)) return;
+    const errorNode = document.querySelector("#quick-lesson-error");
+    if (start + 60 > 1440) {
+      errorNode.textContent = "開始時間太接近午夜，無法在當日自動安排完整一小時；請調整時間。";
+      return;
+    }
+    document.querySelector("#quick-lesson-end").value = minutesText(start + 60);
+    errorNode.textContent = "";
+  }
+
+  function submitQuickLesson() {
+    const dateInput = document.querySelector("#quick-lesson-date");
+    const date = studentRecordDateYmd(dateInput.value);
+    const dateError = document.querySelector("#quick-lesson-date-error");
+    dateError.textContent = date ? "" : "日期格式錯誤，請使用 DD-MMM-YYYY，例如 03-Dec-2026。";
+    const start = document.querySelector("#quick-lesson-start").value.trim();
+    const end = document.querySelector("#quick-lesson-end").value.trim();
+    const error = date ? slotError(date, start, end) : "";
+    document.querySelector("#quick-lesson-error").textContent = error;
+    if (!date || error) return;
+    elements.quickLessonDialog.close();
+    openBookingForm({ date, start, end });
+  }
+
+  function timePickerValues(unit) {
+    const picker = state.timePicker;
+    const [open, close] = lessonOfficeBounds(picker.date);
+    const isEnd = picker.target === "quick-lesson-end" || picker.target.startsWith("booking-end-");
+    const max = unit === "hour" ? isEnd ? 24 : 23 : 59;
+    return Array.from({ length: max + 1 }, (_, value) => value).filter((value) => {
+      const hour = unit === "hour" ? value : picker.hour;
+      const minute = unit === "minute" ? value : picker.minute;
+      const minutes = hour * 60 + minute;
+      if (unit === "hour") return hour * 60 <= close && (hour + 1) * 60 > open && (isEnd || hour * 60 < close) && (hour !== 24 || isEnd);
+      return minutes >= open && minutes <= close && (isEnd || minutes < close) && (hour !== 24 || minute === 0);
+    });
+  }
+
+  function renderTimePicker() {
+    const picker = state.timePicker;
+    for (const [unit, container] of [["hour", "#lesson-time-hours"], ["minute", "#lesson-time-minutes"]]) {
+      const choices = timePickerValues(unit);
+      const current = unit === "hour" ? picker.hour : picker.minute;
+      const index = choices.indexOf(current);
+      document.querySelector(container).innerHTML = Array.from({ length: 5 }, (_, offset) => {
+        const value = choices[index + offset - 2];
+        return value == null ? '<span class="lesson-time-blank"></span>' : '<button type="button" data-action="select-lesson-time" data-unit="' + unit + '" data-value="' + value + '" class="' + (value === current ? 'is-selected' : '') + '">' + String(value).padStart(2, "0") + '</button>';
+      }).join("");
+    }
+  }
+
+  function openTimePicker(target) {
+    const input = document.getElementById(target);
+    if (!input) return;
+    const row = input.closest(".booking-date-row");
+    const rawDate = row ? row.dataset.date : studentRecordDateYmd(document.querySelector("#quick-lesson-date").value) || todayYmd();
+    const isEnd = target === "quick-lesson-end" || target.startsWith("booking-end-");
+    const fallback = isEnd ? "21:00" : "20:00";
+    const value = Number.isFinite(timeMinutes(input.value)) ? input.value : fallback;
+    const [open, close] = lessonOfficeBounds(rawDate);
+    const bounded = Math.max(open, Math.min(timeMinutes(value), close));
+    state.timePicker = { target, date: rawDate, hour: Math.floor(bounded / 60), minute: bounded % 60 };
+    if (!isEnd && state.timePicker.hour === 24) { state.timePicker.hour = 23; state.timePicker.minute = 59; }
+    document.querySelector("#lesson-time-title").textContent = isEnd ? "結束" : "開始";
+    document.querySelector("#lesson-time-error").textContent = "";
+    renderTimePicker();
+    elements.timePickerDialog.showModal();
+  }
+
+  function shiftTimePicker(unit, delta) {
+    const choices = timePickerValues(unit);
+    const current = unit === "hour" ? state.timePicker.hour : state.timePicker.minute;
+    const index = choices.indexOf(current);
+    const next = choices[Math.max(0, Math.min(choices.length - 1, index + delta))];
+    if (next == null) return;
+    state.timePicker[unit] = next;
+    normalizeTimePicker();
+    renderTimePicker();
+  }
+
+  function normalizeTimePicker() {
+    const picker = state.timePicker;
+    const [open, close] = lessonOfficeBounds(picker.date);
+    const isEnd = picker.target === "quick-lesson-end" || picker.target.startsWith("booking-end-");
+    const bounded = Math.max(open, Math.min(picker.hour * 60 + picker.minute, close - (isEnd ? 0 : 1)));
+    picker.hour = Math.floor(bounded / 60);
+    picker.minute = bounded % 60;
+  }
+
+  function confirmTimePicker() {
+    const picker = state.timePicker;
+    const value = minutesText(picker.hour * 60 + picker.minute);
+    const input = document.getElementById(picker.target);
+    if (!input) return elements.timePickerDialog.close();
+    input.value = value;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    elements.timePickerDialog.close();
+  }
+
+  function bookingStudentsForCourse(courseName) {
+    return state.students.filter((student) => student.status !== "inactive" && student.enrollmentStatus !== "pending" &&
+      ((student.enrollments || []).some((item) => sameCourseValue(item.courseName, courseName)) ||
+        (!(student.enrollments || []).length && sameCourseValue(courseForStudent(student)?.name, courseName))));
+  }
+
+  function renderBookingChoices() {
+    const draft = state.bookingDraft;
+    const search = draft.search.trim().toLocaleLowerCase();
+    const matches = (name) => !search || String(name || "").toLocaleLowerCase().includes(search);
+    const chips = (rows, selected, action) => rows.map((item) => '<button class="booking-chip' + (selected.has(item.value) ? ' is-selected' : '') + '" type="button" data-action="' + action + '" data-value="' + escapeHtml(item.value) + '" aria-pressed="' + selected.has(item.value) + '">' + escapeHtml(item.label) + '</button>').join('') || '<p class="booking-empty">未有符合的項目。</p>';
+    const tutors = state.suite.accounts.filter((item) => item.role === "tutor" && matches(item.name)).map((item) => ({ value: item.id, label: item.name }));
+    document.querySelector("#booking-tutors").innerHTML = chips(tutors, draft.tutorIds, "booking-tutor");
+    const courses = uniqueCourseValues(displayCourses(), "name").filter(matches).map((name) => ({ value: name, label: name }));
+    document.querySelector("#booking-courses").innerHTML = chips(courses, new Set(draft.courseName ? [draft.courseName] : []), "booking-course");
+    const students = draft.courseName ? bookingStudentsForCourse(draft.courseName).filter((item) => matches(item.name)).map((item) => ({ value: item.id, label: item.name })) : [];
+    document.querySelector("#booking-students").innerHTML = draft.courseName ? chips(students, draft.studentIds, "booking-student") : '<p class="booking-empty">請先選擇課程。</p>';
+    const pools = locationSelectOptions().filter((item) => !search || matches(item.label) || item.value === draft.roomId);
+    document.querySelector("#booking-pool").innerHTML = '<option value="">未指定課堂泳池</option>' + pools.map((item) => '<option value="' + escapeHtml(item.value) + '"' + (item.value === draft.roomId ? ' selected' : '') + '>' + escapeHtml(item.label) + '</option>').join('');
+  }
+
+  function renderBookingCalendar() {
+    const draft = state.bookingDraft;
+    const first = new Date(draft.month.getFullYear(), draft.month.getMonth(), 1);
+    const start = addDays(first, -first.getDay());
+    document.querySelector("#booking-month-label").textContent = first.getFullYear() + "年" + (first.getMonth() + 1) + "月";
+    document.querySelector("#booking-calendar-days").innerHTML = Array.from({ length: 42 }, (_, index) => {
+      const date = addDays(start, index), ymd = formatYmd(date);
+      const classes = [date.getMonth() !== first.getMonth() ? "is-outside" : "", ymd === todayYmd() ? "is-today" : "", draft.dates[ymd] ? "is-selected" : ""].filter(Boolean).join(" ");
+      return '<button type="button" class="' + classes + '" data-action="booking-date" data-date="' + ymd + '" aria-label="' + escapeHtml(ymd) + '" aria-pressed="' + Boolean(draft.dates[ymd]) + '">' + date.getDate() + '</button>';
+    }).join("");
+  }
+
+  function renderBookingDates() {
+    const dates = Object.entries(state.bookingDraft.dates).sort(([a], [b]) => a.localeCompare(b));
+    document.querySelector("#booking-selected-count").textContent = "已選日期 (" + dates.length + ")";
+    document.querySelector("#booking-selected-dates").innerHTML = dates.map(([date, slot]) => {
+      const label = (parseDate(date).getMonth() + 1) + "月" + parseDate(date).getDate() + "日";
+      return '<div class="booking-date-row" data-date="' + date + '"><strong>' + label + '</strong><input id="booking-start-' + date + '" type="text" inputmode="numeric" value="' + escapeHtml(slot.start) + '" placeholder="開始" aria-label="' + label + '開始時間"><span>→</span><input id="booking-end-' + date + '" type="text" inputmode="numeric" value="' + escapeHtml(slot.end) + '" placeholder="結束" aria-label="' + label + '結束時間"><button type="button" data-action="booking-date" data-date="' + date + '" aria-label="移除' + label + '">×</button></div>';
+    }).join('');
+  }
+
+  function openBookingForm(slot, existing) {
+    const firstDate = slot.date || todayYmd();
+    state.bookingDraft = {
+      editingId: existing?.id || "", search: "", courseName: existing?.courseName || "", roomId: existing?.roomId || "",
+      tutorIds: new Set(existing?.tutorIds || []), studentIds: new Set(existing?.studentIds || []),
+      dates: { [firstDate]: { start: slot.start, end: slot.end } }, defaultSlot: { start: slot.start, end: slot.end }, month: parseDate(firstDate)
+    };
+    document.querySelector("#booking-title").textContent = existing ? "編輯預約課堂" : "預約課堂";
+    document.querySelector("#booking-search").value = "";
+    document.querySelector("#booking-error").textContent = "";
+    renderBookingChoices();
+    renderBookingCalendar();
+    renderBookingDates();
+    elements.bookingDialog.showModal();
+    document.body.classList.add("modal-open");
+  }
+
+  function syncBookingStudent(studentId) {
+    const student = findById(state.students, studentId);
+    if (!student) return;
+    const next = state.suite.lessonBookings.filter((booking) => booking.studentIds.includes(studentId))
+      .sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start))[0];
+    if (next) {
+      if (!student.bookingManaged) {
+        if (student.nextDate) return;
+        student.bookingFallbackDate = student.nextDate || "";
+        student.bookingFallbackTime = student.nextTime || student.time || "";
+      }
+      student.bookingManaged = true;
+      student.nextDate = next.date;
+      student.nextTime = next.start;
+    } else if (student.bookingManaged) {
+      student.bookingManaged = false;
+      student.nextDate = student.bookingFallbackDate >= todayYmd() ? student.bookingFallbackDate : "";
+      student.nextTime = student.bookingFallbackTime || student.time;
+      student.bookingFallbackDate = "";
+      student.bookingFallbackTime = "";
+    }
+  }
+
+  function saveBookingDraft() {
+    const draft = state.bookingDraft;
+    const errorNode = document.querySelector("#booking-error");
+    errorNode.textContent = "";
+    if (!draft.courseName || !draft.tutorIds.size || !draft.studentIds.size) {
+      errorNode.textContent = "請選擇課程、導師及至少一位報讀該課程的學生。"; return;
+    }
+    const validTutors = new Set(state.suite.accounts.filter((item) => item.role === "tutor").map((item) => item.id));
+    if ([...draft.tutorIds].some((id) => !validTutors.has(id)) || !displayCourses().some((item) => sameCourseValue(item.name, draft.courseName))) {
+      errorNode.textContent = "導師或課程設定已變更，請重新選擇。"; return;
+    }
+    const eligible = new Set(bookingStudentsForCourse(draft.courseName).map((item) => item.id));
+    if ([...draft.studentIds].some((id) => !eligible.has(id))) { errorNode.textContent = "部分學生未報讀所選課程，請重新選擇。"; return; }
+    const dates = Object.entries(draft.dates).sort(([a], [b]) => a.localeCompare(b));
+    if (!dates.length) { errorNode.textContent = "請從月曆選擇至少一個日期。"; return; }
+    for (const [date, slot] of dates) {
+      const problem = slotError(date, slot.start, slot.end);
+      if (problem) { errorNode.textContent = date + "：" + problem; return; }
+    }
+    const previous = state.suite.lessonBookings;
+    const old = previous.find((item) => item.id === draft.editingId);
+    const room = locationSelectOptions().find((item) => item.value === draft.roomId);
+    const created = dates.map(([date, slot], index) => ({
+      id: index === 0 && old ? old.id : makeId(), date, start: slot.start, end: slot.end,
+      courseName: draft.courseName, tutorIds: [...draft.tutorIds], studentIds: [...draft.studentIds],
+      roomId: draft.roomId, roomName: room ? room.label : "", createdAt: index === 0 && old ? old.createdAt : new Date().toISOString()
+    }));
+    const remaining = previous.filter((item) => item.id !== draft.editingId);
+    for (const booking of created) {
+      const overlaps = remaining.some((item) => item.date === booking.date && timeMinutes(booking.start) < timeMinutes(item.end) && timeMinutes(item.start) < timeMinutes(booking.end) &&
+        (item.studentIds.some((id) => booking.studentIds.includes(id)) || item.tutorIds.some((id) => booking.tutorIds.includes(id))));
+      if (overlaps) { errorNode.textContent = booking.date + " 有學生或導師已安排同時段課堂。"; return; }
+      const legacyOverlap = booking.studentIds.some((id) => {
+        const student = findById(state.students, id);
+        if (!student || student.bookingManaged || student.nextDate !== booking.date) return false;
+        const start = timeMinutes(student.nextTime || student.time);
+        const end = start + (Number(courseForStudent(student)?.duration) || 60);
+        return Number.isFinite(start) && timeMinutes(booking.start) < end && start < timeMinutes(booking.end);
+      });
+      if (legacyOverlap) { errorNode.textContent = booking.date + " 有學生已安排同時段課堂。"; return; }
+    }
+    const touched = new Set([...(old?.studentIds || []), ...draft.studentIds]);
+    const snapshots = [...touched].map((id) => { const student = findById(state.students, id); return student && [student, student.nextDate, student.nextTime, student.bookingManaged, student.bookingFallbackDate, student.bookingFallbackTime]; }).filter(Boolean);
+    state.suite.lessonBookings = remaining.concat(created);
+    touched.forEach(syncBookingStudent);
+    try { saveAll(); }
+    catch {
+      state.suite.lessonBookings = previous;
+      snapshots.forEach(([student, date, time, managed, fallbackDate, fallbackTime]) => Object.assign(student, { nextDate: date, nextTime: time, bookingManaged: managed, bookingFallbackDate: fallbackDate, bookingFallbackTime: fallbackTime }));
+      errorNode.textContent = "瀏覽器儲存空間不足；未有新增課堂。請先備份。"; return;
+    }
+    elements.bookingDialog.close();
+    document.body.classList.remove("modal-open");
+    state.scheduleDate = dates[0][0];
+    renderModule();
+    showToast("已預約 " + created.length + " 個日期的課堂");
+  }
+
+  function completeBooking(booking) {
+    if (!booking) return;
+    const students = booking.studentIds.map((id) => findById(state.students, id)).filter(Boolean);
+    if (students.some((student) => student.remaining <= 0)) return showToast("有學生堂數已用完，請先記錄收款");
+    if (!window.confirm("確認完成 " + booking.date + " 的課堂，並為 " + students.length + " 位學生各扣一堂？")) return;
+    for (const student of students) {
+      student.remaining -= 1;
+      student.history.unshift({ id: makeId(), type: "completed", lessonDate: booking.date, lessonTime: booking.start,
+        tutorId: booking.tutorIds[0] || "", tutorIds: booking.tutorIds, courseId: student.courseId || "", durationMinutes: timeMinutes(booking.end) - timeMinutes(booking.start),
+        roomId: booking.roomId, roomName: booking.roomName, createdAt: new Date().toISOString() });
+      student.history = student.history.slice(0, 100);
+    }
+    state.suite.lessonBookings = state.suite.lessonBookings.filter((item) => item.id !== booking.id);
+    booking.studentIds.forEach(syncBookingStudent);
+    saveAll(); renderModule(); showToast("課堂已完成，學生堂數已扣減");
+  }
+
+  function cancelBooking(booking) {
+    if (!booking || !window.confirm("確認取消 " + booking.date + " 的預約課堂？學生堂數不會扣減。")) return;
+    for (const id of booking.studentIds) {
+      const student = findById(state.students, id);
+      if (!student) continue;
+      student.history.unshift({ id: makeId(), type: "cancelled", lessonDate: booking.date, lessonTime: booking.start, roomId: booking.roomId, roomName: booking.roomName, createdAt: new Date().toISOString() });
+      student.history = student.history.slice(0, 100);
+    }
+    state.suite.lessonBookings = state.suite.lessonBookings.filter((item) => item.id !== booking.id);
+    booking.studentIds.forEach(syncBookingStudent);
+    saveAll(); renderModule(); showToast("課堂已取消，沒有扣堂");
+  }
+
   function openLessonForm(student) {
     const eligible = state.students.filter((item) => item.enrollmentStatus !== "pending");
     if (!eligible.length) return showToast("請先新增已付款學生");
@@ -1818,9 +2208,14 @@
     for (const name of ["id", "name", "phone", "hourlyRate", "email"]) {
       form.elements.namedItem(name).value = account && account[name] != null ? account[name] : "";
     }
+    form.querySelectorAll(".tutor-floating").forEach((field) => field.classList.toggle("is-filled", Boolean(field.querySelector("input").value)));
     const selectedCourses = new Set(account && Array.isArray(account.courseIds) ? account.courseIds : []);
-    document.querySelector("#tutor-course-options").innerHTML = state.suite.courses.length ? state.suite.courses.map((course) =>
-      '<label class="tutor-course-option"><input type="checkbox" name="courseIds" value="' + escapeHtml(course.id) + '"' + (selectedCourses.has(course.id) ? ' checked' : '') + '><span>' + escapeHtml(course.name) + '</span></label>').join('') : '<p>未有課程；可以先建立導師，之後再指派課程。</p>';
+    const selectedItems = [...selectedCourses].map(tutorCourseForId).filter(Boolean);
+    const choices = displayCourses().concat(selectedItems);
+    document.querySelector("#tutor-course-options").innerHTML = choices.length ? uniqueCourseValues(choices, "name").map((name) => {
+      const course = selectedItems.find((item) => sameCourseValue(item.name, name)) || choices.find((item) => sameCourseValue(item.name, name));
+      return '<label class="tutor-course-option"><input type="checkbox" name="courseIds" value="' + escapeHtml(course.id) + '"' + (selectedItems.some((item) => sameCourseValue(item.name, name)) ? ' checked' : '') + '><span>' + escapeHtml(name) + '</span></label>';
+    }).join('') : '<p>未有課程；可以先建立導師，之後再指派課程。</p>';
     const availability = new Set(account && Array.isArray(account.availability) ? account.availability : []);
     document.querySelector("#tutor-availability-grid").innerHTML = '<table><thead><tr><th></th>' + ["一", "二", "三", "四", "五", "六", "日"].map((day) => '<th>' + day + '</th>').join('') + '</tr></thead><tbody>' +
       [["上午", "am"], ["下午", "pm"], ["晚上", "evening"]].map(([label, slot]) => '<tr><th>' + label + '</th>' + Array.from({ length: 7 }, (_, index) => {
@@ -2178,7 +2573,21 @@
 
   document.addEventListener("click", async (event) => {
     const button = event.target.closest("button");
-    if (!button) return;
+    if (!button) {
+      const column = event.target.closest(".timeline-day-column");
+      const card = column?.closest(".timeline-card");
+      if (state.currentModule !== "schedule" || !card || Date.now() < suppressTimelineClickUntil) return;
+      const rect = column.getBoundingClientRect();
+      const openHour = Number(card.dataset.openHour);
+      const totalHours = Number(card.dataset.totalHours);
+      if (!rect.height || !Number.isFinite(openHour) || !Number.isFinite(totalHours) || !column.dataset.date) return;
+      const slotMinutes = timelineSlotMinutes(state.scheduleZoom);
+      const totalSlots = totalHours * 60 / slotMinutes;
+      const position = Math.max(0, Math.min(rect.height - 0.001, event.clientY - rect.top));
+      const start = openHour * 60 + Math.min(totalSlots - 1, Math.floor(position / rect.height * totalSlots)) * slotMinutes;
+      openQuickLesson({ date: column.dataset.date, start: minutesText(start), end: minutesText(Math.min(start + 60, 1440)) });
+      return;
+    }
     if (button.dataset.close) {
       document.querySelector("#" + button.dataset.close)?.close();
       document.body.classList.remove("modal-open");
@@ -2193,6 +2602,54 @@
 
     const action = button.dataset.action;
     const id = button.dataset.id;
+    if (action === "pick-lesson-time") return openTimePicker(button.dataset.target);
+    if (action === "cancel-lesson-time") return elements.timePickerDialog.close();
+    if (action === "confirm-lesson-time") return confirmTimePicker();
+    if (action === "select-lesson-time") {
+      state.timePicker[button.dataset.unit] = Number(button.dataset.value);
+      normalizeTimePicker();
+      return renderTimePicker();
+    }
+    if (action === "booking-tutor") {
+      const selected = state.bookingDraft.tutorIds;
+      selected.has(button.dataset.value) ? selected.delete(button.dataset.value) : selected.add(button.dataset.value);
+      return renderBookingChoices();
+    }
+    if (action === "booking-course") {
+      state.bookingDraft.courseName = sameCourseValue(state.bookingDraft.courseName, button.dataset.value) ? "" : button.dataset.value;
+      state.bookingDraft.studentIds.clear();
+      return renderBookingChoices();
+    }
+    if (action === "booking-student") {
+      const selected = state.bookingDraft.studentIds;
+      selected.has(button.dataset.value) ? selected.delete(button.dataset.value) : selected.add(button.dataset.value);
+      return renderBookingChoices();
+    }
+    if (action === "booking-month") {
+      state.bookingDraft.month.setMonth(state.bookingDraft.month.getMonth() + Number(button.dataset.delta));
+      return renderBookingCalendar();
+    }
+    if (action === "booking-date") {
+      const draft = state.bookingDraft, date = button.dataset.date;
+      if (draft.dates[date]) delete draft.dates[date];
+      else draft.dates[date] = { ...draft.defaultSlot };
+      renderBookingCalendar(); renderBookingDates(); return;
+    }
+    if (action === "booking-clear-dates") {
+      state.bookingDraft.dates = {};
+      renderBookingCalendar(); renderBookingDates(); return;
+    }
+    if (action === "edit-booking") {
+      const booking = findById(state.suite.lessonBookings, id);
+      return booking && openBookingForm(booking, booking);
+    }
+    if (action === "complete-booking") return completeBooking(findById(state.suite.lessonBookings, id));
+    if (action === "cancel-booking") return cancelBooking(findById(state.suite.lessonBookings, id));
+    if (action === "booking-message") {
+      const booking = findById(state.suite.lessonBookings, id);
+      const student = booking && findById(state.students, booking.studentIds[0]);
+      return student && openMessage(student, "lesson");
+    }
     if (action === "go-home") return showHome();
     if (action === "logout") {
       state.loggedIn = false;
@@ -2206,7 +2663,7 @@
     }
     if (action === "schedule-mode") { state.scheduleMode = button.dataset.value; return renderModule(); }
     if (action === "schedule-display") { state.scheduleDisplay = state.scheduleDisplay === "list" ? "calendar" : "list"; return renderModule(); }
-    if (action === "schedule-zoom") { state.scheduleZoom = Math.max(50, Math.min(150, state.scheduleZoom + Number(button.dataset.delta))); return renderModule(); }
+    if (action === "schedule-zoom") { state.scheduleZoom = Math.max(50, Math.min(200, state.scheduleZoom + Number(button.dataset.delta))); return renderModule(); }
     if (action === "schedule-hours") return openScheduleHours();
     if (action === "schedule-select-date") { state.scheduleDate = button.dataset.date; return renderModule(); }
     if (action === "schedule-shift") {
@@ -2248,16 +2705,28 @@
     if (action === "delete-student") {
       const student = findById(state.students, id);
       if (student && window.confirm("確定永久刪除 " + student.name + " 的學生資料及課堂紀錄？此操作不會刪除已存在的收款或收據。")) {
+        state.suite.lessonBookings = state.suite.lessonBookings.map((booking) => ({ ...booking, studentIds: booking.studentIds.filter((studentId) => studentId !== id) }))
+          .filter((booking) => booking.studentIds.length);
         state.students = state.students.filter((item) => item.id !== id);
         commit("學生已刪除");
       }
       return;
     }
-    if (action === "complete-lesson") return markComplete(findById(state.students, id));
-    if (action === "cancel-lesson") return cancelLesson(findById(state.students, id));
-    if (action === "reschedule") return openLessonForm(findById(state.students, id));
+    if (action === "complete-lesson") {
+      const student = findById(state.students, id);
+      return student?.bookingManaged ? completeBooking(state.suite.lessonBookings.find((item) => item.studentIds.includes(id) && item.date === student.nextDate)) : markComplete(student);
+    }
+    if (action === "cancel-lesson") {
+      const student = findById(state.students, id);
+      return student?.bookingManaged ? cancelBooking(state.suite.lessonBookings.find((item) => item.studentIds.includes(id) && item.date === student.nextDate)) : cancelLesson(student);
+    }
+    if (action === "reschedule") {
+      const student = findById(state.students, id);
+      const booking = student?.bookingManaged && state.suite.lessonBookings.find((item) => item.studentIds.includes(id) && item.date === student.nextDate);
+      return booking ? openBookingForm(booking, booking) : openLessonForm(student);
+    }
     if (action === "prepare-message") return openMessage(findById(state.students, id), button.dataset.type);
-    if (action === "add-lesson") return openLessonForm();
+    if (action === "add-lesson") return openQuickLesson();
     if (action === "select-course-name") {
       state.courseSelection = { name: sameCourseValue(state.courseSelection.name, button.dataset.value) ? "" : button.dataset.value, ageGroup: "", classSize: "" };
       return renderModule();
@@ -2379,6 +2848,10 @@
   });
 
   document.addEventListener("input", (event) => {
+    if (elements.tutorDialog.open && elements.tutorForm.contains(event.target)) {
+      const field = event.target.closest(".tutor-floating");
+      if (field) field.classList.toggle("is-filled", Boolean(event.target.value));
+    }
     if (elements.formDialog.open && elements.formDialog.classList.contains("student-dialog")) {
       const field = event.target.closest(".student-floating");
       if (field) field.classList.toggle("is-filled", Boolean(event.target.value));
@@ -2443,6 +2916,8 @@
   });
 
   document.addEventListener("submit", (event) => {
+    if (event.target.id === "quick-lesson-form") { event.preventDefault(); submitQuickLesson(); return; }
+    if (event.target.id === "booking-form") { event.preventDefault(); saveBookingDraft(); return; }
     if (event.target.id === "location-add-form") {
       event.preventDefault();
       const input = event.target.querySelector("#location-name");
@@ -2485,6 +2960,19 @@
   });
 
   document.addEventListener("input", (event) => {
+    if (event.target.id === "quick-lesson-start") updateQuickEndFromStart(event.target.value);
+    if (event.target.id === "quick-lesson-date") {
+      document.querySelector("#quick-lesson-date-error").textContent = event.target.value && !studentRecordDateYmd(event.target.value) && event.target.value.length >= 11 ? "日期格式錯誤，請使用 DD-MMM-YYYY。" : "";
+    }
+    if (event.target.id === "booking-search" && state.bookingDraft) {
+      state.bookingDraft.search = event.target.value;
+      renderBookingChoices();
+    }
+    const bookingRow = event.target.closest(".booking-date-row");
+    if (bookingRow && state.bookingDraft) {
+      const slot = state.bookingDraft.dates[bookingRow.dataset.date];
+      if (slot) slot[event.target.id.startsWith("booking-end-") ? "end" : "start"] = event.target.value.trim();
+    }
     if (event.target.name === "recordDate" && elements.formDialog.open && elements.formDialog.classList.contains("student-dialog")) {
       const value = event.target.value.trim();
       validateStudentRecordDate(elements.dynamicForm, value.length >= 10 || value.includes("/"));
@@ -2504,6 +2992,23 @@
   }, true);
 
   document.addEventListener("change", (event) => {
+    if (event.target.id === "quick-lesson-date-picker") {
+      document.querySelector("#quick-lesson-date").value = formatStudentRecordDate(event.target.value);
+      document.querySelector("#quick-lesson-date-error").textContent = "";
+      return;
+    }
+    if (event.target.id === "quick-lesson-date") {
+      const value = studentRecordDateYmd(event.target.value);
+      if (value) {
+        event.target.value = formatStudentRecordDate(value);
+        document.querySelector("#quick-lesson-date-picker").value = value;
+      }
+      return;
+    }
+    if (event.target.id === "booking-pool" && state.bookingDraft) {
+      state.bookingDraft.roomId = event.target.value;
+      return;
+    }
     if (elements.formDialog.open && elements.formDialog.classList.contains("student-dialog") && elements.dynamicForm.contains(event.target)) {
       const form = elements.dynamicForm;
       if (event.target.id === "student-photo-file") {
@@ -2567,6 +3072,54 @@
     saveAll();
     showToast("預約選項已儲存");
   });
+
+  let schedulePinch = null;
+  const touchDistance = (touches) => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+  elements.moduleContent.addEventListener("touchstart", (event) => {
+    const card = event.target.closest(".timeline-card");
+    if (state.currentModule !== "schedule" || !card || event.touches.length !== 2) return;
+    schedulePinch = { card, distance: touchDistance(event.touches), zoom: state.scheduleZoom };
+  }, { passive: true });
+  elements.moduleContent.addEventListener("touchmove", (event) => {
+    if (!schedulePinch || event.touches.length !== 2) return;
+    event.preventDefault();
+    const zoom = Math.max(50, Math.min(200, schedulePinch.zoom + Math.round((touchDistance(event.touches) - schedulePinch.distance) / 4)));
+    if (zoom === state.scheduleZoom) return;
+    state.scheduleZoom = zoom;
+    const hourHeight = timelineHourHeight(zoom);
+    const card = schedulePinch.card;
+    card.style.setProperty("--hour-height", hourHeight + "px");
+    card.style.setProperty("--slot-height", hourHeight * timelineSlotMinutes(zoom) / 60 + "px");
+    card.querySelector(".timeline-body").style.height = Number(card.dataset.totalHours) * hourHeight + "px";
+    card.querySelector(".schedule-zoom span").textContent = zoom + "%";
+  }, { passive: false });
+  const finishSchedulePinch = (event) => {
+    if (!schedulePinch || event.touches.length >= 2) return;
+    schedulePinch = null;
+    suppressTimelineClickUntil = Date.now() + 350;
+    renderModule();
+  };
+  elements.moduleContent.addEventListener("touchend", finishSchedulePinch, { passive: true });
+  elements.moduleContent.addEventListener("touchcancel", finishSchedulePinch, { passive: true });
+
+  elements.timePickerDialog.addEventListener("wheel", (event) => {
+    const column = event.target.closest(".lesson-time-column");
+    if (!column || !state.timePicker) return;
+    event.preventDefault();
+    shiftTimePicker(column.dataset.unit, event.deltaY > 0 ? 1 : -1);
+  }, { passive: false });
+
+  let lessonTouchY = 0;
+  elements.timePickerDialog.addEventListener("touchstart", (event) => {
+    if (event.target.closest(".lesson-time-column")) lessonTouchY = event.touches[0].clientY;
+  }, { passive: true });
+  elements.timePickerDialog.addEventListener("touchend", (event) => {
+    const column = event.target.closest(".lesson-time-column");
+    if (!column || !state.timePicker || !lessonTouchY) return;
+    const distance = lessonTouchY - event.changedTouches[0].clientY;
+    if (Math.abs(distance) > 15) shiftTimePicker(column.dataset.unit, distance > 0 ? 1 : -1);
+    lessonTouchY = 0;
+  }, { passive: true });
 
   elements.themeToggle.addEventListener("click", () => {
     state.suite.settings.theme = state.suite.settings.theme === "dark" ? "light" : "dark";

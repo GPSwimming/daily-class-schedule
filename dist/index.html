@@ -143,15 +143,51 @@
       </form>
     </dialog>
 
+    <dialog id="quick-lesson-dialog" class="modal quick-lesson-dialog">
+      <form id="quick-lesson-form" novalidate>
+        <div class="modal-header"><h2>快速新增</h2><button class="icon-button" type="button" data-close="quick-lesson-dialog" aria-label="關閉">×</button></div>
+        <div class="quick-lesson-fields">
+          <div class="quick-date-field"><label for="quick-lesson-date">日期</label><div class="student-record-date-control"><input id="quick-lesson-date" type="text" placeholder="DD-MMM-YYYY" autocomplete="off" spellcheck="false" aria-describedby="quick-lesson-date-error"><label class="student-record-date-calendar" title="選擇日期"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 2v4M17 2v4M4 9h16M5 5h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/><path d="M9 13h6v5H9z"/></svg><input id="quick-lesson-date-picker" type="date" aria-label="從日曆選擇日期"></label></div><small id="quick-lesson-date-error" class="student-record-date-error" aria-live="polite"></small></div>
+          <div class="quick-time-grid"><div class="quick-time-field"><label for="quick-lesson-start">開始</label><div class="quick-time-control"><input id="quick-lesson-start" type="text" inputmode="numeric" placeholder="HH:MM" aria-label="開始時間"><button type="button" data-action="pick-lesson-time" data-target="quick-lesson-start" aria-label="選擇開始時間">◷</button></div></div><div class="quick-time-field"><label for="quick-lesson-end">結束</label><div class="quick-time-control"><input id="quick-lesson-end" type="text" inputmode="numeric" placeholder="HH:MM" aria-label="結束時間"><button type="button" data-action="pick-lesson-time" data-target="quick-lesson-end" aria-label="選擇結束時間">◷</button></div></div></div>
+        </div>
+        <p id="quick-lesson-error" class="form-error" role="alert"></p>
+        <button class="quick-add-class" type="submit"><span aria-hidden="true">＋</span> 新增課堂</button>
+        <div class="quick-cancel"><button type="button" data-close="quick-lesson-dialog">取消</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="booking-dialog" class="modal booking-dialog">
+      <form id="booking-form" novalidate>
+        <div class="modal-header"><h2 id="booking-title">預約課堂</h2><button class="icon-button" type="button" data-close="booking-dialog" aria-label="關閉">×</button></div>
+        <label class="booking-search"><span aria-hidden="true">⌕</span><input id="booking-search" type="search" placeholder="搜尋導師 / 學生 / 課程..." aria-label="搜尋導師、學生或課程"></label>
+        <fieldset class="booking-pick"><legend>請選擇導師</legend><div id="booking-tutors" class="booking-chips"></div><p class="booking-help">可選多位導師共同授課。</p></fieldset>
+        <fieldset class="booking-pick"><legend>小組課堂</legend><div id="booking-courses" class="booking-chips"></div></fieldset>
+        <label class="booking-pool-field">課堂泳池<select id="booking-pool" aria-label="課堂泳池"></select></label>
+        <fieldset class="booking-pick"><legend>請選擇學生</legend><div id="booking-students" class="booking-chips"></div></fieldset>
+        <section class="booking-calendar" aria-label="選擇課堂日期"><div class="booking-month-head"><button type="button" data-action="booking-month" data-delta="-1" aria-label="上一個月">‹</button><strong id="booking-month-label"></strong><button type="button" data-action="booking-month" data-delta="1" aria-label="下一個月">›</button></div><div class="booking-weekdays" aria-hidden="true"><span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span></div><div id="booking-calendar-days" class="booking-calendar-days"></div></section>
+        <div class="booking-selected-heading"><strong id="booking-selected-count">已選日期 (0)</strong><button type="button" data-action="booking-clear-dates">清除所有日期</button></div>
+        <div id="booking-selected-dates" class="booking-selected-dates"></div>
+        <p id="booking-error" class="form-error" role="alert"></p>
+        <div class="modal-actions"><button class="button button-secondary" type="button" data-close="booking-dialog">取消</button><button class="button button-primary" type="submit">確認預約</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="lesson-time-dialog" class="modal lesson-time-dialog">
+      <div class="modal-header"><h2 id="lesson-time-title">開始</h2><button class="icon-button" type="button" data-action="cancel-lesson-time" aria-label="關閉">×</button></div>
+      <div class="lesson-time-wheel"><div class="lesson-time-column" data-unit="hour" aria-label="小時"><span>小時</span><div id="lesson-time-hours" class="lesson-time-values"></div></div><b aria-hidden="true">:</b><div class="lesson-time-column" data-unit="minute" aria-label="分鐘"><span>分鐘</span><div id="lesson-time-minutes" class="lesson-time-values"></div></div></div>
+      <p id="lesson-time-error" class="form-error" role="alert"></p>
+      <div class="modal-actions"><button class="button button-secondary" type="button" data-action="cancel-lesson-time">取消</button><button class="button button-primary" type="button" data-action="confirm-lesson-time">確認</button></div>
+    </dialog>
+
     <dialog id="tutor-dialog" class="modal tutor-dialog">
       <form id="tutor-form">
         <div class="modal-header"><div><span class="module-kicker">個人資訊</span><h2 id="tutor-form-title">新增導師</h2></div><button class="icon-button" type="button" data-close="tutor-dialog" aria-label="關閉">×</button></div>
         <input type="hidden" name="id" id="tutor-id" />
         <div class="tutor-fields">
-          <label class="field"><span>導師姓名 <b>*</b></span><input name="name" type="text" maxlength="60" autocomplete="name" required placeholder="姓名" /></label>
-          <label class="field"><span>導師電話</span><input name="phone" type="tel" autocomplete="tel" placeholder="電話號碼" /></label>
+          <label class="student-floating tutor-floating"><input name="name" type="text" maxlength="60" autocomplete="name" required placeholder=" " /><span>導師姓名 <b>*</b></span></label>
+          <label class="student-floating tutor-floating"><input name="phone" type="tel" autocomplete="tel" placeholder=" " /><span>導師電話</span></label>
           <fieldset class="tutor-course-field"><legend>可負責課程</legend><div id="tutor-course-options" class="tutor-course-options"></div></fieldset>
-          <label class="field"><span>教練時薪（HKD）</span><input name="hourlyRate" type="number" min="0" max="99999" step="0.01" inputmode="decimal" placeholder="例如 250" /><small class="helper-text">本月人工＝教練時薪 × 本月已完成游泳班時數。</small></label>
+          <label class="student-floating tutor-floating tutor-hourly-field"><input name="hourlyRate" type="number" min="0" max="99999" step="0.01" inputmode="decimal" placeholder=" " /><i class="tutor-hourly-prefix" aria-hidden="true">$</i><span>教練時薪 (HKD)</span><small class="helper-text">本月人工＝教練時薪 × 本月已完成游泳班時數。</small></label>
           <label class="field"><span>電郵（稍後登入用）</span><input name="email" type="email" autocomplete="email" placeholder="name@example.com" /></label>
           <label class="field"><span>密碼（接駁 Supabase 後設定）</span><input type="password" autocomplete="new-password" placeholder="目前未啟用" disabled /><small class="helper-text">現時不會建立登入帳戶或儲存密碼。</small></label>
         </div>

@@ -34,9 +34,9 @@ const context = {
 };
 vm.runInNewContext(locationSource, context);
 vm.runInNewContext(courseSource, context);
-const instrumented = appSource.replace(/\n\}\)\(\);\s*$/, "\n  globalThis.studentTest = { fiscalYear, isMinorAge, nextStudentNumber, studentAgeGroups, studentRecordDateYmd, formatStudentRecordDate, studentFormHtml, studentEnrollmentHtml, studentLocationPickerHtml, saveStudentProfile, renderPeople, state };\n})();");
+const instrumented = appSource.replace(/\n\}\)\(\);\s*$/, "\n  globalThis.studentTest = { fiscalYear, isMinorAge, nextStudentNumber, studentAgeGroups, studentCoursesForAge, studentRecordDateYmd, formatStudentRecordDate, studentFormHtml, studentEnrollmentHtml, studentLocationPickerHtml, saveStudentProfile, renderPeople, state };\n})();");
 vm.runInNewContext(instrumented, context);
-const { fiscalYear, isMinorAge, nextStudentNumber, studentAgeGroups, studentRecordDateYmd, formatStudentRecordDate, studentFormHtml, studentEnrollmentHtml, studentLocationPickerHtml, saveStudentProfile, renderPeople, state } = context.studentTest;
+const { fiscalYear, isMinorAge, nextStudentNumber, studentAgeGroups, studentCoursesForAge, studentRecordDateYmd, formatStudentRecordDate, studentFormHtml, studentEnrollmentHtml, studentLocationPickerHtml, saveStudentProfile, renderPeople, state } = context.studentTest;
 
 assert.equal(fiscalYear("2026-03-31"), 2025);
 assert.equal(fiscalYear("2026-04-01"), 2026);
@@ -71,6 +71,13 @@ assert.doesNotMatch(studentFormHtml(null), /data-action="student-record-date-cal
 const enrollmentHtml = studentEnrollmentHtml({ firstDate: "2026-11-02", discount: 0 }, 0, "6 - 11");
 assert.match(enrollmentHtml, /class="student-floating student-date-field is-filled"[\s\S]*?value="02\/11\/2026"[\s\S]*?placeholder="DD\/MM\/YYYY"/, "first lesson date keeps its day/month/year display and floating label");
 assert.match(enrollmentHtml, /<label class="student-date-calendar"[^>]*><svg[\s\S]*?<input data-course-date type="date"[^>]*><\/label><span>首堂日期<\/span>/, "first lesson calendar icon and native picker share one date box");
+const childCourseNames = [...new Set(studentCoursesForAge("2.5 - 5").map((item) => item.name))];
+assert.deepEqual(childCourseNames, ["感統改良課程", "進階游泳課程", "高階游泳課程", "游泳隊預備班", "游泳隊"], "youngest student group can select all five child courses");
+assert.equal(new Set(studentCoursesForAge("6 - 11").map((item) => item.name)).size, 5, "six to eleven group keeps all five courses");
+assert.equal(new Set(studentCoursesForAge("12 - 17").map((item) => item.name)).size, 5, "twelve to seventeen group keeps all five courses");
+const highCourseHtml = studentEnrollmentHtml({ courseName: "高階游泳課程", classSize: "小組", discount: "" }, 0, "2.5 - 5");
+assert.match(highCourseHtml, /value="200" readonly/, "the 4–5 course setting supplies the existing price");
+assert.match(highCourseHtml, /按課程設定「4 - 5」組合計算/, "the form explains the pricing group");
 assert.equal(state.students[0].enrollmentStatus, "legacy", "old records remain distinguishable and are not auto-numbered");
 assert.equal(state.students[0].enrollmentYear, null, "missing legacy year stays empty");
 assert.equal(state.students[0].prepaid, 8, "old balance remains unchanged");
@@ -106,5 +113,18 @@ studentForm.querySelectorAll = () => [];
 await listeners.get("click")({ target: { closest: () => ({ dataset: { action: "student-add-course" } }) } });
 assert.match(node("#student-course-list").innerHTML, /student-course-card/, "add button creates a course row before age selection");
 assert.equal(node("#student-add-course").disabled, false, "add button stays available until four course rows exist");
+
+const courseCard = { dataset: { enrollmentId: "", ageGroup: "2.5 - 5", duration: "60" }, querySelector: (selector) => ({
+  "[data-course-name]": { value: "高階游泳課程" }, "[data-course-size]": { value: "小組" },
+  "[data-course-date]": { value: "" }, "[data-course-discount]": { value: "" },
+  'input[readonly][type="number"]': { value: "200" }
+})[selector] };
+saveStudentProfile({ name: "幼兒組課程測試", ageGroup: "2.5 - 5", gender: "女", whatsapp: "91234567", recordDate: "2026-11-05", enrollmentStatus: "待確認，未付款" },
+  { querySelectorAll: (selector) => selector === ".student-course-card" ? [courseCard] : [] });
+const savedChildCourse = state.students.at(-1).enrollments[0];
+assert.equal(savedChildCourse.courseName, "高階游泳課程", "selected child course is saved");
+assert.equal(savedChildCourse.ageGroup, "2.5 - 5", "student age group is preserved");
+assert.equal(savedChildCourse.pricingAgeGroup, "4 - 5", "pricing source remains traceable");
+assert.equal(savedChildCourse.originalFee, 200, "saved fee comes from course settings");
 
 console.log("Student profile tests passed: fiscal years, unique IDs, age groups and legacy storage.");
