@@ -84,8 +84,8 @@ assert.match(js, /function peopleMetricIconHtml\(/, "people summary cards use th
 assert.match(js, /課堂泳池/, "swimming location page uses course-style pool selectors");
 assert.match(js, /排程的課堂泳池篩選，預約泳班時的地點選項/, "swimming location introduction is present");
 assert.match(js, /function deletePoolLocation\(/, "pool location combinations have guarded independent deletion");
-assert.match(js, /使用中但未列入的泳班地點/, "unlisted used locations section is present");
-assert.match(js, /function usedUnlistedLocations\(/, "used locations remain discoverable after list removal");
+assert.doesNotMatch(js, /<h2>舊有地點清單<\/h2>|<h3>使用中但未列入的泳班地點<\/h3>/, "retired location sections are absent");
+assert.match(js, /function clearLegacyRooms\(/, "retired room data is cleared while recorded names are kept");
 assert.doesNotMatch(js, /title: "課室設定"/, "old classroom module title was replaced");
 assert.match(js, /durationMinutes: Number\(course && course\.duration\)/, "completed lessons preserve paid duration");
 assert.doesNotMatch(js, /title: account \? "編輯帳戶" : "新增帳戶"/, "generic account form was removed");

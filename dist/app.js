@@ -61,6 +61,7 @@
     const match = String(student.studentNumber || "").match(/^([KA]\d{2})(\d{4})$/);
     if (match) state.suite.studentNumberCounters[match[1]] = Math.max(Number(state.suite.studentNumberCounters[match[1]]) || 0, Number(match[2]));
   }
+  clearLegacyRooms();
 
   const elements = {
     homeView: document.querySelector("#home-view"),
@@ -133,9 +134,7 @@
         { id: makeId(), name: "成人游泳基礎", level: "基礎", duration: 60, fee: 380, active: true }
       ],
       hiddenReferenceCourses: [],
-      rooms: [
-        { id: makeId(), name: "主池 A 線", location: "主泳池", capacity: 6, active: true }
-      ],
+      rooms: [],
       poolLocations: window.SwimLocationImport.referenceRows.map((row) => ({ id: makeId(), ...row })),
       bookingOptions: { onlineBooking: true, preventOverlap: true, bufferMinutes: 10, openHour: 7, closeHour: 22 },
       lessonBookings: [],
@@ -211,6 +210,7 @@
         birthYear: String(item.birthYear || ""),
         guardianName: String(item.guardianName || ""),
         whatsapp: String(item.whatsapp || ""),
+        email: String(item.email || ""),
         homeMtr: String(item.homeMtr || ""),
         schoolMtr: String(item.schoolMtr || ""),
         workMtr: String(item.workMtr || ""),
@@ -227,6 +227,25 @@
   function saveAll() {
     localStorage.setItem(LEGACY_KEY, JSON.stringify(state.students));
     localStorage.setItem(SUITE_KEY, JSON.stringify(state.suite));
+  }
+
+  function clearLegacyRooms() {
+    const rooms = Array.isArray(state.suite.rooms) ? state.suite.rooms : [];
+    if (!rooms.length) { state.suite.rooms = []; return; }
+    const roomNames = new Map(rooms.map((room) => [room.id, room.name]));
+    const keepRecordedName = (record, idKey, nameKey) => {
+      if (record && !record[nameKey] && roomNames.has(record[idKey])) record[nameKey] = roomNames.get(record[idKey]);
+    };
+    state.students.forEach((student) => {
+      keepRecordedName(student, "roomId", "roomName");
+      (student.history || []).forEach((record) => {
+        keepRecordedName(record, "roomId", "roomName");
+        keepRecordedName(record, "newRoomId", "newRoomName");
+      });
+    });
+    (state.suite.lessonBookings || []).forEach((booking) => keepRecordedName(booking, "roomId", "roomName"));
+    state.suite.rooms = [];
+    saveAll();
   }
 
   function clampWhole(value, min, max, fallback) {
@@ -431,7 +450,7 @@
       schedule: "查看日、週、月安排，完成、取消或更改下一堂。",
       courses: "按課程名稱、年齡組別及課程人數，查看完整課程時間與每位學生的課堂費用。",
       people: "集中管理學生及導師資料、堂數與負責安排。",
-      rooms: "排程的課堂泳池篩選，預約泳班時的地點選項，以及新增學生資料時學生偏好的泳班地點選項，均會使用此清單。泳班或預約曾使用但不在清單內的課堂泳池名稱，會自動附加在清單之後。刪除泳班地點不會影響現有泳班或預約記錄。",
+      rooms: "排程的課堂泳池篩選，預約泳班時的地點選項，以及新增學生資料時學生偏好的泳班地點選項，均會使用此清單。舊有地點已從可選清單移除，現有泳班及預約記錄的地點名稱仍會保留。",
       payments: "記錄收款、自動增加堂數、查看收據與每月合計。",
       manual: "保存學生功課、課堂筆記與相片。",
       accounts: "管理家長及導師的本機帳戶目錄，不儲存密碼。",
@@ -946,33 +965,8 @@
     }, []);
   }
 
-  function usedUnlistedLocations() {
-    const poolNames = uniquePoolValues(state.suite.poolLocations, "pool");
-    const listedIds = new Set(state.suite.rooms.map((room) => room.id).concat(poolNames.map(poolOptionId)));
-    const listedNames = new Set(state.suite.rooms.map((room) => String(room.name || "").trim().toLocaleLowerCase()).concat(poolNames.map((name) => name.toLocaleLowerCase())));
-    const used = new Map();
-    const add = (id, name) => {
-      const normalizedName = String(name || "").trim();
-      if (!normalizedName || listedIds.has(id) || listedNames.has(normalizedName.toLocaleLowerCase())) return;
-      const key = id || "name:" + normalizedName.toLocaleLowerCase();
-      if (!used.has(key)) used.set(key, { id: id || "", name: normalizedName });
-    };
-    state.students.forEach((student) => {
-      add(student.roomId, student.roomName);
-      (student.history || []).forEach((record) => {
-        add(record.roomId, record.roomName);
-        add(record.newRoomId, record.newRoomName);
-      });
-    });
-    return Array.from(used.values());
-  }
-
   function locationSelectOptions() {
-    const pools = uniquePoolValues(state.suite.poolLocations, "pool").map((name) => ({ value: poolOptionId(name), label: name }));
-    const poolNames = new Set(pools.map((item) => item.label.toLocaleLowerCase()));
-    return pools.concat(state.suite.rooms.filter((room) => !poolNames.has(String(room.name || "").trim().toLocaleLowerCase())).map((room) => ({ value: room.id, label: room.name })),
-      usedUnlistedLocations().map((room) => ({ value: room.id, label: room.name + "（使用中但未列入清單）" }))
-    );
+    return uniquePoolValues(state.suite.poolLocations, "pool").map((name) => ({ value: poolOptionId(name), label: name }));
   }
 
   function renderRooms() {
@@ -981,11 +975,6 @@
     const selection = state.locationSelection;
     const places = uniquePoolValues(selection.pool ? records.filter((item) => item.pool === selection.pool) : records, "place");
     const chosen = selection.pool && selection.place ? records.find((item) => item.pool === selection.pool && item.place === selection.place) : null;
-    const unlisted = usedUnlistedLocations();
-    const unlistedHtml = unlisted.length ? '<div class="location-unlisted-list">' + unlisted.map((room) =>
-      '<button type="button" class="location-unlisted-chip" data-action="restore-location" data-id="' + escapeHtml(room.id) + '" data-name="' + escapeHtml(room.name) + '"><span aria-hidden="true">＋</span>' + escapeHtml(room.name) + '</button>'
-    ).join("") + '</div>' : '';
-    const legacy = state.suite.rooms.filter((room) => !pools.some((name) => name.toLocaleLowerCase() === String(room.name || "").trim().toLocaleLowerCase()));
     return '<section class="course-page location-page"><div class="location-mobile-menu"' + (state.locationMenuOpen ? '' : ' hidden') + '><button type="button" data-action="add-pool">＋ 新增泳池</button><button type="button" data-action="import-locations">↧ 匯入</button><button type="button" data-action="manage-locations">✎ 更新／刪除</button></div>' +
       '<p class="course-source-note">內附 <a href="' + escapeHtml(window.SwimLocationImport.SOURCE_URL) + '" target="_blank" rel="noopener noreferrer">Google 泳班地點表</a>的 17 組首批資料作為初始清單。匯入新表格前可先預覽新增及更新內容。</p>' +
       '<section class="course-chip-panel"><div class="course-chip-heading"><span class="course-chip-icon">' + locationPanelIcon() + '</span><div><h2>課堂泳池</h2><p>選擇泳班使用的泳池</p></div></div><div class="course-chip-list location-pool-list">' +
@@ -996,8 +985,7 @@
       locationSummaryCard('集合位置', chosen ? chosen.meetingPoint : '—', 'location-summary-wide') +
       locationSummaryCard('泳池清潔日', chosen ? chosen.cleaningDay : '—', '') + locationSummaryCard('年度維修時間', chosen ? chosen.maintenanceTime : '—', '') + '</div>' +
       (chosen ? '<div class="course-record-actions"><button class="mini-button" type="button" data-action="edit-pool-location" data-id="' + escapeHtml(chosen.id) + '">✎ 編輯這組</button><button class="mini-button danger" type="button" data-action="delete-pool-location" data-id="' + escapeHtml(chosen.id) + '">▤ 刪除這組</button></div>' : '<p class="course-selection-help">只會編輯或刪除選定的「課堂泳池＋泳池地點」組合，其他地點不受影響。</p>') + '</section>' +
-      (legacy.length ? '<section class="course-chip-panel location-legacy"><div class="course-chip-heading"><span class="course-chip-icon">' + locationPanelIcon() + '</span><div><h2>舊有地點清單</h2><p>保留原有學生及課堂連結。</p></div></div><div class="course-chip-list">' + legacy.map((room) => '<span class="course-chip">' + escapeHtml(room.name) + '</span>').join('') + '</div></section>' : '') +
-      '<section class="course-chip-panel location-unlisted"><h3>使用中但未列入的泳班地點</h3><p>以下地點已用於學生檔案或課堂，但未列入上方清單。點按地點即可重新加入舊有清單。</p>' + unlistedHtml + '</section></section>';
+      '</section>';
   }
 
   function locationPanelIcon() {
@@ -1245,11 +1233,6 @@
       options.map((item) => '<option value="' + escapeHtml(item.value) + '"' + (String(item.value) === String(selected) ? ' selected' : '') + '>' + escapeHtml(item.label) + '</option>').join('') + '</select>' + studentDropdownArrowHtml() + '<span>' + label + '</span></label>';
   }
 
-  function studentSelectField(name, label, selected, options) {
-    return '<label class="student-floating student-select' + (selected ? ' is-filled' : '') + '"><select name="' + name + '"><option value="">請選擇</option>' +
-      options.map((item) => '<option value="' + escapeHtml(item.value) + '"' + (item.value === selected ? ' selected' : '') + '>' + escapeHtml(item.label) + '</option>').join('') + '</select>' + studentDropdownArrowHtml() + '<span>' + escapeHtml(label) + '</span></label>';
-  }
-
   function studentLocationPickerHtml(selected, options) {
     const current = options.find((item) => item.value === selected);
     return '<div class="student-floating student-location-field' + (current ? ' is-filled' : '') + '"><details id="student-location-picker"><summary aria-labelledby="student-location-floating student-location-label"><span id="student-location-label">' + escapeHtml(current ? current.label : "") + '</span>' + studentDropdownArrowHtml() + '</summary><div class="student-location-options">' +
@@ -1292,14 +1275,8 @@
       '<div id="student-school-field"' + (isMinorAge(age) ? '' : ' hidden') + '>' + studentFloatingField("schoolMtr", "學校地點", item.schoolMtr || "", { placeholder: "請填寫鄰近港鐵站", floatHintOnFocus: true }) + '</div>' +
       '<div id="student-work-field"' + (age && !isMinorAge(age) ? '' : ' hidden') + '>' + studentFloatingField("workMtr", "工作地點", item.workMtr || "", { placeholder: "請填寫鄰近港鐵站" }) + '</div>' +
       studentLocationPickerHtml(item.roomId || "", roomOptions) +
-      '<details class="student-legacy-fields student-wide"><summary>課堂排程、導師與堂數' + (student ? '（保留現有資料）' : '（選填）') + '</summary><div class="student-legacy-grid">' +
-      studentSelectField("legacyCourseId", "舊有連結課程", item.courseId || "", state.suite.courses.map((course) => ({ value: course.id, label: courseLabel(course) }))) +
-      studentSelectField("tutorId", "負責導師", item.tutorId || "", state.suite.accounts.filter((account) => account.role === "tutor").map((account) => ({ value: account.id, label: account.name }))) +
-      studentSelectField("weekday", "每週上課日", String(item.weekday == null ? 1 : item.weekday), WEEKDAYS.map((label, value) => ({ value: String(value), label }))) +
-      studentFloatingField("time", "固定時間", item.time || "18:00", { type: "time" }) +
-      studentFloatingField("prepaid", "預繳堂數", item.prepaid == null ? "0" : String(item.prepaid), { type: "number", min: 0, max: 999 }) +
-      studentFloatingField("remaining", "現時剩餘堂數", item.remaining == null ? "0" : String(item.remaining), { type: "number", min: 0, max: 999 }) +
-      studentFloatingField("nextDate", "下一堂日期", item.nextDate || "", { type: "date" }) + '</div></details>';
+      '<label class="field student-wide"><span>電郵（稍後登入用）</span><input name="email" type="email" autocomplete="email" placeholder="name@example.com" value="' + escapeHtml(item.email || "") + '"></label>' +
+      '<label class="field student-wide"><span>密碼（接駁 Supabase 後設定）</span><input type="password" autocomplete="new-password" placeholder="目前未啟用" disabled><small class="helper-text">現時不會建立登入帳戶或儲存密碼。</small></label>';
   }
 
   function studentEnrollmentDrafts(form) {
@@ -1472,12 +1449,12 @@
       birthDate: isMinorAge(ageGroup) && existing && validDate(existing.birthDate) &&
         String(Number(existing.birthDate.slice(5, 7))) === String(data.birthMonth || "") && existing.birthDate.slice(0, 4) === String(data.birthYear || "") ? existing.birthDate : "",
       birthMonth: isMinorAge(ageGroup) ? String(data.birthMonth || "") : "", birthYear: isMinorAge(ageGroup) ? String(data.birthYear || "") : "",
-      guardianName: String(data.guardianName || "").trim(), whatsapp, homeMtr: String(data.homeMtr || "").trim(),
+      guardianName: String(data.guardianName || "").trim(), whatsapp, email: String(data.email || "").trim(), homeMtr: String(data.homeMtr || "").trim(),
       schoolMtr: isMinorAge(ageGroup) ? String(data.schoolMtr || "").trim() : "", workMtr: isMinorAge(ageGroup) ? "" : String(data.workMtr || "").trim(),
-      photo: state.studentFormPhoto, enrollments, courseId: first ? first.courseId : data.legacyCourseId || existing?.courseId || "",
-      tutorId: data.tutorId || "", weekday: normalizeWeekday(data.weekday), time: validTime(data.time) ? data.time : "18:00",
-      nextTime: existing?.nextTime || (validTime(data.time) ? data.time : "18:00"), prepaid: clampWhole(data.prepaid, 0, 999, 0),
-      remaining: clampWhole(data.remaining, 0, 999, 0), nextDate: existing?.bookingManaged ? existing.nextDate : paid || legacyIncomplete ? dateValue : "", roomId,
+      photo: state.studentFormPhoto, enrollments, courseId: first ? first.courseId : existing?.courseId || "",
+      tutorId: existing?.tutorId || "", weekday: existing?.weekday ?? 1, time: existing?.time || "18:00",
+      nextTime: existing?.nextTime || existing?.time || "18:00", prepaid: existing?.prepaid ?? 0,
+      remaining: existing?.remaining ?? 0, nextDate: existing?.bookingManaged ? existing.nextDate : paid || legacyIncomplete ? dateValue : "", roomId,
       roomName: locationNameForId(roomId, existing && existing.roomId === roomId ? existing.roomName : ""),
       bookingManaged: existing?.bookingManaged || false, bookingFallbackDate: existing?.bookingFallbackDate || "",
       bookingFallbackTime: existing?.bookingFallbackTime || "",
@@ -2283,7 +2260,7 @@
       const courseMatches = exactCourses.length ? exactCourses : namedCourses;
       const course = courseMatches.length === 1 ? courseMatches[0] : null;
       const tutor = tutorName ? state.suite.accounts.find((item) => item.role === "tutor" && item.name === tutorName) : null;
-      const room = roomName ? state.suite.rooms.find((item) => item.name === roomName) : null;
+      const room = roomName ? locationSelectOptions().find((item) => item.label === roomName) : null;
       const weekday = importWeekday(weekdayText);
       const time = importTime(timeText || "18:00");
       const prepaid = prepaidText === "" ? 8 : Number(prepaidText);
@@ -2301,7 +2278,7 @@
       if (!validDate(nextDate) || formatYmd(parseDate(nextDate)) !== nextDate) problems.push("下一堂日期須為有效的 YYYY-MM-DD");
       if (problems.length) { errors.push("第 " + rowNumber + " 行：" + problems.join("；") + "。"); continue; }
       students.push({ id: makeId(), name: cleanName, courseId: course ? course.id : "", tutorId: tutor ? tutor.id : "", weekday,
-        time, nextTime: time, prepaid, remaining, nextDate, roomId: room ? room.id : "", roomName: room ? room.name : "", status: "active", history: [], createdAt: new Date().toISOString() });
+        time, nextTime: time, prepaid, remaining, nextDate, roomId: room ? room.value : "", roomName: room ? room.label : "", status: "active", history: [], createdAt: new Date().toISOString() });
     }
     return { students, errors, skipped };
   }
@@ -2402,36 +2379,6 @@
     if (existing) Object.assign(existing, payload);
     else collection.push({ id: makeId(), ...payload });
     commit(label + (existing ? "已更新" : "已新增"));
-  }
-
-  function addLocation(name, preferredId) {
-    const cleanName = String(name || "").trim();
-    if (!cleanName) return showToast("請輸入泳班地點名稱");
-    if (state.suite.rooms.some((room) => String(room.name || "").trim().toLocaleLowerCase() === cleanName.toLocaleLowerCase())) {
-      return showToast("這個泳班地點已在清單內");
-    }
-    const id = preferredId && !findById(state.suite.rooms, preferredId) ? preferredId : makeId();
-    state.suite.rooms.push({ id, name: cleanName, location: cleanName, capacity: 1, active: true });
-    state.students.forEach((student) => {
-      if ((!student.roomId && student.roomName === cleanName) || student.roomId === id) {
-        student.roomId = id;
-        student.roomName = cleanName;
-      }
-    });
-    commit("泳班地點已新增");
-  }
-
-  function deleteLocation(room) {
-    if (!room || !window.confirm("確定從清單刪除「" + room.name + "」？現有泳班及預約記錄不會受影響。")) return;
-    state.students.forEach((student) => {
-      if (student.roomId === room.id) student.roomName = room.name;
-      (student.history || []).forEach((record) => {
-        if (record.roomId === room.id) record.roomName = record.roomName || room.name;
-        if (record.newRoomId === room.id) record.newRoomName = record.newRoomName || room.name;
-      });
-    });
-    state.suite.rooms = state.suite.rooms.filter((item) => item.id !== room.id);
-    commit("泳班地點已從清單刪除；現有記錄已保留");
   }
 
   async function imageFileToDataUrl(file) {
@@ -2548,6 +2495,7 @@
       if (!window.confirm("匯入會取代目前瀏覽器內所有泳堂管家資料，是否繼續？")) return;
       state.students = payload.students;
       state.suite = { ...defaultSuite(), ...payload.suite, settings: { ...defaultSuite().settings, ...(payload.suite.settings || {}) } };
+      clearLegacyRooms();
       commit("備份已匯入");
     } catch (error) {
       showToast(error.message || "無法匯入備份");
@@ -2767,11 +2715,6 @@
     if (action === "delete-pool-location") return deletePoolLocation(findById(state.suite.poolLocations, id));
     if (action === "download-location-template") return downloadLocationTemplate();
     if (action === "location-reference-preview") return previewLocationImport(window.SwimLocationImport.referenceRows);
-    if (action === "restore-location") return addLocation(button.dataset.name, id);
-    if (action === "delete-location") return deleteLocation(findById(state.suite.rooms, id));
-    if (action === "add-room") return openRoomForm();
-    if (action === "edit-room") return openRoomForm(findById(state.suite.rooms, id));
-    if (action === "delete-room") return deleteLocation(findById(state.suite.rooms, id));
     if (action === "add-payment") return openPaymentForm();
     if (action === "payment-for-student") return openPaymentForm(findById(state.students, id));
     if (action === "view-receipt") return showReceipt(findById(state.suite.payments, id));
@@ -2918,12 +2861,6 @@
   document.addEventListener("submit", (event) => {
     if (event.target.id === "quick-lesson-form") { event.preventDefault(); submitQuickLesson(); return; }
     if (event.target.id === "booking-form") { event.preventDefault(); saveBookingDraft(); return; }
-    if (event.target.id === "location-add-form") {
-      event.preventDefault();
-      const input = event.target.querySelector("#location-name");
-      addLocation(input && input.value);
-      return;
-    }
     if (event.target.id === "schedule-hours-form") {
       event.preventDefault();
       const data = Object.fromEntries(new FormData(event.target).entries());

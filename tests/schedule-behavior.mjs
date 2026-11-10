@@ -5,7 +5,8 @@ import vm from "node:vm";
 const source = await readFile(new URL("../dist/app.js", import.meta.url), "utf8");
 const locationSource = await readFile(new URL("../dist/location-import.js", import.meta.url), "utf8");
 const saved = new Map([
-  ["swim-class-balance.v1", JSON.stringify([{ id: "student-1", name: "Rajinder Afghan", nextDate: "2026-10-19", nextTime: "08:00", time: "08:00", status: "active", remaining: 4 }])]
+  ["swim-class-balance.v1", JSON.stringify([{ id: "student-1", name: "Rajinder Afghan", nextDate: "2026-10-19", nextTime: "08:00", time: "08:00", status: "active", remaining: 4, roomId: "old-room" }])],
+  ["swim-class-suite.v2", JSON.stringify({ rooms: [{ id: "old-room", name: "主池 A 線" }] })]
 ]);
 const nodes = new Map();
 const handlers = new Map();
@@ -34,6 +35,8 @@ const context = {
 };
 vm.runInNewContext(locationSource, context, { filename: "dist/location-import.js" });
 vm.runInNewContext(source, context, { filename: "dist/app.js" });
+assert.deepEqual(JSON.parse(saved.get("swim-class-suite.v2")).rooms, [], "old room list is removed from browser storage");
+assert.equal(JSON.parse(saved.get("swim-class-balance.v1"))[0].roomName, "主池 A 線", "student keeps the recorded location name");
 
 const click = async (dataset) => {
   const button = { dataset };
@@ -67,9 +70,10 @@ assert.doesNotMatch(content(), /month-grid/, "list mode hides the calendar grid"
 
 await click({ action: "schedule-hours" });
 assert.equal(node("#schedule-hours-dialog").open, true, "opening-hours dialog opens");
+const hoursBeforeInvalidSubmit = saved.get("swim-class-suite.v2");
 handlers.get("submit")({ target: { id: "schedule-hours-form", fields: { openHour: "20", closeHour: "8" } }, preventDefault() {} });
 assert.match(node("#schedule-hours-error").textContent, /必須遲於/, "invalid hours are rejected");
-assert.equal(saved.has("swim-class-suite.v2"), false, "invalid hours are not persisted");
+assert.equal(saved.get("swim-class-suite.v2"), hoursBeforeInvalidSubmit, "invalid hours are not persisted");
 handlers.get("submit")({ target: { id: "schedule-hours-form", fields: { openHour: "8", closeHour: "20" } }, preventDefault() {} });
 assert.equal(JSON.parse(saved.get("swim-class-suite.v2")).bookingOptions.openHour, 8, "opening hour is persisted");
 assert.match(content(), /08:00 – 20:00/, "monthly list reflects saved hours");
@@ -126,7 +130,7 @@ await click({ module: "rooms" });
 assert.match(content(), /課堂泳池/, "swimming location page uses the new pool selector");
 assert.match(content(), /泳池地點/, "swimming location page uses the place selector");
 assert.match(content(), /location-summary-grid/, "swimming location page has the matching information cards");
-assert.match(content(), /使用中但未列入的泳班地點/, "swimming location page explains unlisted used locations");
+assert.doesNotMatch(content(), /舊有地點清單|使用中但未列入的泳班地點|主池 A 線/, "retired location sections and values are absent");
 assert.equal(node(".module-heading").hidden, false, "swimming location page uses the course-style heading");
 assert.equal(node("#location-top-actions").hidden, false, "swimming location top actions are visible");
 await click({ action: "select-location-pool", value: "九龍公園游泳池" });

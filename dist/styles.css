@@ -1237,11 +1237,7 @@ body[data-module="rooms"] .module-heading p { max-width: 78ch; line-height: 1.65
 .location-summary-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .location-summary-wide { grid-column: 1 / -1; min-height: 95px; }
 .location-summary-grid .course-summary-card strong { overflow-wrap: anywhere; }
-.location-unlisted h3 { margin: 0 0 7px; font-size: 1rem; }
-.location-unlisted p, .location-empty { margin: 0; color: var(--muted); font-size: .75rem; line-height: 1.55; }
-.location-unlisted-list { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
-.location-unlisted-chip { display: inline-flex; min-height: 36px; align-items: center; gap: 6px; padding: 6px 12px; color: var(--ink); background: #eee7d7; border: 0; border-radius: 999px; font-size: .78rem; font-weight: 750; }
-.location-unlisted-chip span { color: #347fae; font-size: 1rem; }
+.location-empty { margin: 0; color: var(--muted); font-size: .75rem; line-height: 1.55; }
 .location-manage-list { display: grid; gap: 8px; max-height: min(56vh, 540px); overflow: auto; margin-top: 15px; }
 .location-manage-item { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 12px; background: var(--canvas); border: 1px solid var(--line); border-radius: 13px; }
 .location-manage-item strong, .location-manage-item span { display: block; overflow-wrap: anywhere; }
@@ -1437,9 +1433,6 @@ label:has(> input[type="date"]) > input[type="date"]::-webkit-calendar-picker-in
 .student-location-options label { display: flex; align-items: center; gap: 9px; min-height: 38px; padding: 6px 7px; border-radius: 7px; font-size: .79rem; cursor: pointer; }
 .student-location-options label:hover { background: var(--blue-soft); }
 .student-location-options input[type=radio] { width: auto; min-width: 13px; min-height: 0; flex: 0 0 auto; margin: 0; padding: 0; background: transparent; border: 0; accent-color: #2879a9; }
-.student-legacy-fields { padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
-.student-legacy-fields summary { color: #2879a9; font-size: .78rem; font-weight: 750; cursor: pointer; }
-.student-legacy-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 17px 12px; padding-top: 18px; }
 
 @media (max-width: 450px) {
   .student-birth-fields { gap: 7px; }
@@ -1511,7 +1504,7 @@ label:has(> input[type="date"]) > input[type="date"]::-webkit-calendar-picker-in
   .student-dialog .modal-actions, .tutor-dialog .modal-actions { bottom: -8px; }
   .student-form-fields { grid-template-columns: 1fr; }
   .student-wide { grid-column: auto; }
-  .student-course-grid, .student-legacy-grid { grid-template-columns: 1fr; }
+  .student-course-grid { grid-template-columns: 1fr; }
 }
 
 @media (min-width: 760px) {
