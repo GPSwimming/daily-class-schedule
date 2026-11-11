@@ -1,0 +1,2 @@
+[functions.swim-admin-gateway]
+verify_jwt = false

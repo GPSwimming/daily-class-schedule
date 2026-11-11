@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
+import { catalog } from "./catalog-fixture.mjs";
 
 const source = await readFile(new URL("../dist/app.js", import.meta.url), "utf8");
 const locationSource = await readFile(new URL("../dist/location-import.js", import.meta.url), "utf8");
+const courseSource = await readFile(new URL("../dist/course-import.js", import.meta.url), "utf8");
 const saved = new Map([
-  ["swim-class-balance.v1", JSON.stringify([{ id: "student-1", name: "Rajinder Afghan", nextDate: "2026-10-19", nextTime: "08:00", time: "08:00", status: "active", remaining: 4, roomId: "old-room" }])],
-  ["swim-class-suite.v2", JSON.stringify({ rooms: [{ id: "old-room", name: "主池 A 線" }] })]
+  ["swim-class-balance.v1", JSON.stringify([{ id: "student-1", name: "Rajinder Afghan", nextDate: "2026-10-19", nextTime: "08:00", time: "08:00", status: "active", remaining: 4, roomId: "old-room", courseId: "old-course", enrollments: [{ courseId: "old-course" }], history: [{ type: "completed", courseId: "old-course", lessonDate: "2026-10-19" }] }])],
+  ["swim-class-suite.v2", JSON.stringify({ rooms: [{ id: "old-room", name: "主池 A 線" }], courses: [{ id: "old-course", name: "兒童游泳初階", duration: 90, fee: 320 }, { id: "complete-course", name: "進階游泳課程", ageGroup: "6 - 11", classSize: "1:1", duration: 60, fee: 700 }], accounts: [{ id: "tutor-1", courseIds: ["old-course", "complete-course"] }], products: [{ id: "product-1", courseId: "old-course" }] })]
 ]);
 const nodes = new Map();
 const handlers = new Map();
@@ -27,22 +29,37 @@ const context = {
   document,
   localStorage: { getItem: (key) => saved.get(key) ?? null, setItem: (key, value) => saved.set(key, value) },
   sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
-  window: { scrollTo() {} },
+  window: { scrollTo() {}, AdminAuth: { signIn: async () => {}, signOut: async () => {}, check: async () => true, getCatalog: async () => catalog, setOnExpired() {} } },
   FormData: class { constructor(form) { this.form = form; } entries() { return Object.entries(this.form.fields); } },
   setTimeout: () => 1,
   clearTimeout() {},
   console
 };
 vm.runInNewContext(locationSource, context, { filename: "dist/location-import.js" });
+vm.runInNewContext(courseSource, context, { filename: "dist/course-import.js" });
 vm.runInNewContext(source, context, { filename: "dist/app.js" });
+node("#admin-login-form").elements = { email: { value: "admin@example.com" }, password: { value: "test-only" } };
+await nodeHandlers.get("#admin-login-form:submit")({ preventDefault() {} });
 assert.deepEqual(JSON.parse(saved.get("swim-class-suite.v2")).rooms, [], "old room list is removed from browser storage");
 assert.equal(JSON.parse(saved.get("swim-class-balance.v1"))[0].roomName, "主池 A 線", "student keeps the recorded location name");
+const cleanedSuite = JSON.parse(saved.get("swim-class-suite.v2"));
+const cleanedStudent = JSON.parse(saved.get("swim-class-balance.v1"))[0];
+assert.deepEqual(cleanedSuite.courses.map((course) => course.id), ["complete-course"], "only incomplete legacy courses are removed");
+assert.equal(cleanedStudent.courseId, "", "student no longer links to a removed course");
+assert.equal(cleanedStudent.enrollments[0].courseName, "兒童游泳初階", "existing enrollment retains its course snapshot");
+assert.equal(cleanedStudent.history[0].durationMinutes, 90, "completed lesson keeps its original duration for payroll");
+assert.equal(cleanedStudent.history[0].courseId, "", "completed lesson no longer links to a removed course");
+assert.deepEqual(cleanedSuite.accounts[0].courseIds, ["complete-course"], "tutor keeps valid course links");
+assert.equal(cleanedSuite.products[0].courseId, "", "product no longer links to a removed course");
 
 const click = async (dataset) => {
   const button = { dataset };
   await handlers.get("click")({ target: { closest: () => button } });
 };
 const content = () => node("#module-content").innerHTML;
+
+await click({ module: "courses" });
+assert.doesNotMatch(content(), /待補資料的舊課程/, "course page no longer displays the legacy section");
 
 await click({ module: "schedule" });
 assert.match(content(), /timeline-body/, "week timeline renders");
@@ -133,11 +150,11 @@ assert.match(content(), /location-summary-grid/, "swimming location page has the
 assert.doesNotMatch(content(), /舊有地點清單|使用中但未列入的泳班地點|主池 A 線/, "retired location sections and values are absent");
 assert.equal(node(".module-heading").hidden, false, "swimming location page uses the course-style heading");
 assert.equal(node("#location-top-actions").hidden, false, "swimming location top actions are visible");
-await click({ action: "select-location-pool", value: "九龍公園游泳池" });
-await click({ action: "select-location-place", value: "戶外下層嬉水池" });
-assert.match(content(), /柯士甸站\/佐敦站行過去/, "selected combination shows its meeting point");
-assert.match(content(), /星期二 \(星期四\*\)/, "selected combination shows its cleaning day");
-assert.match(content(), /11月1日至翌年4月15日/, "selected combination shows its maintenance period");
+await click({ action: "select-location-pool", value: "測試泳池" });
+await click({ action: "select-location-place", value: "室內池" });
+assert.match(content(), /入口/, "selected combination shows its meeting point");
+assert.match(content(), /星期一/, "selected combination shows its cleaning day");
+assert.match(content(), /一月/, "selected combination shows its maintenance period");
 await click({ action: "go-home" });
 assert.equal(node("#theme-toggle").hidden, false, "theme control returns on the homepage");
 assert.equal(node("#logout-button").hidden, false, "logout control returns on the homepage");

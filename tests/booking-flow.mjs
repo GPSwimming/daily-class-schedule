@@ -2,14 +2,15 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import vm from "node:vm";
+import { catalog } from "./catalog-fixture.mjs";
 
 const files = await Promise.all(["location-import.js", "course-import.js", "app.js"].map((name) => readFile(new URL(`../dist/${name}`, import.meta.url), "utf8")));
 const saved = new Map([
   ["swim-class-balance.v1", JSON.stringify([
     { id: "s1", name: "測試學生", ageGroup: "6 - 11", enrollmentStatus: "paid", status: "active", remaining: 4,
-      enrollments: [{ id: "e1", courseName: "進階游泳課程", classSize: "1:1", ageGroup: "6 - 11" }] },
+      enrollments: [{ id: "e1", courseName: "課程甲", classSize: "1:1", ageGroup: "6 - 11" }] },
     { id: "s2", name: "已有下一堂", ageGroup: "6 - 11", enrollmentStatus: "paid", status: "active", remaining: 4, nextDate: "2026-11-10", nextTime: "18:00",
-      enrollments: [{ id: "e2", courseName: "進階游泳課程", classSize: "1:1", ageGroup: "6 - 11" }] }
+      enrollments: [{ id: "e2", courseName: "課程甲", classSize: "1:1", ageGroup: "6 - 11" }] }
   ])],
   ["swim-class-suite.v2", JSON.stringify({ accounts: [{ id: "t1", role: "tutor", name: "測試導師" }] })]
 ]);
@@ -24,9 +25,11 @@ const node = (selector) => {
 const document = { documentElement: { dataset: {} }, body: { classList: classList(), dataset: {} }, querySelector: node,
   querySelectorAll: () => [], getElementById: (id) => node(`#${id}`), addEventListener: (name, handler) => handlers.set(name, handler) };
 const context = { document, localStorage: { getItem: (key) => saved.get(key) ?? null, setItem: (key, value) => saved.set(key, value) },
-  sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} }, window: { scrollTo() {} }, crypto: { randomUUID },
+  sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} }, window: { scrollTo() {}, AdminAuth: { signIn: async () => {}, signOut: async () => {}, check: async () => true, getCatalog: async () => catalog, setOnExpired() {} } }, crypto: { randomUUID },
   setTimeout: () => 1, clearTimeout() {}, console };
 for (let index = 0; index < files.length; index += 1) vm.runInNewContext(files[index], context, { filename: ["location-import.js", "course-import.js", "app.js"][index] });
+node("#admin-login-form").elements = { email: { value: "admin@example.com" }, password: { value: "test-only" } };
+await node("#admin-login-form").onsubmit({ preventDefault() {} });
 
 const click = async (dataset) => handlers.get("click")({ target: { closest: () => ({ dataset }) } });
 await click({ module: "schedule" });
@@ -68,13 +71,13 @@ handlers.get("submit")({ target: { id: "quick-lesson-form" }, preventDefault() {
 assert.equal(node("#booking-dialog").open, true, "quick add opens booking page");
 assert.match(node("#booking-students").innerHTML, /請先選擇課程/, "students wait for course choice");
 await click({ action: "booking-tutor", value: "t1" });
-await click({ action: "booking-course", value: "進階游泳課程" });
+await click({ action: "booking-course", value: "課程甲" });
 assert.match(node("#booking-students").innerHTML, /測試學生/, "enrolled student appears for matching course");
 await click({ action: "booking-student", value: "s1" });
 await click({ action: "booking-student", value: "s2" });
 await click({ action: "booking-date", date: "2026-11-12" });
 assert.match(node("#booking-selected-count").textContent, /2/, "calendar supports multiple lesson dates");
-handlers.get("submit")({ target: { id: "booking-form" }, preventDefault() {} });
+await handlers.get("submit")({ target: { id: "booking-form" }, preventDefault() {} });
 const suite = JSON.parse(saved.get("swim-class-suite.v2"));
 const students = JSON.parse(saved.get("swim-class-balance.v1"));
 assert.equal(suite.lessonBookings.length, 2, "each date is saved as a booking");

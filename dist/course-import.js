@@ -4,24 +4,14 @@
   // Source: 課程設定 - GP Classroom, 工作表1, A1:E53 (read 2026-10-22).
   const SOURCE_URL = "https://docs.google.com/spreadsheets/d/12sfH9psh9KkldqEybfH-0CMGNRi9ezLEgboA5eXZfhk/edit?usp=sharing";
   const HEADERS = ["課程名稱", "年齡組別", "課程人數", "課堂時間 (分鐘)", "原價 (HK$) (每位學生計算)"];
-  const childAges = ["2.5 - 5", "6 - 11", "12 - 17"];
-  const groupAges = ["4 - 5", "6 - 11", "12 - 17"];
-  const adultAges = ["18-29", "30-39", "40-49", "50-59", "60-69"];
   const referenceRows = [];
 
-  function addGroup(name, ages, sizes) {
-    for (const [classSize, duration, fee] of sizes) {
-      for (const ageGroup of ages) referenceRows.push({ name, ageGroup, classSize, duration, fee });
+  function setReferenceRows(rows) {
+    if (!Array.isArray(rows) || rows.length > 500 || rows.some((row) => !row || typeof row.name !== "string" || typeof row.ageGroup !== "string" || typeof row.classSize !== "string" || !Number.isFinite(row.duration) || !Number.isFinite(row.fee))) {
+      throw new Error("受保護課程資料格式錯誤。");
     }
+    referenceRows.splice(0, referenceRows.length, ...rows);
   }
-  addGroup("感統改良課程", childAges, [["1:1", 60, 700], ["1:2", 60, 400], ["1:3", 60, 300]]);
-  addGroup("進階游泳課程", childAges, [["1:1", 60, 600], ["1:2", 60, 350], ["1:3-4", 60, 250]]);
-  addGroup("高階游泳課程", groupAges, [["小組", 60, 200]]);
-  addGroup("游泳隊預備班", groupAges, [["小組", 90, 160]]);
-  addGroup("游泳隊", groupAges, [["小組", 120, 160]]);
-  addGroup("成人初階(保證)游泳班", adultAges, [["1:1", 60, 700], ["1:2", 60, 450], ["1:3-4", 60, 300]]);
-  addGroup("成人(技術改良)游泳班", adultAges, [["小組", 60, 250]]);
-  addGroup("成人恆常訓練班", adultAges, [["小組", 60, 200]]);
 
   function key(item) {
     return [item.name, item.ageGroup, item.classSize].map((part) => String(part || "").trim().replace(/\s*[-–—]\s*/g, "-").replace(/\s+/g, " ").toLocaleLowerCase()).join("\u0001");
@@ -90,5 +80,5 @@
     return "\uFEFF" + [HEADERS, ...records.map((item) => [item.name, item.ageGroup, item.classSize, item.duration, item.fee])].map((row) => row.map(quote).join(",")).join("\r\n") + "\r\n";
   }
 
-  window.SwimCourseImport = { SOURCE_URL, HEADERS, referenceRows, key, normalizeRows, parse, plan, toCsv };
+  window.SwimCourseImport = { SOURCE_URL, HEADERS, referenceRows, setReferenceRows, key, normalizeRows, parse, plan, toCsv };
 })();

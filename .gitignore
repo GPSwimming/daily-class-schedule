@@ -5,4 +5,5 @@ node_modules/
 temp-*.json
 .DS_Store
 Thumbs.db
+private/
 

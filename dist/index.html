@@ -35,7 +35,7 @@
       </header>
 
       <main>
-        <section id="home-view" class="view home-view">
+        <section id="home-view" class="view home-view" hidden>
           <article class="welcome-card">
             <div class="profile-avatar" id="profile-avatar" aria-hidden="true">G</div>
             <div>
@@ -83,12 +83,51 @@
         </section>
 
         <section id="logged-out-view" class="logged-out-view" hidden>
-          <div class="login-card">
-            <span class="login-logo" aria-hidden="true">✓</span>
-            <p>泳堂管家</p>
-            <h1>管理課堂，由今日開始。</h1>
-            <span>這是本機模式；重新進入不需要密碼。</span>
-            <button class="button button-primary" type="button" data-action="login">進入管理台</button>
+          <div class="auth-page">
+            <div class="auth-brand" aria-label="Genius Pro Swimming">
+              <img src="./genius-pro-logo.png" alt="Genius Pro Swimming" width="800" height="346" />
+              <p>ATTENDANCE / BOOKING / PAYMENT / HANDBOOK OPERATING SYSTEM</p>
+              <span>Education Centre Solutions</span>
+            </div>
+            <div id="auth-login-panel" class="auth-panel">
+              <div class="auth-options">
+                <span class="auth-language-icon" aria-hidden="true">文A</span>
+                <div class="auth-language-list" role="group" aria-label="Language">
+                  <button type="button" data-auth-lang="zh-Hant" aria-pressed="true">中文(繁)</button>
+                  <button type="button" data-auth-lang="en" aria-pressed="false">English</button>
+                  <button type="button" data-auth-lang="zh-Hans" aria-pressed="false">中文(简)</button>
+                </div>
+                <button id="auth-theme-toggle" class="auth-theme-button" type="button" aria-label="切換夜間模式" title="切換日夜模式">☾</button>
+              </div>
+              <div id="auth-main-content">
+                <form id="admin-login-form" class="admin-login-form">
+                  <h1 data-auth-text="signIn">登入</h1>
+                  <label class="auth-floating-field"><input id="admin-email" name="email" type="email" placeholder=" " autocomplete="username" required /><span data-auth-text="email">電郵</span></label>
+                  <label class="auth-floating-field auth-password-field"><input id="admin-password" name="password" type="password" placeholder=" " autocomplete="current-password" required /><span data-auth-text="password">密碼</span><button class="auth-eye" type="button" data-auth-visibility="admin-password" aria-label="顯示密碼" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="3.1"/></svg></button></label>
+                  <button class="auth-forgot" type="button" id="auth-forgot-button" data-auth-text="forgot">忘記密碼？</button>
+                  <label class="auth-consent"><input id="auth-consent" type="checkbox" required /><span data-auth-text="consent">我已閱讀私隱政策，了解本平台如何處理登入及課堂資料。</span></label>
+                  <p id="admin-login-error" class="admin-login-error" role="alert" aria-live="polite"></p>
+                  <button id="admin-login-submit" class="auth-primary-button" type="submit" data-auth-text="signIn">登入</button>
+                  <button id="auth-register-button" class="auth-text-button" type="button" data-auth-text="register" aria-disabled="true">註冊</button>
+                  <button id="auth-privacy-button" class="auth-policy-link" type="button" data-auth-text="privacyLink">私隱政策 Privacy Policy</button>
+                </form>
+                <form id="admin-reset-form" class="admin-login-form" hidden>
+                  <h1 data-auth-text="setPassword">設定新密碼</h1>
+                  <p class="auth-description" data-auth-text="setPasswordHint">請輸入最少 12 個字元的新密碼，完成後重新登入。</p>
+                  <label class="auth-floating-field auth-password-field"><input id="admin-new-password" name="newPassword" type="password" placeholder=" " minlength="12" autocomplete="new-password" required /><span data-auth-text="newPassword">新密碼</span><button class="auth-eye" type="button" data-auth-visibility="admin-new-password" aria-label="顯示密碼" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="3.1"/></svg></button></label>
+                  <label class="auth-floating-field auth-password-field"><input id="admin-confirm-password" name="confirmPassword" type="password" placeholder=" " minlength="12" autocomplete="new-password" required /><span data-auth-text="confirmPassword">確認新密碼</span><button class="auth-eye" type="button" data-auth-visibility="admin-confirm-password" aria-label="顯示密碼" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="3.1"/></svg></button></label>
+                  <p id="admin-reset-error" class="admin-login-error" role="alert" aria-live="polite"></p>
+                  <button id="admin-reset-submit" class="auth-primary-button" type="submit" data-auth-text="savePassword">儲存新密碼</button>
+                  <button id="auth-reset-back" class="auth-text-button" type="button" data-auth-text="backToLogin">返回登入</button>
+                </form>
+              </div>
+              <article id="auth-privacy-view" class="auth-privacy-view" hidden>
+                <h1 data-auth-text="privacyTitle">私隱政策</h1>
+                <div id="auth-privacy-content"></div>
+                <button id="auth-privacy-back" class="auth-policy-back" type="button" data-auth-text="backToLogin">← 返回登入</button>
+              </article>
+            </div>
+            <p class="auth-footer">© Genius Pro Swimming</p>
           </div>
         </section>
       </main>
@@ -273,11 +312,27 @@
       </div>
     </dialog>
 
+    <dialog id="auth-recovery-dialog" class="auth-dialog" aria-labelledby="auth-recovery-title">
+      <form id="auth-recovery-form" method="dialog">
+        <h2 id="auth-recovery-title" data-auth-text="resetTitle">重設密碼</h2>
+        <p data-auth-text="resetInstructions">輸入你的登入電郵，我們會傳送重設密碼連結至該郵箱。</p>
+        <label class="auth-floating-field"><input id="auth-recovery-email" name="email" type="email" placeholder=" " autocomplete="email" required /><span data-auth-text="email">電郵</span></label>
+        <p id="auth-recovery-error" class="admin-login-error" role="alert" aria-live="polite"></p>
+        <div class="auth-dialog-actions"><button id="auth-recovery-cancel" type="button" data-auth-text="cancel">取消</button><button id="auth-recovery-send" type="submit" data-auth-text="sendReset">發送重設郵件</button></div>
+      </form>
+      <div id="auth-recovery-success" hidden>
+        <h2 data-auth-text="resetTitle">重設密碼</h2>
+        <p data-auth-text="resetSent">如電郵屬於管理員帳戶，重設連結已發送。請檢查收件箱及垃圾郵件。</p>
+        <div class="auth-dialog-actions"><button id="auth-recovery-close" type="button" data-auth-text="close">關閉</button></div>
+      </div>
+    </dialog>
     <input id="import-data" type="file" accept="application/json" hidden />
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <script src="./student-import.js" defer></script>
     <script src="./course-import.js" defer></script>
     <script src="./location-import.js" defer></script>
+    <script src="./admin-auth.js" defer></script>
+    <script src="./login-ui.js" defer></script>
     <script src="./app.js" defer></script>
   </body>
 </html>

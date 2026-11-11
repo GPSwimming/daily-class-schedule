@@ -3,6 +3,7 @@
 
   const LEGACY_KEY = "swim-class-balance.v1";
   const SUITE_KEY = "swim-class-suite.v2";
+  const OTHER_POOL_OPTION = "other-pool";
   const LOW_DEFAULT = 2;
   const WEEKDAYS = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
   const FEATURES = [
@@ -23,6 +24,10 @@
   const moduleMeta = Object.fromEntries(FEATURES.map((item) => [item.id, item]));
   const todayYmd = () => formatYmd(startOfToday());
   const makeId = () => Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+  const hadPoolLocationsAtStartup = (() => {
+    try { return Array.isArray(JSON.parse(localStorage.getItem(SUITE_KEY))?.poolLocations); }
+    catch { return false; }
+  })();
 
   const state = {
     students: loadStudents(),
@@ -53,7 +58,7 @@
     messageStudentId: null,
     messageType: "lesson",
     formHandler: null,
-    loggedIn: sessionStorage.getItem("swim-suite.logged-out") !== "1"
+    loggedIn: false
   };
   let suppressTimelineClickUntil = 0;
 
@@ -62,11 +67,18 @@
     if (match) state.suite.studentNumberCounters[match[1]] = Math.max(Number(state.suite.studentNumberCounters[match[1]]) || 0, Number(match[2]));
   }
   clearLegacyRooms();
+  clearIncompleteCourses();
 
   const elements = {
     homeView: document.querySelector("#home-view"),
     moduleView: document.querySelector("#module-view"),
     loggedOutView: document.querySelector("#logged-out-view"),
+    adminLoginForm: document.querySelector("#admin-login-form"),
+    adminLoginError: document.querySelector("#admin-login-error"),
+    adminLoginSubmit: document.querySelector("#admin-login-submit"),
+    adminResetForm: document.querySelector("#admin-reset-form"),
+    adminResetError: document.querySelector("#admin-reset-error"),
+    adminResetSubmit: document.querySelector("#admin-reset-submit"),
     pageLabel: document.querySelector("#page-label"),
     brandName: document.querySelector("#brand-name"),
     coachName: document.querySelector("#coach-name"),
@@ -129,13 +141,10 @@
         contactPhone: "",
         theme: "light"
       },
-      courses: [
-        { id: makeId(), name: "兒童游泳初階", level: "初階", duration: 60, fee: 320, active: true },
-        { id: makeId(), name: "成人游泳基礎", level: "基礎", duration: 60, fee: 380, active: true }
-      ],
+      courses: [],
       hiddenReferenceCourses: [],
       rooms: [],
-      poolLocations: window.SwimLocationImport.referenceRows.map((row) => ({ id: makeId(), ...row })),
+      poolLocations: [],
       bookingOptions: { onlineBooking: true, preventOverlap: true, bufferMinutes: 10, openHour: 7, closeHour: 22 },
       lessonBookings: [],
       payments: [],
@@ -245,6 +254,39 @@
     });
     (state.suite.lessonBookings || []).forEach((booking) => keepRecordedName(booking, "roomId", "roomName"));
     state.suite.rooms = [];
+    saveAll();
+  }
+
+  function clearIncompleteCourses() {
+    const courses = Array.isArray(state.suite.courses) ? state.suite.courses : [];
+    const obsolete = courses.filter((course) => !String(course.ageGroup || "").trim() || !String(course.classSize || "").trim());
+    if (!obsolete.length) return;
+    const byId = new Map(obsolete.map((course) => [course.id, course]));
+    state.students.forEach((student) => {
+      if (byId.has(student.courseId)) student.courseId = "";
+      (student.enrollments || []).forEach((row) => {
+        const course = byId.get(row.courseId);
+        if (!course) return;
+        if (!row.courseName) row.courseName = course.name;
+        if (!Number(row.duration)) row.duration = Number(course.duration) || 60;
+        if (!Number(row.originalFee)) row.originalFee = Number(course.fee) || 0;
+        row.courseId = "";
+      });
+      (student.history || []).forEach((record) => {
+        const course = byId.get(record.courseId);
+        if (!course) return;
+        if (!record.courseName) record.courseName = course.name;
+        if (record.type === "completed" && !Number(record.durationMinutes)) record.durationMinutes = Number(course.duration) || 60;
+        record.courseId = "";
+      });
+    });
+    (state.suite.accounts || []).forEach((account) => {
+      if (Array.isArray(account.courseIds)) account.courseIds = account.courseIds.filter((id) => !byId.has(id));
+    });
+    (state.suite.products || []).forEach((product) => {
+      if (byId.has(product.courseId)) product.courseId = "";
+    });
+    state.suite.courses = courses.filter((course) => !obsolete.includes(course));
     saveAll();
   }
 
@@ -358,6 +400,7 @@
   }
 
   function showHome() {
+    document.body.classList.remove("auth-logged-out");
     state.currentModule = null;
     document.body.dataset.module = "";
     elements.peopleTopActions.hidden = true;
@@ -376,8 +419,12 @@
   }
 
   function showLoggedOut() {
+    document.body.classList.add("auth-logged-out");
     document.body.dataset.module = "";
     document.body.classList.remove("nav-expanded");
+    document.body.classList.remove("modal-open");
+    document.querySelectorAll("dialog[open]").forEach((dialog) => dialog.close());
+    elements.moduleContent.innerHTML = "";
     elements.peopleTopActions.hidden = true;
     elements.peopleMoreButton.hidden = true;
     elements.locationTopActions.hidden = true;
@@ -392,6 +439,8 @@
   }
 
   function openModule(id) {
+    if (!state.loggedIn) return;
+    document.body.classList.remove("auth-logged-out");
     if (!moduleMeta[id]) return;
     state.currentModule = id;
     elements.homeView.hidden = true;
@@ -657,7 +706,6 @@
       ["課程時間 (分鐘)", chosen ? chosen.duration + " 分鐘" : "—"],
       ["課堂費用", chosen ? formatMoney(chosen.fee, 2) + "／堂／位" : "—"]
     ];
-    const legacy = state.suite.courses.filter((item) => !item.ageGroup || !item.classSize);
     return '<section class="course-page"><div class="course-intro"><div><h2>課程組合</h2><p>依次選擇課程名稱、年齡組別及課程人數；每個組合對應一個完整的課堂時間和每位學生收費。</p></div><button class="button button-secondary" type="button" data-action="import-courses">↧ 匯入／更新課程</button></div>' +
       '<p class="course-source-note">顯示 <a href="' + escapeHtml(window.SwimCourseImport.SOURCE_URL) + '" target="_blank" rel="noopener noreferrer">Google 課程表</a>的 52 組參考資料；尚未匯入的組合只作預覽，不會改動本機課程或現有學生資料。</p>' +
       courseChipSection("name", "課程名稱", "選擇泳班課程", uniqueCourseValues(nameRows, "name"), selection.name) +
@@ -668,8 +716,7 @@
       (chosen ? '<div class="course-record-actions"><span class="badge ' + (chosen.reference ? 'neutral' : chosen.active === false ? 'neutral' : '') + '">' + (chosen.reference ? '試算表參考 · 尚未匯入' : chosen.active === false ? '已停用' : '已儲存') + '</span>' +
         (chosen.reference ? '<button class="mini-button" type="button" data-action="save-reference-course" data-id="' + escapeHtml(chosen.id) + '">＋ 加入這組課程</button>' :
           '<button class="mini-button" type="button" data-action="toggle-course" data-id="' + escapeHtml(chosen.id) + '">' + (chosen.active === false ? '啟用' : '停用') + '</button><button class="mini-button" type="button" data-action="edit-course" data-id="' + escapeHtml(chosen.id) + '">✎ 編輯整組</button><button class="mini-button danger" type="button" data-action="delete-course" data-id="' + escapeHtml(chosen.id) + '">▤ 刪除整組</button>') + '</div>' : '<p class="course-selection-help">請由上方三個區塊選擇一組課程；更改或刪除會作用於完整五項資料。</p>') + '</section>' +
-      (legacy.length ? '<section class="course-legacy panel"><h2>待補資料的舊課程</h2><p>舊課程未有年齡組別或課程人數，仍會保留原有學生連結。編輯並補齊後即可在上方選擇。</p><div class="list-stack">' + legacy.map((course) =>
-        '<article class="list-row"><div class="row-icon">🎟️</div><div class="row-main"><strong>' + escapeHtml(course.name) + '</strong><span>' + escapeHtml(course.level || '未設定年齡及人數') + ' · ' + escapeHtml(course.duration) + ' 分鐘 · ' + escapeHtml(formatMoney(course.fee, 2)) + '</span></div><div class="row-actions"><button class="mini-button" type="button" data-action="edit-course" data-id="' + escapeHtml(course.id) + '">✎ 編輯</button><button class="mini-button danger" type="button" data-action="delete-course" data-id="' + escapeHtml(course.id) + '">刪除</button></div></article>').join('') + '</div></section>' : '') + '</section>';
+      '</section>';
   }
 
   function sameCourseValue(a, b) {
@@ -1234,10 +1281,21 @@
   }
 
   function studentLocationPickerHtml(selected, options) {
-    const current = options.find((item) => item.value === selected);
+    const choices = [{ value: "", label: "不設課堂地點" }].concat(options.filter((item) => item.value !== OTHER_POOL_OPTION), { value: OTHER_POOL_OPTION, label: "其他" });
+    const current = selected ? choices.find((item) => item.value === selected) : null;
     return '<div class="student-floating student-location-field' + (current ? ' is-filled' : '') + '"><details id="student-location-picker"><summary aria-labelledby="student-location-floating student-location-label"><span id="student-location-label">' + escapeHtml(current ? current.label : "") + '</span>' + studentDropdownArrowHtml() + '</summary><div class="student-location-options">' +
-      [{ value: "", label: "不設課堂地點" }].concat(options).map((item) => '<label><input type="radio" name="roomId" value="' + escapeHtml(item.value) + '"' + (item.value === selected ? ' checked' : '') + '><span>' + escapeHtml(item.label) + '</span></label>').join('') +
+      choices.map((item) => '<label><input type="radio" name="roomId" value="' + escapeHtml(item.value) + '"' + (item.value === selected ? ' checked' : '') + '><span>' + escapeHtml(item.label) + '</span></label>').join('') +
       '</div></details><span id="student-location-floating">課堂地點</span></div>';
+  }
+
+  function updateStudentOtherPoolField(form) {
+    const selected = form.querySelector('input[name="roomId"]:checked')?.value;
+    const field = form.querySelector("#student-other-pool-field");
+    const input = form.elements.otherPoolName;
+    const show = selected === OTHER_POOL_OPTION;
+    field.hidden = !show;
+    input.disabled = !show;
+    input.required = show;
   }
 
   function studentFormHtml(student) {
@@ -1254,7 +1312,7 @@
     const latestBirthYear = Math.max(new Date().getFullYear(), Number(recordDate.slice(0, 4)) || 0, Number(birthYear) || 0);
     const birthYears = Array.from({ length: latestBirthYear - 1899 }, (_, index) => ({ value: String(latestBirthYear - index), label: String(latestBirthYear - index) }));
     const roomOptions = locationSelectOptions().filter((option) => option.value.startsWith("pool:"));
-    if (item.roomId && !roomOptions.some((option) => option.value === item.roomId)) roomOptions.push({ value: item.roomId, label: item.roomName || "舊有地點" });
+    if (item.roomId && item.roomId !== OTHER_POOL_OPTION && !roomOptions.some((option) => option.value === item.roomId)) roomOptions.push({ value: item.roomId, label: item.roomName || "舊有地點" });
     return '<input type="hidden" name="id" value="' + escapeHtml(item.id || "") + '">' +
       '<div class="student-photo-row"><span class="student-photo-preview" id="student-photo-preview">' + (item.photo ? '<img src="' + escapeHtml(item.photo) + '" alt="學生相片預覽">' : '<span aria-hidden="true">👤</span>') + '</span><label class="student-photo-upload"><input id="student-photo-file" class="sr-only" type="file" accept="image/png,image/jpeg,image/webp,image/gif">▣ 上載相片</label><small>PNG、JPG、WebP 或 GIF，最多 1MB</small></div>' +
       studentFloatingField("name", "學生姓名(必填)", item.name || "", { required: true, requiredMarker: false, wide: true, maxlength: 60 }) +
@@ -1274,7 +1332,8 @@
       studentFloatingField("homeMtr", "居住地點", item.homeMtr || "", { placeholder: "請填寫鄰近港鐵站", floatHintOnFocus: true }) +
       '<div id="student-school-field"' + (isMinorAge(age) ? '' : ' hidden') + '>' + studentFloatingField("schoolMtr", "學校地點", item.schoolMtr || "", { placeholder: "請填寫鄰近港鐵站", floatHintOnFocus: true }) + '</div>' +
       '<div id="student-work-field"' + (age && !isMinorAge(age) ? '' : ' hidden') + '>' + studentFloatingField("workMtr", "工作地點", item.workMtr || "", { placeholder: "請填寫鄰近港鐵站" }) + '</div>' +
-      studentLocationPickerHtml(item.roomId || "", roomOptions) +
+      '<div class="student-location-stack">' + studentLocationPickerHtml(item.roomId || "", roomOptions) +
+      '<div class="student-other-pool-field" id="student-other-pool-field"' + (item.roomId === OTHER_POOL_OPTION ? '' : ' hidden') + '>' + studentFloatingField("otherPoolName", "其他泳池 (請註明)", item.roomId === OTHER_POOL_OPTION ? item.roomName || "" : "", { maxlength: 120 }) + '</div></div>' +
       '<label class="field student-wide"><span>電郵（稍後登入用）</span><input name="email" type="email" autocomplete="email" placeholder="name@example.com" value="' + escapeHtml(item.email || "") + '"></label>' +
       '<label class="field student-wide"><span>密碼（接駁 Supabase 後設定）</span><input type="password" autocomplete="new-password" placeholder="目前未啟用" disabled><small class="helper-text">現時不會建立登入帳戶或儲存密碼。</small></label>';
   }
@@ -1405,6 +1464,7 @@
     renderStudentYears(form, item && item.enrollmentYear || fiscalYear(form.dataset.recordDateYmd || todayYmd()));
     renderStudentEnrollments(form, item && item.enrollments || []);
     updateStudentForm(form);
+    updateStudentOtherPoolField(form);
     if (student) requestAnimationFrame(() => form.elements.name.focus());
   }
 
@@ -1444,6 +1504,8 @@
     const assigned = paid && !(existing && existing.studentNumber) ? nextStudentNumber(year, ageGroup) : null;
     const dateValue = validDate(data.nextDate) ? data.nextDate : (!existing || existing.enrollmentStatus === "pending") && first && first.firstDate && paid ? first.firstDate : existing?.nextDate || "";
     const roomId = data.roomId || "";
+    const otherPoolName = roomId === OTHER_POOL_OPTION ? String(data.otherPoolName || "").trim() : "";
+    if (roomId === OTHER_POOL_OPTION && !otherPoolName) throw new Error("請註明其他泳池名稱。");
     const payload = { id: existing ? existing.id : makeId(), name, ageGroup, gender: data.gender, recordDate,
       enrollmentStatus: legacyIncomplete ? "legacy" : paid ? "paid" : "pending", studentNumber: existing?.studentNumber || assigned?.value || "", enrollmentYear: year,
       birthDate: isMinorAge(ageGroup) && existing && validDate(existing.birthDate) &&
@@ -1455,7 +1517,7 @@
       tutorId: existing?.tutorId || "", weekday: existing?.weekday ?? 1, time: existing?.time || "18:00",
       nextTime: existing?.nextTime || existing?.time || "18:00", prepaid: existing?.prepaid ?? 0,
       remaining: existing?.remaining ?? 0, nextDate: existing?.bookingManaged ? existing.nextDate : paid || legacyIncomplete ? dateValue : "", roomId,
-      roomName: locationNameForId(roomId, existing && existing.roomId === roomId ? existing.roomName : ""),
+      roomName: roomId === OTHER_POOL_OPTION ? otherPoolName : locationNameForId(roomId, existing && existing.roomId === roomId ? existing.roomName : ""),
       bookingManaged: existing?.bookingManaged || false, bookingFallbackDate: existing?.bookingFallbackDate || "",
       bookingFallbackTime: existing?.bookingFallbackTime || "",
       status: existing?.status || "active", history: existing?.history || [], createdAt: existing?.createdAt || new Date().toISOString() };
@@ -2496,6 +2558,7 @@
       state.students = payload.students;
       state.suite = { ...defaultSuite(), ...payload.suite, settings: { ...defaultSuite().settings, ...(payload.suite.settings || {}) } };
       clearLegacyRooms();
+      clearIncompleteCourses();
       commit("備份已匯入");
     } catch (error) {
       showToast(error.message || "無法匯入備份");
@@ -2520,6 +2583,7 @@
   }
 
   document.addEventListener("click", async (event) => {
+    if (!state.loggedIn) return;
     const button = event.target.closest("button");
     if (!button) {
       const column = event.target.closest(".timeline-day-column");
@@ -2601,13 +2665,8 @@
     if (action === "go-home") return showHome();
     if (action === "logout") {
       state.loggedIn = false;
-      sessionStorage.setItem("swim-suite.logged-out", "1");
-      return showLoggedOut();
-    }
-    if (action === "login") {
-      state.loggedIn = true;
-      sessionStorage.removeItem("swim-suite.logged-out");
-      return showHome();
+      showLoggedOut();
+      return window.AdminAuth?.signOut();
     }
     if (action === "schedule-mode") { state.scheduleMode = button.dataset.value; return renderModule(); }
     if (action === "schedule-display") { state.scheduleDisplay = state.scheduleDisplay === "list" ? "calendar" : "list"; return renderModule(); }
@@ -2975,6 +3034,7 @@
         document.querySelector("#student-location-label").textContent = event.target.value ? event.target.nextElementSibling.textContent : "";
         event.target.closest(".student-location-field").classList.toggle("is-filled", Boolean(event.target.value));
         document.querySelector("#student-location-picker").open = false;
+        updateStudentOtherPoolField(form);
         return;
       }
       if (event.target.name === "ageGroup") { updateStudentForm(form, true); return; }
@@ -3092,6 +3152,84 @@
       document.body.classList.remove("modal-open");
     }
   }));
+
+  window.AdminAuth?.setOnExpired(() => {
+    state.loggedIn = false;
+    showLoggedOut();
+    elements.adminLoginError.textContent = "登入已到期，請重新登入。";
+  });
+
+  elements.adminLoginForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const email = elements.adminLoginForm.elements.email.value.trim();
+    const password = elements.adminLoginForm.elements.password.value;
+    elements.adminLoginError.textContent = "";
+    window.LoginUI?.setLoginBusy(true);
+    try {
+      if (!window.AdminAuth) throw new Error("登入服務尚未載入，請重新整理頁面。");
+      await window.AdminAuth.signIn(email, password);
+      const catalog = await window.AdminAuth.getCatalog();
+      window.SwimCourseImport.setReferenceRows(catalog.courses);
+      window.SwimLocationImport.setReferenceRows(catalog.locations);
+      if (!hadPoolLocationsAtStartup) {
+        state.suite.poolLocations = catalog.locations.map((row) => ({ id: makeId(), ...row }));
+        saveAll();
+      }
+      state.loggedIn = true;
+      elements.adminLoginForm.elements.password.value = "";
+      renderShell();
+    } catch (error) {
+      elements.adminLoginError.textContent = error.message || "登入失敗，請稍後再試。";
+    } finally {
+      window.LoginUI?.setLoginBusy(false);
+    }
+  });
+
+  const recovery = window.AdminAuth?.getRecoveryState?.();
+  if (recovery?.active) {
+    elements.adminLoginForm.hidden = true;
+    elements.adminResetForm.hidden = false;
+    window.AdminAuth.checkRecovery().then((valid) => {
+      if (valid) return;
+      elements.adminResetForm.hidden = true;
+      elements.adminLoginForm.hidden = false;
+      elements.adminLoginError.textContent = window.AdminAuth.getRecoveryState().error;
+    });
+  } else if (recovery?.error) {
+    elements.adminLoginError.textContent = recovery.error;
+  }
+
+  elements.adminResetForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const password = elements.adminResetForm.elements.newPassword.value;
+    const confirmation = elements.adminResetForm.elements.confirmPassword.value;
+    elements.adminResetError.textContent = "";
+    if (password !== confirmation) {
+      elements.adminResetError.textContent = "兩次輸入的密碼不一致。";
+      return;
+    }
+    elements.adminResetSubmit.disabled = true;
+    try {
+      await window.AdminAuth.resetPassword(password);
+      elements.adminResetForm.reset();
+      elements.adminResetForm.hidden = true;
+      elements.adminLoginForm.hidden = false;
+      elements.adminLoginError.textContent = "密碼已更新，請使用新密碼登入。";
+    } catch (error) {
+      elements.adminResetError.textContent = error.message || "無法設定密碼，請稍後再試。";
+    } finally {
+      elements.adminResetSubmit.disabled = false;
+    }
+  });
+
+  document.addEventListener("visibilitychange", async () => {
+    if (document.visibilityState !== "visible" || !state.loggedIn) return;
+    if (!await window.AdminAuth.check()) {
+      state.loggedIn = false;
+      showLoggedOut();
+      elements.adminLoginError.textContent = "登入已失效，請重新登入。";
+    }
+  });
 
   renderShell();
 })();
