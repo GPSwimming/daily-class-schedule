@@ -836,21 +836,26 @@ summary:focus-visible {
   position: absolute;
   z-index: 1;
   left: 2px;
-  right: 2px;
+  width: calc(100% - 4px);
   min-height: 18px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   padding: 2px 3px;
-  color: var(--teal-dark);
+  color: var(--ink);
   text-align: left;
-  background: color-mix(in srgb, var(--blue-soft) 78%, white);
+  background: color-mix(in srgb, var(--lane-color, #168f9e) 17%, var(--paper));
   border: 0;
-  border-left: 3px solid var(--teal);
+  border-left: 3px solid var(--lane-color, #168f9e);
   border-radius: 5px;
   font-size: 0.58rem;
   line-height: 1.15;
 }
+.timeline-lane-0 { --lane-color: #168f9e; }
+.timeline-lane-1 { --lane-color: #7055af; }
+.timeline-lane-2 { --lane-color: #d27632; }
+.timeline-lane-3 { --lane-color: #bf4986; }
+.timeline-lane-4 { --lane-color: #547734; }
 .timeline-event strong,
 .timeline-event span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .timeline-event:hover { filter: brightness(0.96); }
@@ -968,6 +973,14 @@ summary:focus-visible {
 .booking-search { display: flex; min-height: 55px; align-items: center; gap: 12px; padding: 0 15px; border: 1px solid #d4cec1; border-radius: 10px; background: var(--paper-strong); }
 .booking-search span { color: var(--muted); font-size: 1.65rem; line-height: 1; }
 .booking-search input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--ink); font: inherit; font-size: .95rem; }
+.booking-groups-section { margin-top: 20px; }
+.booking-groups-section > .student-section-heading { margin-bottom: 12px; }
+.booking-groups-section > .student-section-heading p { margin: 3px 0 0; color: var(--muted); font-size: .78rem; }
+.booking-groups { display: grid; gap: 12px; }
+.booking-group-card { min-width: 0; padding: 16px; border: 1px solid var(--line); border-radius: 15px; background: var(--paper-strong); }
+.booking-group-card > .student-section-heading h4 { margin: 0; }
+.booking-group-card .booking-pick { margin-top: 14px; }
+.booking-group-card .booking-pool-field { margin-top: 14px; }
 .booking-pick { min-width: 0; margin: 20px 0 0; padding: 0; border: 0; }
 .booking-pick legend { margin-bottom: 10px; font-size: .9rem; font-weight: 750; }
 .booking-help { margin: 6px 0 0; color: var(--muted); font-size: .72rem; }
@@ -1373,6 +1386,8 @@ body[data-module="rooms"] .module-heading p { max-width: 78ch; line-height: 1.65
 .people-table-wrap { max-width: 100%; overflow-x: auto; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; }.people-table { width: 100%; border-collapse: collapse; font-size: .78rem; white-space: nowrap; }.people-table th, .people-table td { padding: 13px 12px; border-bottom: 1px solid var(--line); text-align: left; }.people-table th { color: var(--muted); background: var(--canvas); }
 .people-tutor-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }.people-footnote { margin: 30px 0 0; color: var(--muted); font-size: .72rem; }
 .tutor-payroll { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); font-size: .74rem; }.tutor-payroll span { color: var(--muted); }.tutor-payroll strong { color: var(--teal-dark); }
+.shared-tutor-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }.shared-tutor-card { min-width: 0; padding: 17px; border: 1px solid var(--line); border-radius: 14px; background: var(--paper-strong); }.shared-tutor-card h3 { margin: 0; overflow-wrap: anywhere; font-size: .95rem; }.shared-tutor-card p { margin: 6px 0 12px; color: var(--muted); font-size: .77rem; }.shared-tutor-metrics { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: baseline; color: var(--teal-dark); font-size: .8rem; }.shared-tutor-metrics span { color: var(--muted); }.shared-tutor-card ul { margin: 13px 0 0; padding: 0; list-style: none; }.shared-tutor-card li { display: grid; grid-template-columns: minmax(0, 110px) minmax(0, 1fr); gap: 8px; padding: 7px 0; border-top: 1px solid var(--line); font-size: .77rem; }.shared-tutor-card li span { color: var(--muted); overflow-wrap: anywhere; }
+.tutor-leave-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: end; }.tutor-leave-form > * { min-width: 0; }.tutor-leave-form .tutor-leave-reason, .tutor-leave-form .form-error { grid-column: 1 / -1; }.tutor-leave-form textarea { width: 100%; min-height: 92px; resize: vertical; }.tutor-leave-form .button { justify-self: start; }.tutor-leave-history { margin-top: 18px; }
 .tutor-account-row .row-main span:last-child { color: var(--teal-dark); font-weight: 750; }.accounts-preserved-note { margin: 16px 0 0; }
 .tutor-dialog { width: min(510px, calc(100% - 20px)); padding: 0; overflow: auto; border-radius: 32px; }.tutor-dialog form { padding: 24px; }.tutor-dialog .modal-header { position: sticky; z-index: 2; top: -24px; padding: 0 0 13px; background: var(--paper); }.tutor-fields { display: grid; gap: 13px; }.tutor-course-field, .tutor-availability, .tutor-permissions { min-width: 0; margin: 0; padding: 0; border: 0; }.tutor-course-field legend, .tutor-availability legend, .tutor-permissions legend { margin-bottom: 7px; font-size: .75rem; font-weight: 800; }.tutor-course-options { display: flex; flex-wrap: wrap; gap: 7px; }.tutor-course-option { display: inline-flex; align-items: center; gap: 6px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 9px; font-size: .75rem; }.tutor-course-option input { accent-color: #347fae; }.tutor-availability, .tutor-permissions { margin-top: 18px; }.tutor-availability p, .tutor-permissions p { margin: 0 0 9px; color: var(--muted); font-size: .7rem; line-height: 1.5; }.tutor-availability table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: .72rem; }.tutor-availability th, .tutor-availability td { height: 32px; border: 1px solid var(--line); text-align: center; }.tutor-availability th { background: var(--canvas); }.tutor-availability th:first-child { width: 48px; }.tutor-availability td label { display: grid; height: 32px; place-items: center; cursor: pointer; }.tutor-availability td input { position: absolute; opacity: 0; }.tutor-availability td span[aria-hidden] { color: var(--muted); font-size: .9rem; }.tutor-availability td input:checked + span { color: #2879a9; font-weight: 900; }.tutor-availability td input:checked + span::before { content: '✓'; }.tutor-availability td input:checked + span { font-size: 0; }.tutor-availability td input:checked + span::before { font-size: .9rem; }.tutor-permissions { display: grid; gap: 7px; }.tutor-permissions legend { float: left; width: 100%; }.tutor-permissions label { font-size: .75rem; }.tutor-permissions input { accent-color: #347fae; }.tutor-dialog .modal-actions { position: sticky; bottom: -24px; padding: 15px 0 0; background: var(--paper); border-top: 1px solid var(--line); }
 .import-dialog > p { color: var(--muted); font-size: .79rem; line-height: 1.55; }.import-file-field { margin-top: 18px; }.import-preview { margin-top: 12px; font-size: .78rem; }.import-preview ul { max-height: 170px; overflow: auto; padding-left: 20px; }.import-preview .preview-good { color: #167282; font-weight: 750; }.import-preview .preview-warning { color: #a4573e; }.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
@@ -1587,6 +1602,8 @@ label:has(> input[type="date"]) > input[type="date"]::-webkit-calendar-picker-in
   .people-metric { min-height: 48px; flex-direction: row; justify-content: center; gap: 5px; padding: 6px 3px; border-radius: 13px; }.people-metric.is-active { padding: 5px 2px; }.people-metric small { display: none; }.people-metric strong { font-size: 1.03rem; }.people-metric-icon { width: 17px; height: 17px; flex-basis: 17px; }.people-metric-dismiss { display: none; }
   .people-tools { margin-bottom: 16px; }.people-search { min-height: 52px; padding-inline: 13px; }.people-round-button { min-height: 52px; padding-inline: 10px; }.people-table-toggle { display: none; }
   .people-directory { display: none; }.people-mobile-cards { display: grid; gap: 10px; }.people-mobile-card { padding: 15px; }.people-tutor-list { grid-template-columns: 1fr; }.people-footnote { margin-top: 24px; }
+  .shared-tutor-grid { grid-template-columns: 1fr; }
+  .tutor-leave-form { grid-template-columns: 1fr; }
   .pending-student-list { grid-template-columns: 1fr; }
   .student-dialog, .tutor-dialog { width: calc(100% - 12px); max-height: calc(100dvh - 20px); }
   .student-dialog form, .tutor-dialog form { max-height: calc(100dvh - 36px); margin: 7px; padding: 11px 7px 8px 11px; }
@@ -1728,6 +1745,21 @@ label:has(> input[type="date"]) > input[type="date"]::-webkit-calendar-picker-in
   #receipt-dialog { position: absolute; inset: 0; width: 100%; max-width: none; padding: 0; border-radius: 0; }
   .no-print { display: none !important; }
   .receipt-paper { border: 0; }
+}
+
+.tutor-assignment, .attendance-review { display: grid; gap: 14px; min-width: 0; padding: 16px; border: 1px solid var(--border, #dedbd3); border-radius: 16px; background: var(--surface, #fff); }
+.tutor-assignment p, .attendance-review p { margin: 5px 0 0; color: var(--muted, #68747a); overflow-wrap: anywhere; }
+.tutor-roll { display: grid; gap: 8px; }
+.tutor-roll-row { display: grid; grid-template-columns: minmax(90px, 1fr) minmax(130px, 1fr) auto; align-items: center; gap: 9px; padding-top: 8px; border-top: 1px solid var(--border, #dedbd3); }
+.tutor-roll-row .row-actions, .attendance-decision .row-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.attendance-decision { display: grid; grid-template-columns: minmax(130px, 1fr) minmax(150px, 200px); gap: 9px; }
+.attendance-decision input { min-width: 0; width: 100%; padding: 10px 12px; border: 1px solid var(--border, #cfcfc7); border-radius: 10px; background: var(--surface, #fff); color: inherit; }
+.attendance-decision .row-actions { grid-column: 1 / -1; }
+@media (max-width: 650px) {
+  .tutor-roll-row { grid-template-columns: 1fr; }
+  .tutor-roll-row .row-actions { width: 100%; }
+  .attendance-decision { grid-template-columns: 1fr; }
+  .attendance-decision .row-actions { grid-column: auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {

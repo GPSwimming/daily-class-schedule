@@ -71,7 +71,7 @@ assert.match(html, /location-import\.js/, "location import data and parser are l
 assert.match(js, /function courseChipSection\(/, "course combination selectors exist");
 assert.match(js, /function deleteCourse\(/, "complete course deletion is guarded");
 assert.doesNotMatch(js, /label: "平均時長"|label: "平均單堂"/, "course average boxes were removed");
-assert.match(html, /密碼（接駁 Supabase 後設定）/, "password future state is clear");
+assert.match(html, /密碼（在 Supabase 設定）/, "coach password is set only in Supabase");
 assert.match(html, /type="password"[^>]*disabled/, "password cannot be entered or persisted locally");
 assert.match(html, /data-action="add-course"[\s\S]*data-action="import-students"[\s\S]*data-action="add-student"[\s\S]*data-action="add-tutor"/, "people top actions follow the requested order");
 assert.equal((html.match(/class="people-action-icon"/g) || []).length, 7, "people and location actions use matching SVG icons");

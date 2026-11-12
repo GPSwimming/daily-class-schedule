@@ -199,10 +199,7 @@
       <form id="booking-form" novalidate>
         <div class="modal-header"><h2 id="booking-title">預約課堂</h2><button class="icon-button" type="button" data-close="booking-dialog" aria-label="關閉">×</button></div>
         <label class="booking-search"><span aria-hidden="true">⌕</span><input id="booking-search" type="search" placeholder="搜尋導師 / 學生 / 課程..." aria-label="搜尋導師、學生或課程"></label>
-        <fieldset class="booking-pick"><legend>請選擇導師</legend><div id="booking-tutors" class="booking-chips"></div><p class="booking-help">可選多位導師共同授課。</p></fieldset>
-        <fieldset class="booking-pick"><legend>小組課堂</legend><div id="booking-courses" class="booking-chips"></div></fieldset>
-        <label class="booking-pool-field">課堂泳池<select id="booking-pool" aria-label="課堂泳池"></select></label>
-        <fieldset class="booking-pick"><legend>請選擇學生</legend><div id="booking-students" class="booking-chips"></div></fieldset>
+        <section class="booking-groups-section"><div class="student-section-heading"><div><h3>小組班別</h3><p>同一時段最多五班；每班選一位不同導師，再選可任教課程及已報讀的學生。</p></div><button class="mini-button" type="button" data-action="booking-add-group" id="booking-add-group">新增班別</button></div><div id="booking-groups" class="booking-groups"></div></section>
         <section class="booking-calendar" aria-label="選擇課堂日期"><div class="booking-month-head"><button type="button" data-action="booking-month" data-delta="-1" aria-label="上一個月">‹</button><strong id="booking-month-label"></strong><button type="button" data-action="booking-month" data-delta="1" aria-label="下一個月">›</button></div><div class="booking-weekdays" aria-hidden="true"><span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span></div><div id="booking-calendar-days" class="booking-calendar-days"></div></section>
         <div class="booking-selected-heading"><strong id="booking-selected-count">已選日期 (0)</strong><button type="button" data-action="booking-clear-dates">清除所有日期</button></div>
         <div id="booking-selected-dates" class="booking-selected-dates"></div>
@@ -227,11 +224,11 @@
           <label class="student-floating tutor-floating"><input name="phone" type="tel" autocomplete="tel" placeholder=" " /><span>導師電話</span></label>
           <fieldset class="tutor-course-field"><legend>可負責課程</legend><div id="tutor-course-options" class="tutor-course-options"></div></fieldset>
           <label class="student-floating tutor-floating tutor-hourly-field"><input name="hourlyRate" type="number" min="0" max="99999" step="0.01" inputmode="decimal" placeholder=" " /><i class="tutor-hourly-prefix" aria-hidden="true">$</i><span>教練時薪 (HKD)</span><small class="helper-text">本月人工＝教練時薪 × 本月已完成游泳班時數。</small></label>
-          <label class="field"><span>電郵（稍後登入用）</span><input name="email" type="email" autocomplete="email" placeholder="name@example.com" /></label>
-          <label class="field"><span>密碼（接駁 Supabase 後設定）</span><input type="password" autocomplete="new-password" placeholder="目前未啟用" disabled /><small class="helper-text">現時不會建立登入帳戶或儲存密碼。</small></label>
+          <label class="field"><span>Supabase 登入電郵</span><input name="email" type="email" autocomplete="email" placeholder="name@example.com" /><small class="helper-text">相同電郵可連結多個導師身分；輸入後會要求確認。電話相同亦會另行確認。</small></label>
+          <label class="field"><span>密碼（在 Supabase 設定）</span><input type="password" autocomplete="new-password" placeholder="不在此設定" disabled /><small class="helper-text">此表單不建立登入帳戶，也不會儲存密碼。</small></label>
         </div>
         <fieldset class="tutor-availability"><legend>可授課時段（可選）</legend><p>選取導師通常可以授課的時段。</p><div id="tutor-availability-grid"></div></fieldset>
-        <fieldset class="tutor-permissions"><legend>日後導師權限</legend><p>以下設定會保存在本機作接駁準備；Supabase 接入前不會限制實際存取。</p><label><input type="checkbox" name="permission" value="read_assigned_students" /> 閱讀獲指派學員資料</label><label><input type="checkbox" name="permission" value="read_assigned_lessons" /> 閱讀獲指派課堂</label><label><input type="checkbox" name="permission" value="edit_assigned_lessons" /> 修改獲指派課堂紀錄</label><label><input type="checkbox" name="permission" value="edit_own_notes" /> 修改自己的教學筆記</label></fieldset>
+        <fieldset class="tutor-permissions"><legend>日後導師權限</legend><p>導師工作台現可查看獲編配班別的學生姓名、點名、去重工時及請假申請。以下勾選暫存本機作日後擴展，不會授予其他資料存取權。</p><label><input type="checkbox" name="permission" value="read_assigned_students" /> 閱讀獲指派學員資料</label><label><input type="checkbox" name="permission" value="read_assigned_lessons" /> 閱讀獲指派課堂</label><label><input type="checkbox" name="permission" value="edit_assigned_lessons" /> 修改獲指派課堂紀錄</label><label><input type="checkbox" name="permission" value="edit_own_notes" /> 修改自己的教學筆記</label></fieldset>
         <p id="tutor-form-error" class="form-error" role="alert"></p>
         <div class="modal-actions"><button class="button button-secondary" type="button" data-close="tutor-dialog">取消</button><button class="button button-primary" type="submit">儲存導師</button></div>
       </form>
@@ -322,7 +319,7 @@
       </form>
       <div id="auth-recovery-success" hidden>
         <h2 data-auth-text="resetTitle">重設密碼</h2>
-        <p data-auth-text="resetSent">如電郵屬於管理員帳戶，重設連結已發送。請檢查收件箱及垃圾郵件。</p>
+        <p data-auth-text="resetSent">如電郵屬於已授權帳戶，重設連結已發送。請檢查收件箱及垃圾郵件。</p>
         <div class="auth-dialog-actions"><button id="auth-recovery-close" type="button" data-auth-text="close">關閉</button></div>
       </div>
     </dialog>

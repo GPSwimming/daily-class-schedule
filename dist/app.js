@@ -58,9 +58,15 @@
     messageStudentId: null,
     messageType: "lesson",
     formHandler: null,
-    loggedIn: false
+    loggedIn: false,
+    role: "",
+    tutorPortal: null,
+    tutorSyncStatus: "",
+    tutorLeaveRequests: [],
+    tutorAttendance: []
   };
   let suppressTimelineClickUntil = 0;
+  let tutorDuplicateConfirmations = { email: "", phone: "" };
 
   for (const student of state.students) {
     const match = String(student.studentNumber || "").match(/^([KA]\d{2})(\d{4})$/);
@@ -236,6 +242,7 @@
   function saveAll() {
     localStorage.setItem(LEGACY_KEY, JSON.stringify(state.students));
     localStorage.setItem(SUITE_KEY, JSON.stringify(state.suite));
+    if (state.loggedIn && state.role === "admin") state.tutorSyncStatus = "本機資料已變更，請重新同步導師工作台。";
   }
 
   function clearLegacyRooms() {
@@ -389,6 +396,7 @@
     elements.profileAvatar.textContent = [...(settings.brandName || "G")][0].toUpperCase();
     elements.featureGrid.innerHTML = FEATURES.map(featureCardHtml).join("");
     if (!state.loggedIn) showLoggedOut();
+    else if (state.role === "tutor") renderTutorPortal();
     else if (state.currentModule) renderModule();
     else showHome();
   }
@@ -400,6 +408,7 @@
   }
 
   function showHome() {
+    if (state.role === "tutor") return renderTutorPortal();
     document.body.classList.remove("auth-logged-out");
     state.currentModule = null;
     document.body.dataset.module = "";
@@ -419,6 +428,8 @@
   }
 
   function showLoggedOut() {
+    state.role = "";
+    state.tutorPortal = null;
     document.body.classList.add("auth-logged-out");
     document.body.dataset.module = "";
     document.body.classList.remove("nav-expanded");
@@ -438,8 +449,51 @@
     elements.pageLabel.textContent = "泳堂管家";
   }
 
+  function renderTutorPortal() {
+    const portal = state.tutorPortal || {};
+    const snapshot = portal.snapshot || {};
+    const profiles = Array.isArray(snapshot.profiles) ? snapshot.profiles : [];
+    const assignments = Array.isArray(snapshot.assignments) ? snapshot.assignments : [];
+    const leaveRequests = Array.isArray(portal.leaveRequests) ? portal.leaveRequests : [];
+    document.body.classList.remove("auth-logged-out");
+    document.body.dataset.module = "tutor-portal";
+    elements.homeView.hidden = true;
+    elements.loggedOutView.hidden = true;
+    elements.moduleView.hidden = false;
+    elements.bottomNav.hidden = true;
+    elements.peopleTopActions.hidden = true;
+    elements.peopleMoreButton.hidden = true;
+    elements.locationTopActions.hidden = true;
+    elements.locationMoreButton.hidden = true;
+    elements.themeToggle.hidden = false;
+    elements.logoutButton.hidden = false;
+    elements.pageLabel.textContent = "導師工作台";
+    elements.moduleKicker.textContent = "導師帳戶";
+    elements.moduleTitle.textContent = "我的班別";
+    elements.moduleDescription.textContent = "同一登入電郵下的所有導師身分會顯示在這裏。";
+    elements.moduleActions.innerHTML = '<button class="button button-secondary" type="button" data-action="tutor-refresh">更新資料</button>';
+    elements.moduleContent.innerHTML = '<section class="panel"><div class="panel-heading"><div><h2>' + escapeHtml(portal.email || "導師") + '</h2><p>' + profiles.length + ' 個導師身分 · 本月 ' + (Number(snapshot.summary?.classes) || 0) + ' 班 · 去重工時 ' + formatHours(Number(snapshot.summary?.hours) || 0) + ' 小時</p></div></div><p class="helper-text">共享帳戶薪金待管理員確認計法；同時段只計一次實際工時。</p><div class="shared-tutor-grid">' + profiles.map((profile) => '<article class="shared-tutor-card"><h3>' + escapeHtml(profile.name) + '</h3><p>' + escapeHtml((profile.courses || []).join("、") || "未指定課程") + '</p><strong>本月 ' + (Number(profile.classes) || 0) + ' 班</strong></article>').join('') + '</div></section>' +
+      '<section class="panel"><div class="panel-heading"><div><h2>已編配課堂與點名</h2><p>只顯示獲編配學生姓名。導師只標記出席或缺席；缺席是否補堂由管理員決定。</p></div></div>' + (assignments.length ? '<div class="list-stack">' + assignments.map(tutorAssignmentHtml).join('') + '</div>' : '<p class="helper-text">暫未有已同步的課堂。</p>') + '</section>' +
+      '<section class="panel"><div class="panel-heading"><div><h2>請假申請</h2><p>提交後由管理員處理。</p></div></div><form id="tutor-leave-form" class="tutor-leave-form"><label class="field"><span>開始日期</span><input name="startDate" type="date" required></label><label class="field"><span>結束日期</span><input name="endDate" type="date" required></label><label class="field tutor-leave-reason"><span>原因</span><textarea name="reason" maxlength="500" required></textarea></label><button class="button button-primary" type="submit">提交請假申請</button><p id="tutor-leave-error" class="form-error" role="alert"></p></form>' + (leaveRequests.length ? '<div class="list-stack tutor-leave-history">' + leaveRequests.map((item) => '<article class="list-row"><div class="row-main"><strong>' + escapeHtml(item.start_date + ' 至 ' + item.end_date) + '</strong><span>' + escapeHtml(item.reason) + '</span><span>' + escapeHtml(tutorLeaveStatus(item.status)) + '</span></div></article>').join('') + '</div>' : '<p class="helper-text">暫未有請假申請。</p>') + '</section>';
+  }
+
+  function tutorAssignmentHtml(item) {
+    const recorded = Array.isArray(state.tutorPortal?.attendance) ? state.tutorPortal.attendance : [];
+    const students = Array.isArray(item.students) ? item.students : [];
+    return '<article class="tutor-assignment"><div><strong>' + escapeHtml(item.date + ' ' + item.start + '–' + item.end) + '</strong><p>' + escapeHtml([item.courseName, item.ageGroup, item.classSize, (item.tutors || []).join("、"), item.location || "未指定地點"].filter(Boolean).join(" · ")) + '</p></div>' +
+      (students.length ? '<div class="tutor-roll">' + students.map((student) => {
+        const mark = recorded.find((row) => row.lesson_id === item.id && row.student_id === student.id);
+        const locked = Boolean(mark?.decision || mark?.applied_at);
+        return '<div class="tutor-roll-row"><strong>' + escapeHtml(student.name) + '</strong><span>' + (mark ? escapeHtml(mark.status === "present" ? "已標記出席" : "已標記缺席，待管理員決定") : "未點名") + '</span><div class="row-actions"><button class="mini-button" type="button" data-action="tutor-attendance" data-lesson-id="' + escapeHtml(item.id) + '" data-student-id="' + escapeHtml(student.id) + '" data-value="present" ' + (item.date > todayYmd() || locked ? 'disabled' : '') + '>出席</button><button class="mini-button" type="button" data-action="tutor-attendance" data-lesson-id="' + escapeHtml(item.id) + '" data-student-id="' + escapeHtml(student.id) + '" data-value="absent" ' + (item.date > todayYmd() || locked ? 'disabled' : '') + '>缺席</button></div></div>';
+      }).join('') + '</div>' : '<p class="helper-text">這班暫未編配學生。</p>') + '</article>';
+  }
+
+  function tutorLeaveStatus(status) {
+    return status === "approved" ? "已批准" : status === "rejected" ? "不獲批准" : "待處理";
+  }
+
   function openModule(id) {
-    if (!state.loggedIn) return;
+    if (!state.loggedIn || state.role !== "admin") return;
     document.body.classList.remove("auth-logged-out");
     if (!moduleMeta[id]) return;
     state.currentModule = id;
@@ -448,8 +502,27 @@
     elements.moduleView.hidden = false;
     elements.bottomNav.hidden = false;
     renderModule();
+    if (id === "accounts") { refreshTutorLeaveRequests(); refreshTutorAttendance(); }
     setActiveNav(id);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function refreshTutorLeaveRequests() {
+    if (state.role !== "admin") return;
+    try {
+      const result = await window.AdminAuth.getTutorLeaveRequests();
+      state.tutorLeaveRequests = Array.isArray(result.leaveRequests) ? result.leaveRequests : [];
+      if (state.currentModule === "accounts") renderModule();
+    } catch { /* The administrator can still use local accounts while the tutor service is unavailable. */ }
+  }
+
+  async function refreshTutorAttendance() {
+    if (state.role !== "admin") return;
+    try {
+      const result = await window.AdminAuth.getAttendance();
+      state.tutorAttendance = Array.isArray(result.attendance) ? result.attendance : [];
+      if (state.currentModule === "accounts") renderModule();
+    } catch { /* Keep local records usable when the cloud service is unavailable. */ }
   }
 
   function setActiveNav(id) {
@@ -590,6 +663,27 @@
       scheduleRowsHtml(lessons) + '</section>').join('') + '</div>';
   }
 
+  function timelineLayout(entries) {
+    const sorted = entries.map((entry) => {
+      const start = timeMinutes(entry.time || "00:00");
+      const duration = entry.booking ? timeMinutes(entry.booking.end) - start : Number(courseForStudent(entry.student)?.duration) || 60;
+      return { entry, start, end: start + Math.max(30, duration), lane: 0, lanes: 1 };
+    }).sort((a, b) => a.start - b.start || a.end - b.end);
+    let cluster = [], clusterEnd = -1, laneEnds = [];
+    const finish = () => { for (const item of cluster) item.lanes = laneEnds.length; cluster = []; laneEnds = []; };
+    for (const item of sorted) {
+      if (cluster.length && item.start >= clusterEnd) { finish(); clusterEnd = -1; }
+      let lane = laneEnds.findIndex((end) => end <= item.start);
+      if (lane < 0) lane = laneEnds.length;
+      laneEnds[lane] = item.end;
+      item.lane = lane;
+      cluster.push(item);
+      clusterEnd = Math.max(clusterEnd, item.end);
+    }
+    if (cluster.length) finish();
+    return sorted;
+  }
+
   function timelineGridHtml(selected, mode) {
     const options = state.suite.bookingOptions;
     const days = mode === "day" ? [selected] : Array.from({ length: 7 }, (_, index) => addDays(mondayOf(selected), index));
@@ -612,7 +706,7 @@
     }).join("");
     const columns = days.map((date) => {
       const ymd = formatYmd(date);
-      const events = lessonsForDate(ymd).map((entry) => {
+      const events = timelineLayout(lessonsForDate(ymd)).map(({ entry, lane, lanes }) => {
         const student = entry.student;
         const booking = entry.booking;
         const time = entry.time || "00:00";
@@ -624,7 +718,8 @@
         const top = Math.max(0, offset) / totalHours * 100;
         const height = Math.min(duration, totalHours - Math.max(0, offset)) / totalHours * 100;
         const title = booking ? booking.studentIds.map((id) => findById(state.students, id)?.name).filter(Boolean).join("、") : student.name;
-        return '<button type="button" class="timeline-event" style="top:' + top + '%;height:' + height + '%" data-action="' + (booking ? 'edit-booking' : 'reschedule') + '" data-id="' + (booking ? booking.id : student.id) + '" title="' + escapeHtml(title + " " + time) + '"><strong>' + escapeHtml(title) + '</strong><span>' + escapeHtml(time) + '</span></button>';
+        const tutorNames = booking ? booking.tutorIds.map((id) => findById(state.suite.accounts, id)?.name).filter(Boolean).join("、") : findById(state.suite.accounts, student.tutorId)?.name || "";
+        return '<button type="button" class="timeline-event timeline-lane-' + (lane % 5) + '" style="top:' + top + '%;height:' + height + '%;left:calc(' + lane + ' * 100% / ' + lanes + ' + 2px);width:calc(100% / ' + lanes + ' - 4px)" data-action="' + (booking ? 'edit-booking' : 'reschedule') + '" data-id="' + escapeHtml(booking ? booking.id : student.id) + '" title="' + escapeHtml(title + ' · ' + tutorNames + ' · ' + (booking?.courseName || course?.name || '') + ' · ' + time) + '"><strong>' + escapeHtml(title || booking?.courseName || "課堂") + '</strong><span>' + escapeHtml(time) + '</span></button>';
       }).join("");
       return '<div class="timeline-day-column' + (ymd === todayYmd() ? " is-today" : "") + '" data-date="' + ymd + '">' + events + '</div>';
     }).join("");
@@ -849,7 +944,7 @@
       '<div class="people-tools"><label class="people-search"><span aria-hidden="true">⌕</span><input id="people-search" type="search" placeholder="' + (state.peopleTab === "tutors" ? '搜尋導師' : '搜尋學生') + '" value="' + escapeHtml(state.peopleSearch) + '" aria-label="搜尋個人資訊"></label>' +
       '<button class="people-round-button' + (state.peopleTab === "tutors" ? ' is-active' : '') + '" type="button" data-action="people-tab" data-value="' + (state.peopleTab === "tutors" ? 'students' : 'tutors') + '">♟ <span>' + (state.peopleTab === "tutors" ? '學員' : '導師') + '</span></button>' +
       (state.peopleTab === "students" ? '<button class="people-round-button people-table-toggle' + (state.peopleLayout === "table" ? ' is-active' : '') + '" type="button" data-action="people-layout">▦ <span>' + (state.peopleLayout === "table" ? '卡片' : '表格') + '</span></button>' : '') + '</div>' +
-      '<div id="people-results">' + peopleResultsHtml() + '</div><p class="people-footnote">本機資料只保存在此瀏覽器；導師登入及權限會在接駁 Supabase 後生效。</p></section>';
+      '<div id="people-results">' + peopleResultsHtml() + '</div><p class="people-footnote">導師檔案先保存在此瀏覽器。要讓導師登入查看班別，須在 Supabase 建立帳戶並於「帳戶管理」同步導師資料。</p></section>';
   }
 
   function peopleActionIconHtml(action) {
@@ -968,25 +1063,106 @@
     return '<div class="people-tutor-list">' + tutors.map((item) => {
       const courseNames = tutorCourseNames(item);
       const payroll = tutorMonthlyPayroll(item);
-      return '<article class="people-mobile-card"><div class="people-person-head"><span class="people-avatar">' + escapeHtml([...item.name][0] || "?") + '</span><div><h2>' + escapeHtml(item.name) + '</h2><p>' + escapeHtml(item.phone || item.email || "未有聯絡資料") + '</p><small>' + escapeHtml(courseNames.join("、") || "未指定課程") + '</small></div><button class="people-edit-button" type="button" data-action="edit-account" data-id="' + escapeHtml(item.id) + '" aria-label="編輯導師 ' + escapeHtml(item.name) + '">✎</button></div><span class="people-status">登入未啟用</span>' +
-        '<div class="tutor-payroll"><span>本月 ' + payroll.lessons + ' 堂 · ' + formatHours(payroll.hours) + ' 小時</span><strong>預計人工 ' + formatMoney(payroll.amount) + '</strong></div></article>';
+      const shared = sharedTutorAccounts().some((group) => group.tutors.some((tutor) => tutor.id === item.id));
+      const month = shared ? sharedTutorMonth([item]) : null;
+      return '<article class="people-mobile-card"><div class="people-person-head"><span class="people-avatar">' + escapeHtml([...item.name][0] || "?") + '</span><div><h2>' + escapeHtml(item.name) + '</h2><p>' + escapeHtml(item.phone || item.email || "未有聯絡資料") + '</p><small>' + escapeHtml(courseNames.join("、") || "未指定課程") + '</small></div><button class="people-edit-button" type="button" data-action="edit-account" data-id="' + escapeHtml(item.id) + '" aria-label="編輯導師 ' + escapeHtml(item.name) + '">✎</button></div><span class="people-status">登入需同步</span>' +
+        '<div class="tutor-payroll"><span>本月 ' + (shared ? month.classes : payroll.lessons) + ' 堂 · ' + formatHours(shared ? month.hours : payroll.hours) + ' 小時</span><strong>' + (shared ? '共享薪金待確認' : '預計人工 ' + formatMoney(payroll.amount)) + '</strong></div></article>';
     }).join('') + '</div>';
   }
 
   function tutorMonthlyPayroll(tutor, month = todayYmd().slice(0, 7)) {
-    let minutes = 0;
-    let lessons = 0;
+    const { classes, hours } = sharedTutorMonth([tutor], month);
+    return { lessons: classes, hours, amount: hours * (Number(tutor.hourlyRate) || 0) };
+  }
+
+  function sharedTutorAccounts() {
+    const groups = new Map();
+    for (const tutor of state.suite.accounts.filter((item) => item.role === "tutor")) {
+      const email = String(tutor.email || "").trim().toLowerCase();
+      if (!email) continue;
+      if (!groups.has(email)) groups.set(email, []);
+      groups.get(email).push(tutor);
+    }
+    return [...groups].filter(([, tutors]) => tutors.length > 1).map(([email, tutors]) => ({ email, tutors }));
+  }
+
+  function sharedTutorMonth(tutors, month = todayYmd().slice(0, 7)) {
+    const tutorIds = new Set(tutors.map((tutor) => tutor.id));
+    const classes = new Set();
+    const intervals = new Map();
+    const classesByTutor = new Map(tutors.map((tutor) => [tutor.id, new Set()]));
     for (const student of state.students) {
-      const course = courseForStudent(student);
       for (const record of student.history || []) {
         if (record.type !== "completed" || !String(record.lessonDate || "").startsWith(month)) continue;
-        if (Array.isArray(record.tutorIds) ? !record.tutorIds.includes(tutor.id) : (record.tutorId || student.tutorId || "") !== tutor.id) continue;
-        minutes += Number(record.durationMinutes) || Number(course && course.duration) || 60;
-        lessons += 1;
+        const assignedIds = Array.isArray(record.tutorIds) ? record.tutorIds : [record.tutorId || student.tutorId || ""];
+        const matchedIds = assignedIds.filter((id) => tutorIds.has(id));
+        if (!matchedIds.length) continue;
+        const course = findById(state.suite.courses, record.courseId || student.courseId);
+        const start = validTime(record.lessonTime) ? record.lessonTime : validTime(student.time) ? student.time : "";
+        const duration = Number(record.durationMinutes) || Number(course?.duration) || 60;
+        const classKey = record.bookingId || [record.lessonDate, start, duration, record.courseId || student.courseId || "", record.roomId || student.roomId || "", [...assignedIds].sort().join(",")].join("|");
+        classes.add(classKey);
+        matchedIds.forEach((id) => classesByTutor.get(id).add(classKey));
+        if (!start) continue;
+        const date = record.lessonDate;
+        if (!intervals.has(date)) intervals.set(date, new Map());
+        intervals.get(date).set(classKey, [timeMinutes(start), timeMinutes(start) + duration]);
       }
     }
-    const hours = minutes / 60;
-    return { lessons, hours, amount: hours * (Number(tutor.hourlyRate) || 0) };
+    let minutes = 0;
+    for (const day of intervals.values()) {
+      const ordered = [...day.values()].sort((a, b) => a[0] - b[0]);
+      let end = -1;
+      for (const [start, stop] of ordered) {
+        minutes += Math.max(0, stop - Math.max(start, end));
+        end = Math.max(end, stop);
+      }
+    }
+    return { classes: classes.size, hours: minutes / 60, classesByTutor };
+  }
+
+  function buildTutorSnapshots() {
+    const groups = new Map();
+    for (const tutor of state.suite.accounts.filter((item) => item.role === "tutor")) {
+      const email = String(tutor.email || "").trim().toLowerCase();
+      if (!email) continue;
+      if (!groups.has(email)) groups.set(email, []);
+      groups.get(email).push(tutor);
+    }
+    const today = todayYmd();
+    return [...groups].map(([email, tutors]) => {
+      const tutorIds = new Set(tutors.map((tutor) => tutor.id));
+      const tutorNames = new Map(tutors.map((tutor) => [tutor.id, tutor.name]));
+      const month = sharedTutorMonth(tutors);
+      const assignments = new Map();
+      for (const booking of state.suite.lessonBookings) {
+        if (booking.date < today) continue;
+        const assigned = (booking.tutorIds || []).filter((id) => tutorIds.has(id));
+        if (!assigned.length) continue;
+        assignments.set(booking.id, { id: booking.id, date: booking.date, start: booking.start, end: booking.end,
+          courseName: booking.courseName || "一般課堂", ageGroup: booking.ageGroup || "", classSize: booking.classSize || "",
+          location: locationNameForId(booking.roomId, booking.roomName), tutors: assigned.map((id) => tutorNames.get(id)),
+          students: (booking.studentIds || []).map((id) => findById(state.students, id)).filter(Boolean).map((student) => ({ id: student.id, name: student.name })) });
+      }
+      for (const student of state.students) {
+        if (student.bookingManaged || !tutorIds.has(student.tutorId) || !student.nextDate || student.nextDate < today) continue;
+        const course = courseForStudent(student);
+        const start = student.nextTime || student.time;
+        const end = minutesText(timeMinutes(start) + (Number(course?.duration) || 60));
+        const location = locationNameForId(student.roomId, student.roomName);
+        const key = [student.nextDate, start, end, course?.name || "", course?.ageGroup || "", course?.classSize || "", location, student.tutorId].join("|");
+        const existing = assignments.get(key);
+        if (existing) existing.students.push({ id: student.id, name: student.name });
+        else assignments.set(key, { id: "rec:" + key, date: student.nextDate, start, end, courseName: course?.name || "一般課堂",
+          ageGroup: course?.ageGroup || "", classSize: course?.classSize || "", location,
+          tutors: [tutorNames.get(student.tutorId)], students: [{ id: student.id, name: student.name }] });
+      }
+      return { email, snapshot: {
+        month: today.slice(0, 7), summary: { classes: month.classes, hours: month.hours },
+        profiles: tutors.map((tutor) => ({ id: tutor.id, name: tutor.name, courses: tutorCourseNames(tutor), classes: month.classesByTutor.get(tutor.id).size })),
+        assignments: [...assignments.values()].sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start)).slice(0, 100)
+      } };
+    });
   }
 
   function formatHours(value) {
@@ -1100,25 +1276,107 @@
 
   function renderAccounts() {
     const tutors = state.suite.accounts.filter((item) => item.role === "tutor");
+    const shared = sharedTutorAccounts();
+    const sharedIds = new Set(shared.flatMap((group) => group.tutors.map((tutor) => tutor.id)));
     const payrolls = tutors.map((tutor) => ({ tutor, ...tutorMonthlyPayroll(tutor) }));
-    const totalHours = payrolls.reduce((sum, item) => sum + item.hours, 0);
-    const totalLessons = payrolls.reduce((sum, item) => sum + item.lessons, 0);
-    const totalPayroll = payrolls.reduce((sum, item) => sum + item.amount, 0);
+    const accountMonths = [...shared.map((group) => sharedTutorMonth(group.tutors)), ...tutors.filter((tutor) => !sharedIds.has(tutor.id)).map((tutor) => sharedTutorMonth([tutor]))];
+    const totalHours = accountMonths.reduce((sum, item) => sum + item.hours, 0);
+    const totalLessons = accountMonths.reduce((sum, item) => sum + item.classes, 0);
+    const totalPayroll = payrolls.filter(({ tutor }) => !sharedIds.has(tutor.id)).reduce((sum, item) => sum + item.amount, 0);
     const preservedParents = state.suite.accounts.filter((item) => item.role === "parent").length;
     return statsHtml([
       { label: "導師總數", value: tutors.length, unit: "位" },
       { label: "本月完成課堂", value: totalLessons, unit: "堂" },
       { label: "本月授課時數", value: formatHours(totalHours), unit: "小時" },
-      { label: "本月預計人工", value: formatMoney(totalPayroll) }
-    ]) + '<section class="panel"><div class="panel-heading"><div><h2>導師資料及人工</h2><p>本月人工＝教練時薪 × 本月已完成游泳班時數</p></div></div>' +
+      { label: shared.length ? "共享帳戶薪金" : "本月預計人工", value: shared.length ? "待確認" : formatMoney(totalPayroll) }
+    ]) + '<section class="panel"><div class="panel-heading"><div><h2>導師雲端工作台</h2><p>只同步導師身分、班別、工時，以及獲編配學生的姓名；不包含電話或收款紀錄。</p></div><button class="button button-secondary" type="button" data-action="sync-tutor-portals">同步導師資料</button></div><p class="helper-text" role="status">' + escapeHtml(state.tutorSyncStatus || "導師資料以此瀏覽器為準。每次更改導師或課堂後，按「同步導師資料」，導師登入後才能看到最新內容。") + '</p></section>' + renderAdminAttendance() + (state.tutorLeaveRequests.length ? '<section class="panel"><div class="panel-heading"><div><h2>導師請假申請</h2></div></div><div class="list-stack">' + state.tutorLeaveRequests.map((item) => '<article class="list-row"><div class="row-main"><strong>' + escapeHtml(item.tutor_email + ' · ' + item.start_date + ' 至 ' + item.end_date) + '</strong><span>' + escapeHtml(item.reason) + '</span><span>' + escapeHtml(tutorLeaveStatus(item.status)) + '</span></div>' + (item.status === 'pending' ? '<div class="row-actions"><button class="mini-button" type="button" data-action="tutor-leave-status" data-id="' + escapeHtml(item.id) + '" data-value="approved">批准</button><button class="mini-button danger" type="button" data-action="tutor-leave-status" data-id="' + escapeHtml(item.id) + '" data-value="rejected">拒絕</button></div>' : '') + '</article>').join('') + '</div></section>' : '') + (shared.length ? '<section class="panel"><div class="panel-heading"><div><h2>共享登入電郵彙總</h2><p>同一電郵下的導師身分分開編班；本月工時計算會扣除同時段重疊。</p></div></div><div class="shared-tutor-grid">' + shared.map(({ email, tutors }) => {
+      const summary = sharedTutorMonth(tutors);
+      const courses = [...new Set(tutors.flatMap(tutorCourseNames))];
+      return '<article class="shared-tutor-card"><h3>' + escapeHtml(email) + '</h3><p>' + tutors.length + ' 個導師身分 · ' + courses.length + ' 類可負責課程</p><div class="shared-tutor-metrics"><strong>本月 ' + summary.classes + ' 班</strong><strong>去重工時 ' + formatHours(summary.hours) + ' 小時</strong><span>共享帳戶薪金待確認</span></div><ul>' + tutors.map((tutor) => '<li><b>' + escapeHtml(tutor.name) + '</b><span>' + escapeHtml(tutorCourseNames(tutor).join("、") || "未指定課程") + ' · 本月 ' + summary.classesByTutor.get(tutor.id).size + ' 班</span></li>').join('') + '</ul></article>';
+    }).join('') + '</div></section>' : '') + '<section class="panel"><div class="panel-heading"><div><h2>導師資料及人工</h2><p>本月人工＝教練時薪 × 本月已完成游泳班時數；共享帳戶需另行確認薪酬規則</p></div></div>' +
       (payrolls.length ? '<div class="list-stack">' + payrolls.map(({ tutor, lessons, hours, amount }) => {
         const courseNames = tutorCourseNames(tutor);
+        const isShared = sharedIds.has(tutor.id);
+        const month = isShared ? sharedTutorMonth([tutor]) : null;
         return '<article class="list-row tutor-account-row"><div class="row-icon">🧑‍🏫</div><div class="row-main"><strong>' + escapeHtml(tutor.name) + '</strong><span>' +
-          escapeHtml(courseNames.join("、") || "未指定課程") + ' · 時薪 ' + formatMoney(tutor.hourlyRate || 0) + '</span><span>本月 ' + lessons + ' 堂 · ' + formatHours(hours) +
-          ' 小時 · 預計人工 ' + formatMoney(amount) + '</span></div><div class="row-actions"><button class="mini-button" type="button" data-action="edit-account" data-id="' + tutor.id +
+          escapeHtml(courseNames.join("、") || "未指定課程") + ' · 時薪 ' + formatMoney(tutor.hourlyRate || 0) + '</span><span>本月 ' + (isShared ? month.classes : lessons) + ' 堂 · ' + formatHours(isShared ? month.hours : hours) +
+          ' 小時 · ' + (isShared ? '共享薪金待確認' : '預計人工 ' + formatMoney(amount)) + '</span></div><div class="row-actions"><button class="mini-button" type="button" data-action="edit-account" data-id="' + tutor.id +
           '">編輯</button><button class="mini-button danger" type="button" data-action="delete-account" data-id="' + tutor.id + '">刪除</button></div></article>';
       }).join("") + "</div>" : emptyHtml("🧑‍🏫", "未有導師", "按「新增導師」建立第一位導師。")) +
       (preservedParents ? '<p class="helper-text accounts-preserved-note">已有 ' + preservedParents + ' 個家長帳戶資料獲保留，但不會出現在新增導師表單。</p>' : '') + "</section>";
+  }
+
+  function attendanceLessonDetails(item) {
+    const booking = findById(state.suite.lessonBookings, item.lesson_id);
+    if (booking) return { booking, date: booking.date, start: booking.start, courseName: booking.courseName || "一般課堂" };
+    if (item.lesson_id.startsWith("rec:")) {
+      const [date, start, , courseName] = item.lesson_id.slice(4).split("|");
+      return { booking: null, date, start, courseName };
+    }
+    return null;
+  }
+
+  function renderAdminAttendance() {
+    return '<section class="panel"><div class="panel-heading"><div><h2>導師點名待處理</h2><p>導師只記錄出席或缺席。管理員決定缺席原因及補堂方式，再套用至本機學生紀錄。</p></div><button class="button button-secondary" type="button" data-action="refresh-attendance">更新點名</button></div>' +
+      (state.tutorAttendance.length ? '<div class="list-stack">' + state.tutorAttendance.map((item) => {
+        const student = findById(state.students, item.student_id);
+        const lesson = attendanceLessonDetails(item);
+        const ready = Boolean(student && lesson);
+        return '<article class="attendance-review"><div><strong>' + escapeHtml(student?.name || "學生已不在本機資料") + '</strong><p>' + escapeHtml((lesson?.date || "課堂已不在本機資料") + ' ' + (lesson?.start || "") + ' · ' + (lesson?.courseName || "") + ' · ' + item.tutor_email) + '</p><p>' + escapeHtml(item.status === "present" ? "導師標記：出席" : "導師標記：缺席") + (item.decision ? ' · 管理員決定：' + escapeHtml(item.decision === "makeup" ? "補堂 " + item.makeup_date : "不補堂") : " · 待管理員決定") + '</p></div>' +
+          (item.status === "absent" && !item.decision ? '<div class="attendance-decision"><input name="reason" type="text" maxlength="500" placeholder="缺席原因（管理員填寫）" aria-label="缺席原因"><input name="makeupDate" type="date" value="' + escapeHtml(lesson?.date ? formatYmd(addDays(parseDate(lesson.date), 7)) : "") + '" aria-label="補堂日期"><div class="row-actions"><button class="mini-button" type="button" data-action="attendance-decision" data-id="' + escapeHtml(item.id) + '" data-value="makeup">指定日期補堂</button><button class="mini-button" type="button" data-action="attendance-next-week" data-id="' + escapeHtml(item.id) + '">順延下一星期</button><button class="mini-button danger" type="button" data-action="attendance-decision" data-id="' + escapeHtml(item.id) + '" data-value="no_makeup">缺席不補堂</button></div></div>' : '') +
+          (item.status === "present" || item.decision ? '<button class="mini-button" type="button" data-action="attendance-apply" data-id="' + escapeHtml(item.id) + '" ' + (ready ? '' : 'disabled') + '>套用到學生紀錄</button>' : '') + (!ready ? '<p class="form-error">本機找不到對應學生或課堂，請先核對資料。</p>' : '') + '</article>';
+      }).join('') + '</div>' : '<p class="helper-text">暫未有待處理的點名。</p>') + '</section>';
+  }
+
+  async function applyAttendanceRecord(item) {
+    const student = findById(state.students, item.student_id);
+    if (!student) throw new Error("本機找不到學生，請先核對資料。");
+    if (student.history?.some((entry) => entry.attendanceId === item.id)) {
+      await window.AdminAuth.markAttendanceApplied(item.id);
+      await refreshTutorAttendance();
+      return;
+    }
+    const lesson = attendanceLessonDetails(item);
+    if (!lesson || (item.status === "absent" && !item.decision)) throw new Error("本機課堂未能核對，或缺席尚待管理員決定。");
+    if (lesson.booking && !lesson.booking.studentIds.includes(student.id)) throw new Error("學生已不在這筆課堂預約，請先核對。");
+    if (!lesson.booking && (student.bookingManaged || student.nextDate !== lesson.date)) throw new Error("學生下一堂日期已更改，請先核對。");
+    if (item.decision === "makeup" && (!validDate(item.makeup_date) || item.makeup_date <= lesson.date)) throw new Error("補堂日期須晚於原課堂日期。");
+    const deduct = item.status === "present" || item.decision === "no_makeup";
+    if (deduct && student.remaining <= 0) throw new Error("學生堂數已用完，請先記錄收款。");
+    const originalStudent = JSON.parse(JSON.stringify(student));
+    const originalBookings = JSON.parse(JSON.stringify(state.suite.lessonBookings));
+    try {
+      const booking = lesson.booking;
+      const entry = { id: makeId(), attendanceId: item.id, type: deduct ? "completed" : "rescheduled",
+        attendanceStatus: item.status, absenceDecision: item.decision || "", absenceReason: item.absence_reason || "",
+        lessonDate: lesson.date, lessonTime: lesson.start, tutorId: booking?.tutorIds?.[0] || student.tutorId || "",
+        tutorIds: booking?.tutorIds || (student.tutorId ? [student.tutorId] : []), courseId: student.courseId || "",
+        durationMinutes: booking ? timeMinutes(booking.end) - timeMinutes(booking.start) : Number(courseForStudent(student)?.duration) || 60,
+        roomId: booking?.roomId || student.roomId || "", roomName: booking?.roomName || student.roomName || "",
+        bookingId: booking?.id || "", makeupDate: item.makeup_date || "", createdAt: new Date().toISOString() };
+      if (deduct) student.remaining -= 1;
+      student.history.unshift(entry);
+      student.history = student.history.slice(0, 100);
+      if (booking) {
+        state.suite.lessonBookings = state.suite.lessonBookings.map((row) => row.id === booking.id ?
+          { ...row, studentIds: row.studentIds.filter((id) => id !== student.id) } : row).filter((row) => row.studentIds.length);
+        if (item.decision === "makeup") state.suite.lessonBookings.push({ ...booking, id: makeId(), date: item.makeup_date, studentIds: [student.id] });
+        syncBookingStudent(student.id);
+      } else {
+        student.nextDate = item.decision === "makeup" ? item.makeup_date : nextRecurringAfter(lesson.date, student.weekday);
+        student.nextTime = item.decision === "makeup" ? lesson.start : student.time;
+      }
+      saveAll();
+    } catch (error) {
+      Object.keys(student).forEach((key) => { if (!(key in originalStudent)) delete student[key]; });
+      Object.assign(student, originalStudent);
+      state.suite.lessonBookings = originalBookings;
+      try { saveAll(); } catch { /* The original in-memory record remains available for export. */ }
+      throw error;
+    }
+    await window.AdminAuth.markAttendanceApplied(item.id);
+    await refreshTutorAttendance();
+    showToast(item.status === "present" ? "已記錄出席並扣一堂" : item.decision === "makeup" ? "已安排補堂，暫不扣堂" : "已記錄缺席不補堂並扣一堂");
   }
 
   function renderProducts() {
@@ -1986,25 +2244,43 @@
     elements.timePickerDialog.close();
   }
 
-  function bookingStudentsForCourse(courseName) {
+  function bookingStudentsForCourse(courseName, ageGroup = "", classSize = "") {
     return state.students.filter((student) => student.status !== "inactive" && student.enrollmentStatus !== "pending" &&
-      ((student.enrollments || []).some((item) => sameCourseValue(item.courseName, courseName)) ||
-        (!(student.enrollments || []).length && sameCourseValue(courseForStudent(student)?.name, courseName))));
+      ((student.enrollments || []).some((item) => sameCourseValue(item.courseName, courseName) &&
+        (!ageGroup || sameCourseValue(item.ageGroup, ageGroup) || sameCourseValue(item.pricingAgeGroup, ageGroup)) &&
+        (!classSize || sameCourseValue(item.classSize, classSize))) ||
+        (!(student.enrollments || []).length && sameCourseValue(courseForStudent(student)?.name, courseName) &&
+          (!ageGroup || sameCourseValue(courseForStudent(student)?.ageGroup, ageGroup) || sameCourseValue(student.ageGroup, ageGroup)) &&
+          (!classSize || sameCourseValue(courseForStudent(student)?.classSize, classSize)))));
   }
 
   function renderBookingChoices() {
     const draft = state.bookingDraft;
     const search = draft.search.trim().toLocaleLowerCase();
     const matches = (name) => !search || String(name || "").toLocaleLowerCase().includes(search);
-    const chips = (rows, selected, action) => rows.map((item) => '<button class="booking-chip' + (selected.has(item.value) ? ' is-selected' : '') + '" type="button" data-action="' + action + '" data-value="' + escapeHtml(item.value) + '" aria-pressed="' + selected.has(item.value) + '">' + escapeHtml(item.label) + '</button>').join('') || '<p class="booking-empty">未有符合的項目。</p>';
-    const tutors = state.suite.accounts.filter((item) => item.role === "tutor" && matches(item.name)).map((item) => ({ value: item.id, label: item.name }));
-    document.querySelector("#booking-tutors").innerHTML = chips(tutors, draft.tutorIds, "booking-tutor");
-    const courses = uniqueCourseValues(displayCourses(), "name").filter(matches).map((name) => ({ value: name, label: name }));
-    document.querySelector("#booking-courses").innerHTML = chips(courses, new Set(draft.courseName ? [draft.courseName] : []), "booking-course");
-    const students = draft.courseName ? bookingStudentsForCourse(draft.courseName).filter((item) => matches(item.name)).map((item) => ({ value: item.id, label: item.name })) : [];
-    document.querySelector("#booking-students").innerHTML = draft.courseName ? chips(students, draft.studentIds, "booking-student") : '<p class="booking-empty">請先選擇課程。</p>';
-    const pools = locationSelectOptions().filter((item) => !search || matches(item.label) || item.value === draft.roomId);
-    document.querySelector("#booking-pool").innerHTML = '<option value="">未指定課堂泳池</option>' + pools.map((item) => '<option value="' + escapeHtml(item.value) + '"' + (item.value === draft.roomId ? ' selected' : '') + '>' + escapeHtml(item.label) + '</option>').join('');
+    const chips = (rows, selected, action, index) => rows.map((item) => '<button class="booking-chip' + (selected.has(item.value) ? ' is-selected' : '') + '" type="button" data-action="' + action + '" data-group="' + index + '" data-value="' + escapeHtml(item.value) + '" aria-pressed="' + selected.has(item.value) + '">' + escapeHtml(item.label) + '</button>').join('') || '<p class="booking-empty">未有符合的項目。</p>';
+    document.querySelector("#booking-add-group").disabled = draft.groups.length >= 5;
+    document.querySelector("#booking-groups").innerHTML = draft.groups.map((group, index) => {
+      const usedTutors = new Set(draft.groups.filter((_, other) => other !== index).flatMap((item) => [...item.tutorIds]));
+      const tutors = state.suite.accounts.filter((item) => item.role === "tutor" && !usedTutors.has(item.id) && (matches(item.name) || group.tutorIds.has(item.id)))
+        .map((item) => ({ value: item.id, label: item.name }));
+      const allowedIds = new Set([...group.tutorIds].flatMap((id) => findById(state.suite.accounts, id)?.courseIds || []));
+      const courses = displayCourses().filter((item) => item.active !== false && allowedIds.has(item.id));
+      const chosen = courses.find((item) => item.id === group.courseId);
+      const preserved = !chosen && group.courseName ? { id: group.courseId || "legacy-course", name: "既有預約：" + group.courseName, ageGroup: group.ageGroup, classSize: group.classSize } : null;
+      const courseRows = (preserved ? courses.concat(preserved) : courses).filter((item) => matches(item.name) || group.courseId === item.id)
+        .map((item) => ({ value: item.id, label: [item.name, item.ageGroup, item.classSize].filter(Boolean).join(" · ") }));
+      const eligibleStudents = group.courseName ? bookingStudentsForCourse(group.courseName, group.ageGroup, group.classSize) : [];
+      const selectedLegacy = [...group.studentIds].map((id) => findById(state.students, id)).filter((item) => item && !eligibleStudents.some((other) => other.id === item.id));
+      const students = eligibleStudents.concat(selectedLegacy).filter((item) => matches(item.name) || group.studentIds.has(item.id))
+        .map((item) => ({ value: item.id, label: item.name }));
+      const pools = locationSelectOptions();
+      return '<article class="booking-group-card"><div class="student-section-heading"><h4>課堂 ' + (index + 1) + '</h4>' + (draft.groups.length > 1 ? '<button class="mini-button danger" type="button" data-action="booking-remove-group" data-group="' + index + '">移除</button>' : '') + '</div>' +
+        '<fieldset class="booking-pick"><legend>導師</legend><div class="booking-chips">' + chips(tutors, group.tutorIds, "booking-tutor", index) + '</div></fieldset>' +
+        '<fieldset class="booking-pick"><legend>可任教課程・年齡・人數</legend><div class="booking-chips">' + (group.tutorIds.size ? chips(courseRows, new Set(group.courseId ? [group.courseId] : group.courseName ? ["legacy-course"] : []), "booking-course", index) : '<p class="booking-empty">請先選擇導師。</p>') + '</div></fieldset>' +
+        '<fieldset class="booking-pick"><legend>已報讀學生</legend><div class="booking-chips">' + (group.courseName ? chips(students, group.studentIds, "booking-student", index) : '<p class="booking-empty">請先選擇小組課堂。</p>') + '</div></fieldset>' +
+        '<label class="booking-pool-field">課堂泳池<select data-booking-pool data-group="' + index + '" aria-label="課堂 ' + (index + 1) + ' 泳池"><option value="">未指定課堂泳池</option>' + pools.map((item) => '<option value="' + escapeHtml(item.value) + '"' + (item.value === group.roomId ? ' selected' : '') + '>' + escapeHtml(item.label) + '</option>').join('') + '</select></label></article>';
+    }).join('');
   }
 
   function renderBookingCalendar() {
@@ -2031,8 +2307,11 @@
   function openBookingForm(slot, existing) {
     const firstDate = slot.date || todayYmd();
     state.bookingDraft = {
-      editingId: existing?.id || "", search: "", courseName: existing?.courseName || "", roomId: existing?.roomId || "",
-      tutorIds: new Set(existing?.tutorIds || []), studentIds: new Set(existing?.studentIds || []),
+      editingId: existing?.id || "", search: "",
+      groups: [{ tutorIds: new Set(existing?.tutorIds || []), courseId: existing?.courseId || "",
+        courseName: existing?.courseName || "", ageGroup: existing?.ageGroup || "",
+        classSize: existing?.classSize || "", studentIds: new Set(existing?.studentIds || []),
+        roomId: existing?.roomId || "", roomName: existing?.roomName || "" }],
       dates: { [firstDate]: { start: slot.start, end: slot.end } }, defaultSlot: { start: slot.start, end: slot.end }, month: parseDate(firstDate)
     };
     document.querySelector("#booking-title").textContent = existing ? "編輯預約課堂" : "預約課堂";
@@ -2072,15 +2351,36 @@
     const draft = state.bookingDraft;
     const errorNode = document.querySelector("#booking-error");
     errorNode.textContent = "";
-    if (!draft.courseName || !draft.tutorIds.size || !draft.studentIds.size) {
-      errorNode.textContent = "請選擇課程、導師及至少一位報讀該課程的學生。"; return;
+    if (!draft.groups.length || draft.groups.length > 5) { errorNode.textContent = "同一時段最多可新增五個課堂。"; return; }
+    const validTutors = new Map(state.suite.accounts.filter((item) => item.role === "tutor").map((item) => [item.id, item]));
+    const selectedTutorIds = new Set(), selectedStudentIds = new Set();
+    for (let index = 0; index < draft.groups.length; index += 1) {
+      const group = draft.groups[index];
+      if (!group.courseName || !group.tutorIds.size || !group.studentIds.size) {
+        errorNode.textContent = "課堂 " + (index + 1) + "：請選擇導師、可任教課程及至少一位已報讀學生。"; return;
+      }
+      if (group.tutorIds.size > 1 && !(draft.editingId && index === 0)) {
+        errorNode.textContent = "每個新課堂只可選一位導師。"; return;
+      }
+      for (const id of group.tutorIds) {
+        if (!validTutors.has(id) || selectedTutorIds.has(id)) { errorNode.textContent = "同一時段的課堂必須由不同導師身分負責。"; return; }
+        selectedTutorIds.add(id);
+      }
+      const course = displayCourses().find((item) => item.id === group.courseId && sameCourseValue(item.name, group.courseName));
+      const old = state.suite.lessonBookings.find((item) => item.id === draft.editingId);
+      const preserved = old && index === 0 && sameCourseValue(old.courseName, group.courseName) &&
+        old.tutorIds.length === group.tutorIds.size && old.tutorIds.every((id) => group.tutorIds.has(id)) &&
+        old.studentIds.length === group.studentIds.size && old.studentIds.every((id) => group.studentIds.has(id));
+      if (!course && !preserved) { errorNode.textContent = "課堂 " + (index + 1) + "：課程設定已變更，請重新選擇。"; return; }
+      if (!preserved && [...group.tutorIds].some((id) => !validTutors.get(id).courseIds?.includes(group.courseId))) {
+        errorNode.textContent = "課堂 " + (index + 1) + "：導師未獲設定任教所選課程。"; return;
+      }
+      const eligible = new Set(bookingStudentsForCourse(group.courseName, group.ageGroup, group.classSize).map((item) => item.id));
+      for (const id of group.studentIds) {
+        if ((!preserved && !eligible.has(id)) || selectedStudentIds.has(id)) { errorNode.textContent = "同一時段的學生只能編入一班，並須已報讀該課程組合。"; return; }
+        selectedStudentIds.add(id);
+      }
     }
-    const validTutors = new Set(state.suite.accounts.filter((item) => item.role === "tutor").map((item) => item.id));
-    if ([...draft.tutorIds].some((id) => !validTutors.has(id)) || !displayCourses().some((item) => sameCourseValue(item.name, draft.courseName))) {
-      errorNode.textContent = "導師或課程設定已變更，請重新選擇。"; return;
-    }
-    const eligible = new Set(bookingStudentsForCourse(draft.courseName).map((item) => item.id));
-    if ([...draft.studentIds].some((id) => !eligible.has(id))) { errorNode.textContent = "部分學生未報讀所選課程，請重新選擇。"; return; }
     const dates = Object.entries(draft.dates).sort(([a], [b]) => a.localeCompare(b));
     if (!dates.length) { errorNode.textContent = "請從月曆選擇至少一個日期。"; return; }
     for (const [date, slot] of dates) {
@@ -2089,15 +2389,16 @@
     }
     const previous = state.suite.lessonBookings;
     const old = previous.find((item) => item.id === draft.editingId);
-    const room = locationSelectOptions().find((item) => item.value === draft.roomId);
-    const created = dates.map(([date, slot], index) => ({
-      id: index === 0 && old ? old.id : makeId(), date, start: slot.start, end: slot.end,
-      courseName: draft.courseName, tutorIds: [...draft.tutorIds], studentIds: [...draft.studentIds],
-      roomId: draft.roomId, roomName: room ? room.label : "", createdAt: index === 0 && old ? old.createdAt : new Date().toISOString()
+    const created = dates.flatMap(([date, slot], dateIndex) => draft.groups.map((group, groupIndex) => {
+      const room = locationSelectOptions().find((item) => item.value === group.roomId);
+      return { id: dateIndex === 0 && groupIndex === 0 && old ? old.id : makeId(), date, start: slot.start, end: slot.end,
+        courseId: group.courseId, courseName: group.courseName, ageGroup: group.ageGroup, classSize: group.classSize,
+        tutorIds: [...group.tutorIds], studentIds: [...group.studentIds], roomId: group.roomId,
+        roomName: room?.label || group.roomName || "", createdAt: dateIndex === 0 && groupIndex === 0 && old ? old.createdAt : new Date().toISOString() };
     }));
     const remaining = previous.filter((item) => item.id !== draft.editingId);
     for (const booking of created) {
-      const overlaps = remaining.some((item) => item.date === booking.date && timeMinutes(booking.start) < timeMinutes(item.end) && timeMinutes(item.start) < timeMinutes(booking.end) &&
+      const overlaps = remaining.concat(created.filter((item) => item !== booking)).some((item) => item.date === booking.date && timeMinutes(booking.start) < timeMinutes(item.end) && timeMinutes(item.start) < timeMinutes(booking.end) &&
         (item.studentIds.some((id) => booking.studentIds.includes(id)) || item.tutorIds.some((id) => booking.tutorIds.includes(id))));
       if (overlaps) { errorNode.textContent = booking.date + " 有學生或導師已安排同時段課堂。"; return; }
       const legacyOverlap = booking.studentIds.some((id) => {
@@ -2109,7 +2410,12 @@
       });
       if (legacyOverlap) { errorNode.textContent = booking.date + " 有學生已安排同時段課堂。"; return; }
     }
-    const touched = new Set([...(old?.studentIds || []), ...draft.studentIds]);
+    for (const [date] of dates) {
+      const intervals = remaining.concat(created).filter((item) => item.date === date).flatMap((item) => [[timeMinutes(item.start), 1], [timeMinutes(item.end), -1]]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+      let concurrent = 0;
+      if (intervals.some(([, delta]) => (concurrent += delta) > 5)) { errorNode.textContent = date + " 同一時間最多可有五個課堂。"; return; }
+    }
+    const touched = new Set([...(old?.studentIds || []), ...draft.groups.flatMap((group) => [...group.studentIds])]);
     const snapshots = [...touched].map((id) => { const student = findById(state.students, id); return student && [student, student.nextDate, student.nextTime, student.bookingManaged, student.bookingFallbackDate, student.bookingFallbackTime]; }).filter(Boolean);
     state.suite.lessonBookings = remaining.concat(created);
     touched.forEach(syncBookingStudent);
@@ -2133,7 +2439,7 @@
     if (!window.confirm("確認完成 " + booking.date + " 的課堂，並為 " + students.length + " 位學生各扣一堂？")) return;
     for (const student of students) {
       student.remaining -= 1;
-      student.history.unshift({ id: makeId(), type: "completed", lessonDate: booking.date, lessonTime: booking.start,
+      student.history.unshift({ id: makeId(), bookingId: booking.id, type: "completed", lessonDate: booking.date, lessonTime: booking.start,
         tutorId: booking.tutorIds[0] || "", tutorIds: booking.tutorIds, courseId: student.courseId || "", durationMinutes: timeMinutes(booking.end) - timeMinutes(booking.start),
         roomId: booking.roomId, roomName: booking.roomName, createdAt: new Date().toISOString() });
       student.history = student.history.slice(0, 100);
@@ -2239,9 +2545,40 @@
     return openTutorForm(account && account.role === "tutor" ? account : null);
   }
 
+  function tutorDuplicateMatches(kind, value, existing) {
+    const normalized = kind === "email" ? String(value || "").trim().toLowerCase() : String(value || "").replace(/\D/g, "");
+    if (!normalized) return [];
+    return state.suite.accounts.filter((account) => account.id !== existing?.id &&
+      (kind === "email" ? String(account.email || "").trim().toLowerCase() : String(account.phone || "").replace(/\D/g, "")) === normalized);
+  }
+
+  function confirmTutorDuplicate(kind, value, existing) {
+    const normalized = kind === "email" ? String(value || "").trim().toLowerCase() : String(value || "").replace(/\D/g, "");
+    const matches = tutorDuplicateMatches(kind, value, existing);
+    const errorNode = document.querySelector("#tutor-form-error");
+    if (!matches.length || (existing && (kind === "email" ? String(existing.email || "").trim().toLowerCase() : String(existing.phone || "").replace(/\D/g, "")) === normalized)) return true;
+    if (kind === "email" && matches.some((account) => account.role !== "tutor")) {
+      errorNode.textContent = "這個電郵已用於非導師帳戶，請使用另一個電郵。";
+      return false;
+    }
+    if (tutorDuplicateConfirmations[kind] === normalized) return true;
+    const names = matches.map((account) => account.name).join("、");
+    const message = kind === "email"
+      ? "電郵「" + value + "」已用於導師「" + names + "」。確認讓這些獨立導師檔案日後共用同一個 Supabase 登入帳戶？目前只會在本機合併顯示資料，不會建立帳戶。"
+      : "電話「" + value + "」已用於導師「" + names + "」。請確認號碼正確，並允許多位導師使用同一電話？電話相同不會合併登入帳戶。";
+    if (!window.confirm(message)) {
+      errorNode.textContent = kind === "email" ? "請修改電郵，或再次確認共用登入電郵。" : "請修改電話，或再次確認共用電話。";
+      return false;
+    }
+    tutorDuplicateConfirmations[kind] = normalized;
+    errorNode.textContent = "";
+    return true;
+  }
+
   function openTutorForm(account) {
     const form = elements.tutorForm;
     form.reset();
+    tutorDuplicateConfirmations = { email: "", phone: "" };
     document.querySelector("#tutor-form-title").textContent = account ? "編輯導師" : "新增導師";
     document.querySelector("#tutor-form-error").textContent = "";
     for (const name of ["id", "name", "phone", "hourlyRate", "email"]) {
@@ -2614,6 +2951,62 @@
 
     const action = button.dataset.action;
     const id = button.dataset.id;
+    if (action === "tutor-attendance" && state.role === "tutor") {
+      button.disabled = true;
+      try {
+        await window.AdminAuth.markTutorAttendance(button.dataset.lessonId, button.dataset.studentId, button.dataset.value);
+        state.tutorPortal = await window.AdminAuth.getTutorPortal();
+        renderTutorPortal();
+        showToast("點名已儲存，待管理員核對。");
+      } catch (error) { button.disabled = false; showToast(error.message || "未能儲存點名。"); }
+      return;
+    }
+    if (action === "tutor-refresh" && state.role === "tutor") {
+      try { state.tutorPortal = await window.AdminAuth.getTutorPortal(); renderTutorPortal(); }
+      catch (error) { showToast(error.message || "未能更新導師資料。"); }
+      return;
+    }
+    if (action === "sync-tutor-portals" && state.role === "admin") {
+      button.disabled = true;
+      try {
+        const items = buildTutorSnapshots();
+        const result = await window.AdminAuth.syncTutors(items);
+        state.tutorSyncStatus = "已同步 " + result.count + " 個導師登入電郵，時間：" + new Date().toLocaleString("zh-HK") + "。";
+      } catch (error) { state.tutorSyncStatus = error.message || "同步失敗；雲端資料未更新。"; }
+      if (state.currentModule === "accounts") renderModule();
+      return;
+    }
+    if (action === "tutor-leave-status" && state.role === "admin") {
+      button.disabled = true;
+      try { await window.AdminAuth.updateTutorLeave(id, button.dataset.value); await refreshTutorLeaveRequests(); }
+      catch (error) { button.disabled = false; showToast(error.message || "未能更新請假狀態。"); }
+      return;
+    }
+    if (action === "refresh-attendance" && state.role === "admin") { await refreshTutorAttendance(); return; }
+    if ((action === "attendance-decision" || action === "attendance-next-week") && state.role === "admin") {
+      const item = state.tutorAttendance.find((row) => row.id === id);
+      const review = button.closest(".attendance-review");
+      const lesson = item && attendanceLessonDetails(item);
+      if (!item || !lesson) return showToast("請先核對本機課堂。");
+      const reason = review.querySelector('[name="reason"]').value.trim();
+      const makeupDate = action === "attendance-next-week" ? formatYmd(addDays(parseDate(lesson.date), 7)) : review.querySelector('[name="makeupDate"]').value;
+      const decision = action === "attendance-next-week" ? "makeup" : button.dataset.value;
+      if (!reason) return showToast("請先填寫缺席原因。");
+      if (decision === "makeup" && (!validDate(makeupDate) || makeupDate <= lesson.date)) return showToast("請選擇原課堂之後的補堂日期。");
+      button.disabled = true;
+      try { await window.AdminAuth.decideAttendance(id, decision, makeupDate, reason); await refreshTutorAttendance(); }
+      catch (error) { button.disabled = false; showToast(error.message || "未能儲存決定。"); }
+      return;
+    }
+    if (action === "attendance-apply" && state.role === "admin") {
+      const item = state.tutorAttendance.find((row) => row.id === id);
+      if (!item) return showToast("請更新點名紀錄。");
+      button.disabled = true;
+      try { await applyAttendanceRecord(item); }
+      catch (error) { button.disabled = false; showToast(error.message || "未能套用點名。"); }
+      return;
+    }
+    if (state.role === "tutor" && action !== "logout") return;
     if (action === "pick-lesson-time") return openTimePicker(button.dataset.target);
     if (action === "cancel-lesson-time") return elements.timePickerDialog.close();
     if (action === "confirm-lesson-time") return confirmTimePicker();
@@ -2622,19 +3015,34 @@
       normalizeTimePicker();
       return renderTimePicker();
     }
+    if (action === "booking-add-group") {
+      if (state.bookingDraft.groups.length < 5) state.bookingDraft.groups.push({ tutorIds: new Set(), courseId: "", courseName: "", ageGroup: "", classSize: "", studentIds: new Set(), roomId: "", roomName: "" });
+      return renderBookingChoices();
+    }
+    if (action === "booking-remove-group") {
+      if (state.bookingDraft.groups.length > 1) state.bookingDraft.groups.splice(Number(button.dataset.group), 1);
+      return renderBookingChoices();
+    }
     if (action === "booking-tutor") {
-      const selected = state.bookingDraft.tutorIds;
-      selected.has(button.dataset.value) ? selected.delete(button.dataset.value) : selected.add(button.dataset.value);
+      const group = state.bookingDraft.groups[Number(button.dataset.group)];
+      if (!group) return;
+      group.tutorIds = group.tutorIds.has(button.dataset.value) ? new Set() : new Set([button.dataset.value]);
+      group.courseId = ""; group.courseName = ""; group.ageGroup = ""; group.classSize = ""; group.studentIds.clear();
       return renderBookingChoices();
     }
     if (action === "booking-course") {
-      state.bookingDraft.courseName = sameCourseValue(state.bookingDraft.courseName, button.dataset.value) ? "" : button.dataset.value;
-      state.bookingDraft.studentIds.clear();
+      const group = state.bookingDraft.groups[Number(button.dataset.group)];
+      if (!group) return;
+      const course = displayCourses().find((item) => item.id === button.dataset.value);
+      group.courseId = course?.id || ""; group.courseName = course?.name || "";
+      group.ageGroup = course?.ageGroup || ""; group.classSize = course?.classSize || "";
+      group.studentIds.clear();
       return renderBookingChoices();
     }
     if (action === "booking-student") {
-      const selected = state.bookingDraft.studentIds;
-      selected.has(button.dataset.value) ? selected.delete(button.dataset.value) : selected.add(button.dataset.value);
+      const group = state.bookingDraft.groups[Number(button.dataset.group)];
+      if (!group) return;
+      group.studentIds.has(button.dataset.value) ? group.studentIds.delete(button.dataset.value) : group.studentIds.add(button.dataset.value);
       return renderBookingChoices();
     }
     if (action === "booking-month") {
@@ -2824,20 +3232,40 @@
     }
   });
 
+  document.addEventListener("submit", async (event) => {
+    if (event.target.id !== "tutor-leave-form" || state.role !== "tutor") return;
+    event.preventDefault();
+    const form = event.target;
+    if (!form.reportValidity()) return;
+    const data = new FormData(form);
+    const button = form.querySelector('button[type="submit"]');
+    const errorNode = form.querySelector("#tutor-leave-error");
+    button.disabled = true;
+    errorNode.textContent = "";
+    try {
+      await window.AdminAuth.requestTutorLeave(data.get("startDate"), data.get("endDate"), data.get("reason"));
+      state.tutorPortal = await window.AdminAuth.getTutorPortal();
+      renderTutorPortal();
+      showToast("請假申請已提交");
+    } catch (error) {
+      button.disabled = false;
+      errorNode.textContent = error.message || "未能提交請假申請。";
+    }
+  });
+
   elements.tutorForm.addEventListener("submit", (event) => {
     event.preventDefault();
     if (!elements.tutorForm.reportValidity()) return;
     const data = new FormData(elements.tutorForm);
     const name = String(data.get("name") || "").trim();
-    const email = String(data.get("email") || "").trim();
+    const email = String(data.get("email") || "").trim().toLowerCase();
+    const phone = String(data.get("phone") || "").trim();
     const hourlyRate = data.get("hourlyRate") === "" ? null : Number(data.get("hourlyRate"));
     const errorNode = document.querySelector("#tutor-form-error");
     if (!name || (hourlyRate !== null && (!Number.isFinite(hourlyRate) || hourlyRate < 0))) { errorNode.textContent = "請檢查導師姓名及時薪。"; return; }
     const existing = data.get("id") ? findById(state.suite.accounts, data.get("id")) : null;
-    if (email && state.suite.accounts.some((account) => account.id !== (existing && existing.id) && String(account.email || "").toLowerCase() === email.toLowerCase())) {
-      errorNode.textContent = "這個電郵已用於另一個帳戶。"; return;
-    }
-    const payload = { id: existing ? existing.id : makeId(), role: "tutor", name, phone: String(data.get("phone") || "").trim(), email,
+    if (!confirmTutorDuplicate("email", email, existing) || !confirmTutorDuplicate("phone", phone, existing)) return;
+    const payload = { id: existing ? existing.id : makeId(), role: "tutor", name, phone, email,
       hourlyRate, courseIds: data.getAll("courseIds"), availability: data.getAll("availability"), permissions: data.getAll("permission"),
       status: existing ? existing.status : "active" };
     if (existing) Object.assign(existing, payload);
@@ -2846,7 +3274,7 @@
     elements.tutorDialog.close();
     document.body.classList.remove("modal-open");
     renderModule();
-    showToast(existing ? "導師資料已更新" : "導師已新增；登入尚未啟用");
+    showToast(existing ? "導師資料已更新；請同步導師工作台" : "導師已新增；請同步導師工作台");
   });
 
   document.addEventListener("input", (event) => {
@@ -2880,6 +3308,10 @@
   });
   document.addEventListener("focusout", (event) => {
     if (event.target.matches?.("[data-course-discount]")) event.target.placeholder = "折扣優惠";
+    if (elements.tutorDialog.open && elements.tutorForm.contains(event.target) && ["email", "phone"].includes(event.target.name) && event.target.value.trim() && event.target.checkValidity()) {
+      const existing = findById(state.suite.accounts, elements.tutorForm.elements.id.value);
+      confirmTutorDuplicate(event.target.name, event.target.value.trim(), existing);
+    }
   });
 
   elements.studentImportFile.addEventListener("change", () => {
@@ -3001,8 +3433,9 @@
       }
       return;
     }
-    if (event.target.id === "booking-pool" && state.bookingDraft) {
-      state.bookingDraft.roomId = event.target.value;
+    if (event.target.matches?.("[data-booking-pool]") && state.bookingDraft) {
+      const group = state.bookingDraft.groups[Number(event.target.dataset.group)];
+      if (group) { group.roomId = event.target.value; group.roomName = ""; }
       return;
     }
     if (elements.formDialog.open && elements.formDialog.classList.contains("student-dialog") && elements.dynamicForm.contains(event.target)) {
@@ -3167,14 +3600,19 @@
     window.LoginUI?.setLoginBusy(true);
     try {
       if (!window.AdminAuth) throw new Error("登入服務尚未載入，請重新整理頁面。");
-      await window.AdminAuth.signIn(email, password);
-      const catalog = await window.AdminAuth.getCatalog();
-      window.SwimCourseImport.setReferenceRows(catalog.courses);
-      window.SwimLocationImport.setReferenceRows(catalog.locations);
-      if (!hadPoolLocationsAtStartup) {
-        state.suite.poolLocations = catalog.locations.map((row) => ({ id: makeId(), ...row }));
-        saveAll();
+      const role = await window.AdminAuth.signIn(email, password) || "admin";
+      if (role === "tutor") {
+        state.tutorPortal = await window.AdminAuth.getTutorPortal();
+      } else {
+        const catalog = await window.AdminAuth.getCatalog();
+        window.SwimCourseImport.setReferenceRows(catalog.courses);
+        window.SwimLocationImport.setReferenceRows(catalog.locations);
+        if (!hadPoolLocationsAtStartup) {
+          state.suite.poolLocations = catalog.locations.map((row) => ({ id: makeId(), ...row }));
+          saveAll();
+        }
       }
+      state.role = role;
       state.loggedIn = true;
       elements.adminLoginForm.elements.password.value = "";
       renderShell();

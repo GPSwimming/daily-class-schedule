@@ -5,6 +5,7 @@
   const endpoint = "https://qflrsblacjukooikvfyx.supabase.co/functions/v1/swim-admin-gateway";
   let accessToken = "";
   let expiresAt = 0;
+  let role = "";
   let expiryTimer;
   let onExpired = () => {};
   let recoveryToken = "";
@@ -25,6 +26,7 @@
   function clearSession() {
     accessToken = "";
     expiresAt = 0;
+    role = "";
     clearTimeout(expiryTimer);
   }
 
@@ -48,13 +50,15 @@
   async function signIn(email, password) {
     clearSession();
     const result = await request("login", { email, password });
-    if (!result.accessToken || !Number.isFinite(result.expiresIn)) throw new Error("登入服務回應無效，請稍後再試。");
+    if (!result.accessToken || !Number.isFinite(result.expiresIn) || ![undefined, "admin", "tutor"].includes(result.role)) throw new Error("登入服務回應無效，請稍後再試。");
     accessToken = result.accessToken;
+    role = result.role || "admin";
     expiresAt = Date.now() + result.expiresIn * 1000;
     expiryTimer = setTimeout(() => {
       clearSession();
       onExpired();
     }, Math.max(0, expiresAt - Date.now() - 5000));
+    return role;
   }
 
   async function check() {
@@ -63,7 +67,8 @@
       return false;
     }
     try {
-      await request("check", {}, accessToken);
+      const result = await request("check", {}, accessToken);
+      if ((result.role || "admin") !== role) throw new Error("登入權限已變更。");
       return true;
     } catch {
       clearSession();
@@ -80,6 +85,51 @@
   async function getCatalog() {
     if (!accessToken) throw new Error("請先登入管理員帳戶。");
     return request("catalog", {}, accessToken);
+  }
+
+  async function getTutorPortal() {
+    if (role !== "tutor") throw new Error("請先登入導師帳戶。");
+    return request("tutor-portal", {}, accessToken);
+  }
+
+  async function requestTutorLeave(startDate, endDate, reason) {
+    if (role !== "tutor") throw new Error("請先登入導師帳戶。");
+    return request("tutor-leave", { startDate, endDate, reason }, accessToken);
+  }
+
+  async function markTutorAttendance(lessonId, studentId, status) {
+    if (role !== "tutor") throw new Error("請先登入導師帳戶。");
+    return request("tutor-attendance", { lessonId, studentId, status }, accessToken);
+  }
+
+  async function syncTutors(items) {
+    if (role !== "admin") throw new Error("請先登入管理員帳戶。");
+    return request("sync-tutors", { items }, accessToken);
+  }
+
+  async function getTutorLeaveRequests() {
+    if (role !== "admin") throw new Error("請先登入管理員帳戶。");
+    return request("tutor-leave-list", {}, accessToken);
+  }
+
+  async function updateTutorLeave(id, status) {
+    if (role !== "admin") throw new Error("請先登入管理員帳戶。");
+    return request("tutor-leave-status", { id, status }, accessToken);
+  }
+
+  async function getAttendance() {
+    if (role !== "admin") throw new Error("請先登入管理員帳戶。");
+    return request("attendance-list", {}, accessToken);
+  }
+
+  async function decideAttendance(id, decision, makeupDate, reason) {
+    if (role !== "admin") throw new Error("請先登入管理員帳戶。");
+    return request("attendance-decision", { id, decision, makeupDate, reason }, accessToken);
+  }
+
+  async function markAttendanceApplied(id) {
+    if (role !== "admin") throw new Error("請先登入管理員帳戶。");
+    return request("attendance-applied", { id }, accessToken);
   }
 
   async function resetPassword(password) {
@@ -110,6 +160,16 @@
     check,
     signOut,
     getCatalog,
+    getTutorPortal,
+    requestTutorLeave,
+    markTutorAttendance,
+    syncTutors,
+    getTutorLeaveRequests,
+    updateTutorLeave,
+    getAttendance,
+    decideAttendance,
+    markAttendanceApplied,
+    getRole() { return role; },
     resetPassword,
     checkRecovery,
     requestReset,

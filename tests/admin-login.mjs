@@ -13,21 +13,29 @@ const fetchMock = async (url, options = {}) => {
   if (url.includes("/auth/v1/recover?")) {
     recoveryCalls += 1;
     recoveryUrl = url;
-    assert.equal(JSON.parse(options.body).email, "admin@gpswimming.com");
+    assert.match(JSON.parse(options.body).email, /@/);
     return recoveryLimited ? Response.json({ message: "rate limit" }, { status: 429 }) : Response.json({});
   }
   if (url.includes("grant_type=password")) {
     const { email, password } = JSON.parse(options.body);
     if (password !== "test-password") return new Response("{}", { status: 400 });
-    return Response.json({ access_token: email === "admin@example.com" ? "admin-token" : "other-token", expires_in: 3600 });
+    return Response.json({ access_token: email === "admin@example.com" ? "admin-token" : email === "coach@example.com" ? "coach-token" : "other-token", expires_in: 3600 });
   }
   if (url.endsWith("/auth/v1/user")) {
     if (options.method === "PUT") return Response.json({ id: "admin-id" });
-    return Response.json({ id: options.headers.Authorization === "Bearer admin-token" ? "admin-id" : "other-id" });
+    return Response.json({ id: options.headers.Authorization === "Bearer admin-token" ? "admin-id" : options.headers.Authorization === "Bearer coach-token" ? "coach-id" : "other-id" });
   }
   if (url.includes("swim_app_admin?")) {
     return Response.json(options.headers.Authorization === "Bearer admin-token" ? [{ user_id: "admin-id" }] : []);
   }
+  if (url.includes("swim_tutor_portal?")) {
+    return Response.json(options.headers.Authorization === "Bearer coach-token" ? [{ email: "coach@example.com", user_id: "coach-id", snapshot: { profiles: [{ name: "Alex 感統" }, { name: "Alex 進階" }], summary: { classes: 2, hours: 1 }, assignments: [{ id: "lesson-1", date: "2026-11-12", students: [{ id: "student-1", name: "小明" }] }] } }] : []);
+  }
+  if (url.includes("swim_tutor_leave?")) return Response.json([]);
+  if (url.endsWith("/rest/v1/swim_tutor_leave")) return Response.json({});
+  if (url.includes("swim_tutor_attendance?")) return Response.json([]);
+  if (url.endsWith("/rest/v1/swim_tutor_attendance")) return Response.json([{ id: "att-1", status: JSON.parse(options.body).status }]);
+  if (url.endsWith("/rest/v1/rpc/swim_sync_tutor_portals")) return Response.json(1);
   if (url.includes("swim_app_data?")) {
     return Response.json([{ suite: { catalog: { courses: [{ name: "課程甲", ageGroup: "6 - 11", classSize: "1:1", duration: 60, fee: 100 }], locations: [] } } }]);
   }
@@ -48,9 +56,9 @@ const wrongPassword = await send({ action: "login", email: "admin@example.com", 
 assert.equal(wrongPassword.status, 401, "wrong password is denied");
 assert.equal((await send({ action: "request-recovery", email: "invalid" })).status, 400, "invalid recovery email is rejected");
 assert.equal((await send({ action: "request-recovery", email: "other@example.com" })).status, 200, "other addresses receive a non-enumerating response");
-assert.equal(recoveryCalls, 0, "other addresses are never sent a recovery email");
+assert.equal(recoveryCalls, 1, "coach addresses can request a recovery email without revealing account membership");
 assert.equal((await send({ action: "request-recovery", email: "admin@gpswimming.com" })).status, 200, "admin can request a password reset");
-assert.equal(recoveryCalls, 1);
+assert.equal(recoveryCalls, 2);
 assert.equal(new URL(recoveryUrl).searchParams.get("redirect_to"), "https://gpswimming.github.io/daily-class-schedule/", "email link returns to the deployed login page");
 recoveryLimited = true;
 assert.equal((await send({ action: "request-recovery", email: "admin@gpswimming.com" })).status, 429, "mail quota error is explained");
@@ -62,6 +70,20 @@ const admin = await send({ action: "login", email: "admin@example.com", password
 assert.equal(admin.status, 200, "allowlisted administrator can log in");
 assert.equal(admin.headers.get("Access-Control-Allow-Origin"), "https://gpswimming.github.io", "deployed site is allowed by CORS");
 assert.equal((await admin.json()).accessToken, "admin-token");
+const coach = await send({ action: "login", email: "coach@example.com", password: "test-password" });
+assert.equal(coach.status, 200, "linked coach can log in");
+assert.equal((await coach.json()).role, "tutor");
+assert.equal((await send({ action: "catalog" }, "coach-token")).status, 403, "coach cannot read admin catalog");
+const portal = await send({ action: "tutor-portal" }, "coach-token");
+assert.equal(portal.status, 200, "coach can read only own portal");
+assert.equal((await portal.json()).snapshot.summary.hours, 1);
+assert.equal((await send({ action: "tutor-attendance", lessonId: "lesson-1", studentId: "student-1", status: "present" }, "coach-token")).status, 200, "coach can mark an assigned student present");
+assert.equal((await send({ action: "tutor-attendance", lessonId: "lesson-1", studentId: "someone-else", status: "present" }, "coach-token")).status, 403, "coach cannot mark an unassigned student");
+assert.equal((await send({ action: "attendance-list" }, "coach-token")).status, 403, "coach cannot see administrator attendance queue");
+assert.equal((await send({ action: "attendance-list" }, "admin-token")).status, 200, "admin can review attendance");
+assert.equal((await send({ action: "sync-tutors", items: [] }, "coach-token")).status, 403, "coach cannot write portal snapshots");
+assert.equal((await send({ action: "tutor-leave", startDate: "2026-11-20", endDate: "2026-11-21", reason: "請假" }, "coach-token")).status, 200, "coach can submit leave request");
+assert.equal((await send({ action: "sync-tutors", items: [{ email: "coach@example.com", snapshot: {} }] }, "admin-token")).status, 200, "admin can sync coach snapshots");
 assert.equal((await send({ action: "check" })).status, 401, "anonymous session cannot pass check");
 assert.equal((await send({ action: "check" }, "admin-token")).status, 200, "administrator session is accepted");
 assert.equal((await send({ action: "catalog" })).status, 401, "anonymous visitor cannot read catalog");

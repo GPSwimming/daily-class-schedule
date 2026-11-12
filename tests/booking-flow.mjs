@@ -10,9 +10,12 @@ const saved = new Map([
     { id: "s1", name: "測試學生", ageGroup: "6 - 11", enrollmentStatus: "paid", status: "active", remaining: 4,
       enrollments: [{ id: "e1", courseName: "課程甲", classSize: "1:1", ageGroup: "6 - 11" }] },
     { id: "s2", name: "已有下一堂", ageGroup: "6 - 11", enrollmentStatus: "paid", status: "active", remaining: 4, nextDate: "2026-11-10", nextTime: "18:00",
-      enrollments: [{ id: "e2", courseName: "課程甲", classSize: "1:1", ageGroup: "6 - 11" }] }
+      enrollments: [{ id: "e2", courseName: "課程甲", classSize: "1:1", ageGroup: "6 - 11" }] },
+    { id: "s3", name: "另一學生", ageGroup: "6 - 11", enrollmentStatus: "paid", status: "active", remaining: 4,
+      enrollments: [{ id: "e3", courseName: "課程甲", classSize: "1:1", ageGroup: "6 - 11" }] }
   ])],
-  ["swim-class-suite.v2", JSON.stringify({ accounts: [{ id: "t1", role: "tutor", name: "測試導師" }] })]
+  ["swim-class-suite.v2", JSON.stringify({ accounts: [{ id: "t1", role: "tutor", name: "測試導師", courseIds: ["reference-1"] },
+    { id: "t2", role: "tutor", name: "第二導師", courseIds: ["reference-1"] }] })]
 ]);
 const nodes = new Map();
 const handlers = new Map();
@@ -69,21 +72,31 @@ assert.match(node("#quick-lesson-error").textContent, /結束時間必須遲於/
 node("#quick-lesson-end").value = "22:00";
 handlers.get("submit")({ target: { id: "quick-lesson-form" }, preventDefault() {} });
 assert.equal(node("#booking-dialog").open, true, "quick add opens booking page");
-assert.match(node("#booking-students").innerHTML, /請先選擇課程/, "students wait for course choice");
-await click({ action: "booking-tutor", value: "t1" });
-await click({ action: "booking-course", value: "課程甲" });
-assert.match(node("#booking-students").innerHTML, /測試學生/, "enrolled student appears for matching course");
-await click({ action: "booking-student", value: "s1" });
-await click({ action: "booking-student", value: "s2" });
+assert.match(node("#booking-groups").innerHTML, /請先選擇導師/, "course choices wait for a tutor");
+await click({ action: "booking-tutor", group: "0", value: "t1" });
+assert.match(node("#booking-groups").innerHTML, /課程甲/, "tutor's permitted course appears");
+await click({ action: "booking-course", group: "0", value: "reference-1" });
+assert.match(node("#booking-groups").innerHTML, /測試學生/, "enrolled student appears for matching course combination");
+await click({ action: "booking-student", group: "0", value: "s1" });
+await click({ action: "booking-add-group" });
+await click({ action: "booking-tutor", group: "1", value: "t2" });
+await click({ action: "booking-course", group: "1", value: "reference-1" });
+await click({ action: "booking-student", group: "1", value: "s3" });
 await click({ action: "booking-date", date: "2026-11-12" });
 assert.match(node("#booking-selected-count").textContent, /2/, "calendar supports multiple lesson dates");
 await handlers.get("submit")({ target: { id: "booking-form" }, preventDefault() {} });
 const suite = JSON.parse(saved.get("swim-class-suite.v2"));
 const students = JSON.parse(saved.get("swim-class-balance.v1"));
-assert.equal(suite.lessonBookings.length, 2, "each date is saved as a booking");
-assert.deepEqual(suite.lessonBookings.map((item) => item.date).sort(), ["2026-11-05", "2026-11-12"]);
+assert.equal(suite.lessonBookings.length, 4, "each class and date is saved as its own booking");
+assert.deepEqual(suite.lessonBookings.map((item) => item.date).sort(), ["2026-11-05", "2026-11-05", "2026-11-12", "2026-11-12"]);
+assert.deepEqual([...new Set(suite.lessonBookings.filter((item) => item.date === "2026-11-05").map((item) => item.tutorIds[0]))].sort(), ["t1", "t2"], "simultaneous classes use different tutors");
 assert.equal(students[0].bookingManaged, true, "student next lesson is linked to the booking");
 assert.equal(students[0].nextDate, "2026-11-05", "earliest booking becomes the next lesson");
 assert.equal(students[1].nextDate, "2026-11-10", "an existing next lesson remains scheduled");
 assert.match(node("#module-content").innerHTML, /預約課堂/, "schedule displays saved booking");
+assert.match(node("#module-content").innerHTML, /timeline-lane-1/, "simultaneous lessons receive distinct week-calendar lanes");
+await click({ action: "edit-booking", id: suite.lessonBookings[0].id });
+for (let index = 0; index < 4; index += 1) await click({ action: "booking-add-group" });
+assert.equal(node("#booking-add-group").disabled, true, "a sixth class cannot be added to one booking slot");
+assert.equal((node("#booking-groups").innerHTML.match(/class="booking-group-card"/g) || []).length, 5);
 console.log("Booking flow tests passed: quick date, course matching, multi-date save, schedule integration.");
