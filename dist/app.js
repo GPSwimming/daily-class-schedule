@@ -48,6 +48,7 @@
     selectedStudentId: null,
     studentFormPhoto: "",
     pendingStudentImport: null,
+    pendingStudentImportCounters: null,
     pendingCourseImport: null,
     courseSelection: { name: "", ageGroup: "", classSize: "" },
     pendingLocationImport: null,
@@ -937,7 +938,7 @@
       ["tutors", "導師總數", tutors.length, "sand"]
     ];
     return '<section class="people-page"><div class="people-mobile-menu"' + (state.peopleMenuOpen ? '' : ' hidden') + '>' +
-      peopleActionHtml("add-course", "新增課程") + peopleActionHtml("import-students", "匯入") +
+      peopleActionHtml("import-students", "匯入學生") +
       peopleActionHtml("add-student", "新增學生", true) + peopleActionHtml("add-tutor", "新增導師") + '</div>' +
       '<div class="people-metrics">' + metrics.map(([filter, label, value, color]) =>
         '<button type="button" class="people-metric ' + color + (state.peopleFilter === filter ? ' is-active' : '') + '" data-action="people-filter" data-value="' + filter + '" aria-pressed="' + (state.peopleFilter === filter) + '">' + peopleMetricIconHtml(filter) + '<small>' + label + '</small><strong>' + value + '</strong>' + (state.peopleFilter === filter ? '<span class="people-metric-dismiss" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17"/></svg></span>' : '') + '</button>').join('') + '</div>' +
@@ -2606,6 +2607,7 @@
 
   function openStudentImport() {
     state.pendingStudentImport = null;
+    state.pendingStudentImportCounters = null;
     elements.studentImportFile.value = "";
     elements.studentImportConfirm.disabled = true;
     document.querySelector("#student-import-error").textContent = "";
@@ -2621,6 +2623,20 @@
       return date.toISOString().slice(0, 10);
     }
     return text;
+  }
+
+  function importRecordDate(value) {
+    const text = String(value || "").trim();
+    if (/^\d+(?:\.\d+)?$/.test(text) && Number(text) > 1000) return importDate(text);
+    const match = /^(\d{1,2})-(\d{1,2})-(\d{2}|\d{4})$/.exec(text);
+    const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+    if (!match && !iso) return "";
+    const year = Number(iso ? iso[1] : match[3].length === 2 ? "20" + match[3] : match[3]);
+    const month = Number(iso ? iso[2] : match[2]);
+    const day = Number(iso ? iso[3] : match[1]);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    if (year < 1900 || date.getUTCFullYear() !== year || date.getUTCMonth() + 1 !== month || date.getUTCDate() !== day) return "";
+    return [year, String(month).padStart(2, "0"), String(day).padStart(2, "0")].join("-");
   }
 
   function importTime(value) {
@@ -2646,40 +2662,72 @@
     const students = [];
     const errors = [];
     const seen = new Set(state.students.map((student) => student.name.trim().toLocaleLowerCase()));
+    const counters = { ...state.suite.studentNumberCounters };
+    const allowedAgeGroups = ["2.5 - 5", "6 - 11", "12 - 17", "18 - 29", "30 - 39", "40 - 49", "50 - 59", "60 - 69"];
+    const numberFor = (year, ageGroup) => {
+      const prefix = isMinorAge(ageGroup) ? "K" : "A";
+      const key = prefix + String(year).slice(-2);
+      const existing = state.students.reduce((max, student) => {
+        const match = String(student.studentNumber || "").match(/^([KA]\d{2})(\d{4})$/);
+        return match && match[1] === key ? Math.max(max, Number(match[2])) : max;
+      }, 0);
+      const sequence = Math.max(existing, Number(counters[key]) || 0) + 1;
+      if (sequence > 9999) throw new Error(year + " 年度的學生編號已用完");
+      counters[key] = sequence;
+      return key + String(sequence).padStart(4, "0");
+    };
     let skipped = 0;
     for (const { rowNumber, values } of records) {
-      const [name, courseName, tutorName, weekdayText, timeText, prepaidText, remainingText, dateText, roomName] = values;
+      const [name, ageGroupText, birthMonthText, birthYearText, gender, statusText, dateText, joinYearText, courseName, classSize, guardianName, whatsapp, homeMtr, roomName, email, password] = values;
       const cleanName = String(name || "").trim();
       const key = cleanName.toLocaleLowerCase();
       if (!cleanName) { errors.push("第 " + rowNumber + " 行：學生姓名不能留空。"); continue; }
       if (seen.has(key)) { skipped += 1; continue; }
       seen.add(key);
-      const exactCourses = courseName ? state.suite.courses.filter((item) => courseLabel(item) === courseName) : [];
-      const namedCourses = courseName && !exactCourses.length ? state.suite.courses.filter((item) => item.name === courseName) : [];
-      const courseMatches = exactCourses.length ? exactCourses : namedCourses;
-      const course = courseMatches.length === 1 ? courseMatches[0] : null;
-      const tutor = tutorName ? state.suite.accounts.find((item) => item.role === "tutor" && item.name === tutorName) : null;
+      const ageGroup = allowedAgeGroups.find((item) => sameCourseValue(item, ageGroupText)) || "";
+      const minor = isMinorAge(ageGroup);
+      const birthMonth = Number(String(birthMonthText || "").replace(/\s*月\s*$/, ""));
+      const birthYear = Number(birthYearText);
+      const recordDate = importRecordDate(dateText);
+      const joinYear = Number(joinYearText);
+      const availableCourses = ageGroup ? studentCoursesForAge(ageGroup) : [];
+      const course = availableCourses.find((item) => sameCourseValue(item.name, courseName) && sameCourseValue(item.classSize, classSize));
       const room = roomName ? locationSelectOptions().find((item) => item.label === roomName) : null;
-      const weekday = importWeekday(weekdayText);
-      const time = importTime(timeText || "18:00");
-      const prepaid = prepaidText === "" ? 8 : Number(prepaidText);
-      const remaining = remainingText === "" ? prepaid : Number(remainingText);
-      const nextDate = dateText ? importDate(dateText) : formatYmd(nextDateForWeekday(weekday));
       const problems = [];
-      if (courseName && courseMatches.length > 1) problems.push("課程名稱有多個年齡／人數組合，請使用「課程名稱｜年齡組別｜課程人數」填寫");
-      else if (courseName && !course) problems.push("找不到課程「" + courseName + "」");
-      if (tutorName && !tutor) problems.push("找不到導師「" + tutorName + "」");
-      if (roomName && !room) problems.push("找不到泳班地點「" + roomName + "」");
-      if (weekday < 0) problems.push("上課日必須為星期一至日或 0 至 6");
-      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) problems.push("固定時間格式應為 HH:MM");
-      if (!Number.isInteger(prepaid) || prepaid < 1 || prepaid > 999) problems.push("預繳堂數須為 1–999");
-      if (!Number.isInteger(remaining) || remaining < 0 || remaining > 999) problems.push("剩餘堂數須為 0–999");
-      if (!validDate(nextDate) || formatYmd(parseDate(nextDate)) !== nextDate) problems.push("下一堂日期須為有效的 YYYY-MM-DD");
+      if (!ageGroup) problems.push("年齡組別必須為範本內八個選項之一");
+      if (minor && (Boolean(birthMonthText) !== Boolean(birthYearText))) problems.push("出生月份及出生年份必須一併填寫");
+      if (minor && birthMonthText && (!Number.isInteger(birthMonth) || birthMonth < 1 || birthMonth > 12)) problems.push("出生月份必須為 1 至 12 月");
+      if (minor && birthYearText && (!Number.isInteger(birthYear) || birthYear < 1900 || (recordDate && birthYear > Number(recordDate.slice(0, 4))))) problems.push("出生年份無效");
+      if (ageGroup && !minor && (birthMonthText || birthYearText)) problems.push("成年年齡組別不可填寫出生月份或年份");
+      if (!["男", "女"].includes(String(gender || "").trim())) problems.push("性別必須選擇男或女");
+      if (!["待確認，未付款", "已付款"].includes(String(statusText || "").trim())) problems.push("學生狀態必須選擇待確認，未付款或已付款");
+      if (!recordDate) problems.push("今日日期必須為有效的 dd-mm-yy 日期");
+      if (recordDate && ![0, 1, 2, 3].some((offset) => joinYear === fiscalYear(recordDate) - offset)) problems.push("學生加入年份須為該日期所屬年度或之前三年");
+      if (!String(courseName || "").trim()) problems.push("課程名稱不能留空");
+      if (!String(classSize || "").trim()) problems.push("課程人數不能留空");
+      if (ageGroup && courseName && classSize && !course) problems.push("課程名稱及課程人數不適用於所選年齡組別");
+      if (!String(whatsapp || "").trim()) problems.push("WhatsApp 聯絡號碼不能留空");
+      else if (/\s/.test(String(whatsapp)) || !/^\+?\d+$/.test(String(whatsapp).trim())) problems.push("WhatsApp 聯絡號碼只可包含數字及開首的 +，不可有空格");
+      if (roomName && !room) problems.push("找不到課堂地點「" + roomName + "」");
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim())) problems.push("Supabase 電郵格式無效");
+      if (password) problems.push("Supabase 密碼必須留空；網站不會從 Excel 儲存或上載密碼");
       if (problems.length) { errors.push("第 " + rowNumber + " 行：" + problems.join("；") + "。"); continue; }
-      students.push({ id: makeId(), name: cleanName, courseId: course ? course.id : "", tutorId: tutor ? tutor.id : "", weekday,
-        time, nextTime: time, prepaid, remaining, nextDate, roomId: room ? room.value : "", roomName: room ? room.label : "", status: "active", history: [], createdAt: new Date().toISOString() });
+      let studentNumber = "";
+      try { if (statusText === "已付款") studentNumber = numberFor(joinYear, ageGroup); }
+      catch (error) { errors.push("第 " + rowNumber + " 行：" + error.message + "。"); continue; }
+      const fee = Number(course.fee) || 0;
+      const duration = Number(course.duration) || 60;
+      students.push({
+        id: makeId(), name: cleanName, ageGroup, gender: String(gender).trim(), recordDate, enrollmentYear: joinYear,
+        enrollmentStatus: statusText === "已付款" ? "paid" : "pending", studentNumber,
+        birthDate: "", birthMonth: minor && birthMonthText ? String(birthMonth) : "", birthYear: minor && birthYearText ? String(birthYear) : "",
+        guardianName: String(guardianName || "").trim(), whatsapp: String(whatsapp).trim(), email: String(email || "").trim(), homeMtr: String(homeMtr || "").trim(), schoolMtr: "", workMtr: "", photo: "",
+        enrollments: [{ id: makeId(), courseId: course.reference ? "" : course.id, courseName: course.name, ageGroup, pricingAgeGroup: course.ageGroup, classSize: course.classSize, firstDate: "", duration, originalFee: fee, discount: 0, netFee: fee }],
+        courseId: course.reference ? "" : course.id, tutorId: "", weekday: 1, time: "18:00", nextTime: "18:00", prepaid: 0, remaining: 0, nextDate: "",
+        roomId: room ? room.value : "", roomName: room ? room.label : "", bookingEnabled: false, bookingPolicy: "", status: "active", history: [], createdAt: new Date().toISOString()
+      });
     }
-    return { students, errors, skipped };
+    return { students, errors, skipped, counters };
   }
 
   async function previewStudentImport(file) {
@@ -2689,6 +2737,7 @@
     preview.innerHTML = "";
     elements.studentImportConfirm.disabled = true;
     state.pendingStudentImport = null;
+    state.pendingStudentImportCounters = null;
     try {
       const records = await window.SwimStudentImport.parse(file);
       const result = prepareStudentImport(records);
@@ -2697,7 +2746,11 @@
         (result.errors.length ? '<ul class="preview-warning">' + result.errors.slice(0, 12).map((item) => '<li>' + escapeHtml(item) + '</li>').join('') + '</ul>' : '');
       if (result.errors.length > 12) preview.innerHTML += '<p>另外還有 ' + (result.errors.length - 12) + ' 個錯誤。</p>';
       if (result.errors.length) errorNode.textContent = "請先修正檔案錯誤後重新選擇。";
-      if (result.students.length && !result.errors.length) { state.pendingStudentImport = result.students; elements.studentImportConfirm.disabled = false; }
+      if (result.students.length && !result.errors.length) {
+        state.pendingStudentImport = result.students;
+        state.pendingStudentImportCounters = result.counters;
+        elements.studentImportConfirm.disabled = false;
+      }
     } catch (error) { errorNode.textContent = error.message || "未能讀取檔案。"; }
   }
 
@@ -3335,14 +3388,18 @@
   elements.studentImportConfirm.addEventListener("click", () => {
     if (!state.pendingStudentImport || !state.pendingStudentImport.length) return;
     const count = state.pendingStudentImport.length;
+    const previousCounters = { ...state.suite.studentNumberCounters };
     state.students.push(...state.pendingStudentImport);
+    state.suite.studentNumberCounters = { ...state.suite.studentNumberCounters, ...(state.pendingStudentImportCounters || {}) };
     try { saveAll(); }
     catch {
       state.students.splice(-count, count);
+      state.suite.studentNumberCounters = previousCounters;
       document.querySelector("#student-import-error").textContent = "瀏覽器儲存空間不足；未有匯入任何學員。請先備份現有資料。";
       return;
     }
     state.pendingStudentImport = null;
+    state.pendingStudentImportCounters = null;
     elements.studentImportDialog.close();
     document.body.classList.remove("modal-open");
     renderModule();

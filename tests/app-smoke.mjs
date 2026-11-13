@@ -73,8 +73,9 @@ assert.match(js, /function deleteCourse\(/, "complete course deletion is guarded
 assert.doesNotMatch(js, /label: "平均時長"|label: "平均單堂"/, "course average boxes were removed");
 assert.match(html, /密碼（在 Supabase 設定）/, "coach password is set only in Supabase");
 assert.match(html, /type="password"[^>]*disabled/, "password cannot be entered or persisted locally");
-assert.match(html, /data-action="add-course"[\s\S]*data-action="import-students"[\s\S]*data-action="add-student"[\s\S]*data-action="add-tutor"/, "people top actions follow the requested order");
-assert.equal((html.match(/class="people-action-icon"/g) || []).length, 7, "people and location actions use matching SVG icons");
+assert.doesNotMatch(html, /people-top-action[^>]*data-action="add-course"/, "people top actions omit add course");
+assert.match(html, /data-action="import-students"[\s\S]*匯入學生[\s\S]*data-action="add-student"[\s\S]*data-action="add-tutor"/, "people top actions follow the requested order and label");
+assert.equal((html.match(/class="people-action-icon"/g) || []).length, 6, "people and location actions use matching SVG icons");
 assert.match(html, /class="bottom-nav"[\s\S]*data-action="go-home"[\s\S]*data-module="people"[\s\S]*data-module="schedule"[\s\S]*data-module="payments"[\s\S]*data-module="manual"/, "five navigation items follow the requested order");
 assert.equal((html.match(/class="nav-icon"/g) || []).length, 5, "all five navigation items use matching SVG icons");
 assert.match(html, /本月人工＝教練時薪 × 本月已完成游泳班時數/, "hourly wage calculation is explained");

@@ -1,7 +1,11 @@
 (() => {
   "use strict";
 
-  const HEADERS = ["學生姓名", "課程", "負責導師", "每週上課日", "固定時間", "預繳堂數", "現時剩餘堂數", "下一堂日期", "課室／泳線"];
+  const TEMPLATE_VERSION = "STUDENT_IMPORT_V2_16_COLUMNS";
+  const HEADERS = [
+    "學生姓名 *", "年齡組別 *", "出生月份", "出生年份", "性別 *", "學生狀態 *", "今日日期 (dd-mm-yy) *", "學生加入年份 *",
+    "課程名稱 *", "課程人數 *", "監護人／緊急聯絡人", "聯絡號碼 WhatsApp *", "居住地點", "課堂地點", "Supabase 電郵", "Supabase 密碼（請留空）"
+  ];
   const decoder = new TextDecoder("utf-8");
 
   function parseCsv(text) {
@@ -114,12 +118,14 @@
 
   async function parse(file) {
     const rows = await readRows(file);
-    if (HEADERS.some((header, index) => String(rows[0][index] || "").trim() !== header)) throw new Error("欄位與範本不符，請下載最新 Excel 範本。");
+    if (rows[0].length !== HEADERS.length || HEADERS.some((header, index) => String(rows[0][index] || "").trim() !== header)) {
+      throw new Error("欄位或範本版本不符，請下載最新 16 欄 Excel 範本後再匯入。");
+    }
     const records = rows.slice(1).map((row, index) => ({ rowNumber: index + 2, values: row.map((value) => String(value == null ? "" : value).trim()) }))
       .filter(({ values }) => values.some(Boolean));
     if (records.length > 500) throw new Error("每次最多匯入 500 位學員，請分批處理。");
     return records;
   }
 
-  window.SwimStudentImport = { HEADERS, parse, readRows };
+  window.SwimStudentImport = { TEMPLATE_VERSION, HEADERS, parse, readRows };
 })();
