@@ -49,6 +49,7 @@
     studentFormPhoto: "",
     pendingStudentImport: null,
     pendingStudentImportCounters: null,
+    pendingStudentImportOptions: null,
     pendingCourseImport: null,
     courseSelection: { name: "", ageGroup: "", classSize: "" },
     pendingLocationImport: null,
@@ -126,6 +127,11 @@
     studentImportDialog: document.querySelector("#student-import-dialog"),
     studentImportFile: document.querySelector("#student-import-file"),
     studentImportConfirm: document.querySelector("#student-import-confirm"),
+    studentImportDuplicateWarning: document.querySelector("#student-import-duplicate-warning"),
+    studentImportDuplicateList: document.querySelector("#student-import-duplicate-list"),
+    studentImportSkipDuplicates: document.querySelector("#student-import-skip-duplicates"),
+    studentImportIncludeDuplicates: document.querySelector("#student-import-include-duplicates"),
+    studentImportDuplicateChoice: document.querySelector("#student-import-duplicate-choice"),
     courseImportDialog: document.querySelector("#course-import-dialog"),
     courseImportFile: document.querySelector("#course-import-file"),
     courseImportConfirm: document.querySelector("#course-import-confirm"),
@@ -2608,8 +2614,14 @@
   function openStudentImport() {
     state.pendingStudentImport = null;
     state.pendingStudentImportCounters = null;
+    state.pendingStudentImportOptions = null;
     elements.studentImportFile.value = "";
     elements.studentImportConfirm.disabled = true;
+    elements.studentImportDuplicateWarning.hidden = true;
+    elements.studentImportDuplicateList.innerHTML = "";
+    elements.studentImportDuplicateChoice.textContent = "";
+    elements.studentImportSkipDuplicates.setAttribute("aria-pressed", "false");
+    elements.studentImportIncludeDuplicates.setAttribute("aria-pressed", "false");
     document.querySelector("#student-import-error").textContent = "";
     document.querySelector("#student-import-preview").innerHTML = "";
     elements.studentImportDialog.showModal();
@@ -2639,6 +2651,10 @@
     return [year, String(month).padStart(2, "0"), String(day).padStart(2, "0")].join("-");
   }
 
+  function normalizeWhatsapp(value) {
+    return String(value || "").replace(/\D/g, "");
+  }
+
   function importTime(value) {
     const text = String(value || "").trim();
     if (/^0?\.\d+$/.test(text)) {
@@ -2659,12 +2675,10 @@
   }
 
   function prepareStudentImport(records) {
-    const students = [];
+    const candidates = [];
     const errors = [];
-    const seen = new Set(state.students.map((student) => student.name.trim().toLocaleLowerCase()));
-    const counters = { ...state.suite.studentNumberCounters };
     const allowedAgeGroups = ["2.5 - 5", "6 - 11", "12 - 17", "18 - 29", "30 - 39", "40 - 49", "50 - 59", "60 - 69"];
-    const numberFor = (year, ageGroup) => {
+    const numberFor = (counters, year, ageGroup) => {
       const prefix = isMinorAge(ageGroup) ? "K" : "A";
       const key = prefix + String(year).slice(-2);
       const existing = state.students.reduce((max, student) => {
@@ -2676,14 +2690,10 @@
       counters[key] = sequence;
       return key + String(sequence).padStart(4, "0");
     };
-    let skipped = 0;
     for (const { rowNumber, values } of records) {
       const [name, ageGroupText, birthMonthText, birthYearText, gender, statusText, dateText, joinYearText, courseName, classSize, guardianName, whatsapp, homeMtr, roomName, email, password] = values;
       const cleanName = String(name || "").trim();
-      const key = cleanName.toLocaleLowerCase();
       if (!cleanName) { errors.push("第 " + rowNumber + " 行：學生姓名不能留空。"); continue; }
-      if (seen.has(key)) { skipped += 1; continue; }
-      seen.add(key);
       const ageGroup = allowedAgeGroups.find((item) => sameCourseValue(item, ageGroupText)) || "";
       const minor = isMinorAge(ageGroup);
       const birthMonth = Number(String(birthMonthText || "").replace(/\s*月\s*$/, ""));
@@ -2712,22 +2722,81 @@
       if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim())) problems.push("Supabase 電郵格式無效");
       if (password) problems.push("Supabase 密碼必須留空；網站不會從 Excel 儲存或上載密碼");
       if (problems.length) { errors.push("第 " + rowNumber + " 行：" + problems.join("；") + "。"); continue; }
-      let studentNumber = "";
-      try { if (statusText === "已付款") studentNumber = numberFor(joinYear, ageGroup); }
-      catch (error) { errors.push("第 " + rowNumber + " 行：" + error.message + "。"); continue; }
       const fee = Number(course.fee) || 0;
       const duration = Number(course.duration) || 60;
-      students.push({
+      candidates.push({ rowNumber, phoneKey: normalizeWhatsapp(whatsapp), duplicate: false, student: {
         id: makeId(), name: cleanName, ageGroup, gender: String(gender).trim(), recordDate, enrollmentYear: joinYear,
-        enrollmentStatus: statusText === "已付款" ? "paid" : "pending", studentNumber,
+        enrollmentStatus: statusText === "已付款" ? "paid" : "pending", studentNumber: "",
         birthDate: "", birthMonth: minor && birthMonthText ? String(birthMonth) : "", birthYear: minor && birthYearText ? String(birthYear) : "",
         guardianName: String(guardianName || "").trim(), whatsapp: String(whatsapp).trim(), email: String(email || "").trim(), homeMtr: String(homeMtr || "").trim(), schoolMtr: "", workMtr: "", photo: "",
         enrollments: [{ id: makeId(), courseId: course.reference ? "" : course.id, courseName: course.name, ageGroup, pricingAgeGroup: course.ageGroup, classSize: course.classSize, firstDate: "", duration, originalFee: fee, discount: 0, netFee: fee }],
         courseId: course.reference ? "" : course.id, tutorId: "", weekday: 1, time: "18:00", nextTime: "18:00", prepaid: 0, remaining: 0, nextDate: "",
         roomId: room ? room.value : "", roomName: room ? room.label : "", bookingEnabled: false, bookingPolicy: "", status: "active", history: [], createdAt: new Date().toISOString()
-      });
+      } });
     }
-    return { students, errors, skipped, counters };
+    const existingByPhone = new Map();
+    for (const student of state.students) {
+      const phoneKey = normalizeWhatsapp(student.whatsapp);
+      if (!phoneKey) continue;
+      if (!existingByPhone.has(phoneKey)) existingByPhone.set(phoneKey, []);
+      existingByPhone.get(phoneKey).push(student.name);
+    }
+    const firstBatchPhone = new Map();
+    const duplicates = [];
+    for (const candidate of candidates) {
+      const existingNames = existingByPhone.get(candidate.phoneKey) || [];
+      const earlier = firstBatchPhone.get(candidate.phoneKey);
+      if (existingNames.length || earlier) {
+        candidate.duplicate = true;
+        duplicates.push({
+          rowNumber: candidate.rowNumber,
+          name: candidate.student.name,
+          whatsapp: candidate.student.whatsapp,
+          existingNames,
+          earlier: earlier ? { rowNumber: earlier.rowNumber, name: earlier.student.name } : null
+        });
+      }
+      if (!earlier) firstBatchPhone.set(candidate.phoneKey, candidate);
+    }
+    const finalize = (selected) => {
+      const counters = { ...state.suite.studentNumberCounters };
+      const students = [];
+      const numberErrors = [];
+      for (const candidate of selected) {
+        const student = { ...candidate.student };
+        try {
+          if (student.enrollmentStatus === "paid") student.studentNumber = numberFor(counters, student.enrollmentYear, student.ageGroup);
+        } catch (error) {
+          numberErrors.push("第 " + candidate.rowNumber + " 行：" + error.message + "。");
+          continue;
+        }
+        students.push(student);
+      }
+      return { students, counters, numberErrors };
+    };
+    const all = finalize(candidates);
+    const unique = finalize(candidates.filter((candidate) => !candidate.duplicate));
+    errors.push(...all.numberErrors);
+    return { students: all.students, counters: all.counters, uniqueStudents: unique.students, uniqueCounters: unique.counters, duplicates, errors, skipped: 0 };
+  }
+
+  function chooseStudentImportDuplicates(mode) {
+    const options = state.pendingStudentImportOptions;
+    if (!options) return;
+    const skip = mode === "skip";
+    state.pendingStudentImport = skip ? options.uniqueStudents : options.allStudents;
+    state.pendingStudentImportCounters = skip ? options.uniqueCounters : options.allCounters;
+    elements.studentImportSkipDuplicates.setAttribute("aria-pressed", String(skip));
+    elements.studentImportIncludeDuplicates.setAttribute("aria-pressed", String(!skip));
+    if (skip && !state.pendingStudentImport.length) {
+      elements.studentImportConfirm.disabled = true;
+      elements.studentImportDuplicateChoice.textContent = "全部項目均屬重複，沒有其他學生可匯入；你可改選連同重複項目匯入。";
+      return;
+    }
+    elements.studentImportConfirm.disabled = false;
+    elements.studentImportDuplicateChoice.textContent = skip ?
+      "已選擇略過 " + options.duplicateCount + " 個重複項目；將匯入其餘 " + state.pendingStudentImport.length + " 位學生。" :
+      "已確認保留重複項目；將匯入全部 " + state.pendingStudentImport.length + " 位學生。";
   }
 
   async function previewStudentImport(file) {
@@ -2738,15 +2807,36 @@
     elements.studentImportConfirm.disabled = true;
     state.pendingStudentImport = null;
     state.pendingStudentImportCounters = null;
+    state.pendingStudentImportOptions = null;
+    elements.studentImportDuplicateWarning.hidden = true;
+    elements.studentImportDuplicateList.innerHTML = "";
+    elements.studentImportDuplicateChoice.textContent = "";
+    elements.studentImportSkipDuplicates.setAttribute("aria-pressed", "false");
+    elements.studentImportIncludeDuplicates.setAttribute("aria-pressed", "false");
     try {
       const records = await window.SwimStudentImport.parse(file);
       const result = prepareStudentImport(records);
-      preview.innerHTML = '<p class="preview-good">可新增 ' + result.students.length + ' 位學員' + (result.skipped ? '；同名略過 ' + result.skipped + ' 位' : '') + '</p>' +
+      preview.innerHTML = '<p class="preview-good">可處理 ' + result.students.length + ' 位學員' + (result.duplicates.length ? '；發現 ' + result.duplicates.length + ' 個重複號碼項目' : '') + '</p>' +
         (result.students.length ? '<p>預覽：' + result.students.slice(0, 5).map((item) => escapeHtml(item.name)).join('、') + '</p>' : '') +
         (result.errors.length ? '<ul class="preview-warning">' + result.errors.slice(0, 12).map((item) => '<li>' + escapeHtml(item) + '</li>').join('') + '</ul>' : '');
       if (result.errors.length > 12) preview.innerHTML += '<p>另外還有 ' + (result.errors.length - 12) + ' 個錯誤。</p>';
       if (result.errors.length) errorNode.textContent = "請先修正檔案錯誤後重新選擇。";
-      if (result.students.length && !result.errors.length) {
+      if (result.duplicates.length && !result.errors.length) {
+        state.pendingStudentImportOptions = {
+          allStudents: result.students,
+          allCounters: result.counters,
+          uniqueStudents: result.uniqueStudents,
+          uniqueCounters: result.uniqueCounters,
+          duplicateCount: result.duplicates.length
+        };
+        elements.studentImportDuplicateList.innerHTML = result.duplicates.map((duplicate) => {
+          const matches = [];
+          if (duplicate.existingNames.length) matches.push('現有學生「' + duplicate.existingNames.join('」、「') + '」');
+          if (duplicate.earlier) matches.push('本次第 ' + duplicate.earlier.rowNumber + ' 行「' + duplicate.earlier.name + '」');
+          return '<li>第 ' + duplicate.rowNumber + ' 行「' + escapeHtml(duplicate.name) + '」（' + escapeHtml(duplicate.whatsapp) + '）與' + escapeHtml(matches.join('及')) + '使用相同號碼。</li>';
+        }).join('');
+        elements.studentImportDuplicateWarning.hidden = false;
+      } else if (result.students.length && !result.errors.length) {
         state.pendingStudentImport = result.students;
         state.pendingStudentImportCounters = result.counters;
         elements.studentImportConfirm.disabled = false;
@@ -3384,6 +3474,8 @@
 
   elements.courseImportConfirm.addEventListener("click", applyCourseImport);
   elements.locationImportConfirm.addEventListener("click", applyLocationImport);
+  elements.studentImportSkipDuplicates.addEventListener("click", () => chooseStudentImportDuplicates("skip"));
+  elements.studentImportIncludeDuplicates.addEventListener("click", () => chooseStudentImportDuplicates("include"));
 
   elements.studentImportConfirm.addEventListener("click", () => {
     if (!state.pendingStudentImport || !state.pendingStudentImport.length) return;
@@ -3400,6 +3492,7 @@
     }
     state.pendingStudentImport = null;
     state.pendingStudentImportCounters = null;
+    state.pendingStudentImportOptions = null;
     elements.studentImportDialog.close();
     document.body.classList.remove("modal-open");
     renderModule();

@@ -239,6 +239,16 @@
       <a class="button button-secondary" href="./students-import-template.xlsx" download="泳堂管家-學生匯入範本.xlsx">下載 Excel 範本</a>
       <label class="field import-file-field"><span>選擇已填寫的檔案</span><input id="student-import-file" type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" /></label>
       <div id="student-import-preview" class="import-preview" aria-live="polite"></div>
+      <section id="student-import-duplicate-warning" class="import-duplicate-warning" role="alert" hidden>
+        <h3>發現重複 WhatsApp 聯絡號碼</h3>
+        <p>請檢查以下學生，再選擇是否仍然匯入重複項目。</p>
+        <ul id="student-import-duplicate-list"></ul>
+        <div class="import-duplicate-actions" aria-label="重複學生處理方式">
+          <button class="button button-secondary" id="student-import-skip-duplicates" type="button" aria-pressed="false">取消重複項目，只匯入其他學生</button>
+          <button class="button button-secondary" id="student-import-include-duplicates" type="button" aria-pressed="false">確認連同重複項目匯入</button>
+        </div>
+        <p id="student-import-duplicate-choice" class="import-duplicate-choice" role="status"></p>
+      </section>
       <p id="student-import-error" class="form-error" role="alert"></p>
       <div class="modal-actions"><button class="button button-secondary" type="button" data-close="student-import-dialog">取消</button><button class="button button-primary" id="student-import-confirm" type="button" disabled>確認匯入</button></div>
     </dialog>
