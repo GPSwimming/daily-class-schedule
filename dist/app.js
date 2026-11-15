@@ -3094,6 +3094,13 @@
 
     const action = button.dataset.action;
     const id = button.dataset.id;
+    if (action === "show-guide") {
+      showHome();
+      const guide = document.querySelector(".setup-guide");
+      guide.open = true;
+      guide.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
     if (action === "tutor-attendance" && state.role === "tutor") {
       button.disabled = true;
       try {

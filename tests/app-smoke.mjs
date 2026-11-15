@@ -54,6 +54,9 @@ for (const id of [
 }
 
 assert.match(html, /viewport-fit=cover/, "mobile viewport is configured");
+assert.match(html, /class="month-pass-link"[^>]*href="https:\/\/pool-motion-preview-nov2026\.pastelpeach7\.chatgpt\.site\/"[^>]*target="_blank"[^>]*rel="noopener noreferrer"/, "month pass opens the requested site in an isolated tab");
+assert.match(html, /src="\.\/month-pass\.svg"/, "month pass uses its own icon");
+assert.match(html, /class="month-pass-link"[\s\S]*class="workflow-button"/, "desktop month pass precedes the workflow button");
 assert.match(html, /個人資訊/);
 assert.match(html, /時間表/);
 assert.match(html, /付款/);

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" aria-hidden="true">
+  <defs>
+    <linearGradient id="pass" x2="1" y2="1">
+      <stop stop-color="#84d1e8"/>
+      <stop offset="1" stop-color="#2b95bd"/>
+    </linearGradient>
+  </defs>
+  <rect x="3" y="6" width="26" height="23" rx="6" fill="url(#pass)" stroke="#155778" stroke-width="1.5"/>
+  <path d="M9.5 3.5v6M22.5 3.5v6M4 12h24" fill="none" stroke="#155778" stroke-width="2.4" stroke-linecap="round"/>
+  <text x="16" y="24" fill="#083b57" font-family="Microsoft JhengHei,PingFang TC,sans-serif" font-size="12" font-weight="800" text-anchor="middle">月</text>
+</svg>

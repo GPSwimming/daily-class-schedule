@@ -25,24 +25,24 @@
 }
 
 :root[data-theme="dark"] {
-  --canvas: #151a19;
-  --paper: #1e2523;
-  --paper-strong: #252d2b;
-  --ink: #f4f5f1;
-  --muted: #aeb8b4;
-  --line: #36413e;
-  --teal: #48bdc6;
-  --teal-dark: #63d0d7;
-  --teal-soft: #163d41;
-  --blue-soft: #203942;
-  --yellow-soft: #463e20;
-  --pink-soft: #482d32;
-  --purple-soft: #3c3048;
-  --green-soft: #263d2d;
+  --canvas: #041423;
+  --paper: #102f4b;
+  --paper-strong: #173956;
+  --ink: #f3f7fa;
+  --muted: #aabcc9;
+  --line: #29465d;
+  --teal: #83cfee;
+  --teal-dark: #9bdcf4;
+  --teal-soft: #183d58;
+  --blue-soft: #214963;
+  --yellow-soft: #5c491c;
+  --pink-soft: #55313d;
+  --purple-soft: #47305e;
+  --green-soft: #314e31;
   --coral: #f18a7c;
   --coral-soft: #4e2d29;
-  --shadow: 0 3px 12px rgba(0, 0, 0, 0.25);
-  --shadow-large: 0 20px 60px rgba(0, 0, 0, 0.42);
+  --shadow: 0 2px 8px rgba(0, 8, 20, 0.18);
+  --shadow-large: 0 18px 48px rgba(0, 8, 20, 0.38);
 }
 
 * { box-sizing: border-box; }
@@ -59,6 +59,8 @@ body {
 }
 
 body.modal-open { overflow: hidden; }
+
+:root[data-theme="dark"] body { background: var(--canvas); }
 
 button,
 input,
@@ -135,6 +137,24 @@ summary:focus-visible {
 }
 
 .header-actions { gap: 6px; }
+.month-pass-link {
+  display: inline-flex;
+  width: 44px;
+  min-width: 44px;
+  height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  color: var(--teal);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  text-decoration: none;
+}
+.month-pass-link:hover { background: var(--blue-soft); }
+.month-pass-link img { display: block; width: 26px; height: 26px; flex: 0 0 26px; }
+.month-pass-label { display: none; font-size: .85rem; font-weight: 750; white-space: nowrap; }
+.workflow-button { display: none; }
 
 .people-top-actions { display: flex; align-items: center; gap: 6px; }
 .people-top-action { display: inline-flex; align-items: center; gap: 6px; min-height: 42px; padding: 7px 12px; color: #2879a9; background: var(--paper); border: 1px solid #ccc8bc; border-radius: 999px; font-size: .76rem; font-weight: 750; white-space: nowrap; }
@@ -365,6 +385,21 @@ summary:focus-visible {
   font-size: 0.7rem;
   letter-spacing: 0.04em;
 }
+
+:root[data-theme="dark"] .topbar { background: #041423; }
+:root[data-theme="dark"] .welcome-card { color: #f3f7fa; background: #2d5870; border-color: #2d5870; }
+:root[data-theme="dark"] .profile-avatar { color: #0d3650; background: #8bcce8; }
+:root[data-theme="dark"] .feature-card { background: #102f4b; border-color: #102f4b; box-shadow: none; }
+:root[data-theme="dark"] .feature-card:hover { border-color: #42718b; box-shadow: var(--shadow-large); }
+:root[data-theme="dark"] .feature-card::after { color: #7891a4; }
+:root[data-theme="dark"] .feature-card:nth-child(2) .feature-icon { background: #35465e; }
+:root[data-theme="dark"] .feature-card:nth-child(4) .feature-icon { background: #574034; }
+:root[data-theme="dark"] .feature-card:nth-child(7) .feature-icon { background: #643640; }
+:root[data-theme="dark"] .feature-card:nth-child(8) .feature-icon { background: #394b5a; }
+:root[data-theme="dark"] .feature-card:nth-child(9) .feature-icon { background: #674d1b; }
+:root[data-theme="dark"] .feature-card:nth-child(10) .feature-icon { background: #4c4845; }
+:root[data-theme="dark"] .feature-card:nth-child(12) .feature-icon { background: #3b4d75; }
+:root[data-theme="dark"] .setup-guide { background: #102f4b; border-color: #29465d; }
 
 .module-view { max-width: 1080px; margin: 0 auto; }
 
@@ -1627,7 +1662,8 @@ label:has(> input[type="date"]) > input[type="date"]::-webkit-calendar-picker-in
   .schedule-zoom { right: max(36px, calc((100vw - 76px - 1080px) / 2 + 8px)); bottom: 20px; }
   body { padding-left: 76px; transition: padding-left 190ms ease; }
   body.nav-expanded { padding-left: 190px; }
-  .app-shell { padding: 0 28px 32px; }
+  .app-shell { width: 100%; padding: 0 28px 32px; }
+  .topbar { margin-inline: -28px; padding-inline: 28px; }
   .topbar .brand-icon { display: none; }
   .bottom-nav {
     inset: 0 auto 0 0;
@@ -1677,6 +1713,10 @@ label:has(> input[type="date"]) > input[type="date"]::-webkit-calendar-picker-in
     overflow: hidden;
   }
   .bottom-nav button.is-active { color: #174b63; background: #dceef6; }
+  :root[data-theme="dark"] .bottom-nav { background: #123450; border-right-color: #29465d; box-shadow: none; }
+  :root[data-theme="dark"] .bottom-nav:hover,
+  :root[data-theme="dark"] body.nav-expanded .bottom-nav { box-shadow: 7px 0 20px rgba(0, 8, 20, .22); }
+  :root[data-theme="dark"] .bottom-nav button.is-active { color: #f3f7fa; background: #2d5870; }
   .bottom-nav button > .nav-icon { align-self: center; width: 19px; height: 19px; }
   .bottom-nav b { align-self: center; opacity: 0; font-size: .79rem; white-space: nowrap; transform: translateX(-5px); transition: opacity 130ms ease, transform 190ms ease; }
   .bottom-nav:hover b,
@@ -1687,6 +1727,27 @@ label:has(> input[type="date"]) > input[type="date"]::-webkit-calendar-picker-in
   .record-grid,
   .student-grid,
   .product-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (min-width: 1100px) {
+  .month-pass-link { width: auto; padding-inline: 10px; }
+  .month-pass-label { display: inline; }
+  .home-view { display: flex; max-width: 1420px; flex-direction: column; padding-top: 40px; }
+  .home-view .welcome-card { order: 1; min-height: 136px; padding: 24px; gap: 20px; }
+  .home-view .profile-avatar { width: 80px; height: 80px; flex-basis: 80px; font-size: 2rem; }
+  .home-view .welcome-card h1 { font-size: 1.8rem; }
+  .home-view .welcome-card span,
+  .home-view .welcome-card p { font-size: .88rem; }
+  .home-view .feature-grid { order: 2; margin-top: 20px; gap: 14px; }
+  .home-view .feature-card { min-height: 176px; padding: 20px; }
+  .home-view .feature-icon { width: 64px; height: 64px; margin-bottom: 18px; font-size: 1.7rem; }
+  .home-view .feature-card strong { font-size: 1.1rem; }
+  .home-view .feature-card small { font-size: .85rem; }
+  .home-view .setup-guide { order: 4; margin-top: 24px; }
+  .home-view .powered-by { order: 3; font-size: .8rem; }
+  .topbar .brand-button { font-size: 1.5rem; }
+  .workflow-button { display: inline-flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 10px; color: var(--teal); background: transparent; border: 0; border-radius: 10px; font-weight: 700; }
+  .workflow-button:hover { background: var(--paper); }
 }
 
 @media (max-width: 620px) {
