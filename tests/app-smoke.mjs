@@ -64,17 +64,20 @@ assert.match(html, /時間表/);
 assert.match(html, /付款/);
 assert.match(html, /數位手冊/);
 
-const [passHtml, passClock, passNav, passAssets, gateway, storagePolicy] = await Promise.all([
+const [passHtml, passStyle, passNav, passAssets, gateway, storagePolicy] = await Promise.all([
   readFile(new URL("dist/month-pass/index.html", root), "utf8"),
-  readFile(new URL("dist/month-pass/clock.js", root), "utf8"),
+  readFile(new URL("dist/month-pass/style.css", root), "utf8"),
   readFile(new URL("dist/month-pass/navigation.js", root), "utf8"),
   readFile(new URL("dist/month-pass/secure-assets.js", root), "utf8"),
   readFile(new URL("supabase/functions/swim-admin-gateway/index.ts", root), "utf8"),
   readFile(new URL("supabase/month_pass_storage.sql", root), "utf8"),
 ]);
-assert.equal((passHtml.match(/data-live-time/g) || []).length, 3, "both image screens and the animated detail show the same live clock");
-assert.match(passClock, /new Date\(\)/, "month pass reads device time");
-assert.match(passNav, /month-pass:height/, "embedded page reports its height to the parent");
+assert.doesNotMatch(passHtml, /data-live-time|clock\.js/, "month pass does not duplicate the phone status bar");
+assert.match(passStyle, /aspect-ratio:589\/1200/, "status-bar crop retains the source image proportions");
+assert.match(passStyle, /top:-6\.666667%/, "original screenshot status row is outside the fixed viewport");
+assert.match(passNav, /const crop=button\.dataset\.coordinateSize\?0:80/, "image hotspots follow the cropped screenshot");
+assert.match(passNav, /month-pass:home/, "the image home control returns to the host app");
+assert.match(css, /body\[data-module="month-pass"\] \.topbar, body\[data-module="month-pass"\] \.bottom-nav \{ display: none; \}/, "month pass uses the full phone viewport");
 assert.doesNotMatch(passHtml, /(?:src|href)="[^"]*\.(?:jpg|png|mp4)"/i, "month-pass markup has no public personal-data asset URL");
 assert.match(passAssets, /window\.parent === window/, "standalone month-pass page cannot request private assets");
 assert.match(gateway, /role !== "admin"[\s\S]*?swim-month-pass-private/, "private assets require admin role on the server");

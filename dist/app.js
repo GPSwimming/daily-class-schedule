@@ -420,6 +420,7 @@
   function showHome() {
     if (state.role === "tutor") return renderTutorPortal();
     document.body.classList.remove("auth-logged-out");
+    if (state.currentModule === "month-pass") elements.moduleContent.innerHTML = "";
     state.currentModule = null;
     document.body.dataset.module = "";
     elements.peopleTopActions.hidden = true;
@@ -3833,10 +3834,7 @@
   if (typeof window.addEventListener === "function") window.addEventListener("message", (event) => {
     const frame = elements.moduleContent.querySelector(".month-pass-frame");
     if (event.origin !== location.origin || event.source !== frame?.contentWindow) return;
-    if (event.data?.type === "month-pass:height") {
-      const height = Number(event.data.height);
-      if (Number.isFinite(height) && height > 0 && height < 4000) frame.style.height = Math.ceil(height) + "px";
-    }
+    if (event.data?.type === "month-pass:home" && state.loggedIn && state.role === "admin") return showHome();
     if (event.data?.type === "month-pass:asset-request" && state.loggedIn && state.role === "admin") {
       const name = event.data.name;
       window.AdminAuth.getMonthPassAsset(name).then((blob) => {

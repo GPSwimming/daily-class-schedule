@@ -13,8 +13,8 @@
 <section id="screen-facilities" class="screen" aria-label="設施">
 <h1 class="sr-only">設施</h1>
 <img class="screen-image" data-private-asset="facilities.jpg" width="589" height="1280" alt="設施：設施申請清單、預訂設施、預訂營地、月票、未完成的預訂。">
-<span class="device-time" data-live-time aria-label="現在時間"></span>
 <button id="open-types" class="hit-target" data-box="25,810,539,134" aria-label="月票" aria-haspopup="dialog" aria-expanded="false"></button>
+<button id="return-home" class="hit-target" data-box="8,1152,140,128" aria-label="返回泳堂管家主頁"></button>
 <div id="type-overlay" class="type-overlay" hidden>
 <button id="modal-backdrop" class="modal-backdrop" tabindex="-1" aria-label="取消選擇類型"></button>
 <section id="type-dialog" class="type-dialog" role="dialog" aria-modal="true" aria-labelledby="type-title">
@@ -29,7 +29,6 @@
 <section id="screen-passes" class="screen" aria-label="公眾游泳池月票" hidden>
 <h1 class="sr-only" tabindex="-1" id="passes-title">公眾游泳池月票</h1>
 <img class="screen-image" data-private-asset="monthly-passes.jpg" width="589" height="1280" alt="公眾游泳池有效月票：2027年1月1日至1月31日。">
-<span class="device-time" data-live-time aria-label="現在時間"></span>
 <button id="passes-back" class="hit-target" data-box="13,95,55,55" aria-label="返回設施"></button>
 <button id="passes-close" class="hit-target" data-box="517,95,59,55" aria-label="關閉月票頁面"></button>
 <button id="view-pass" class="hit-target" data-box="25,488,539,80" aria-label="查看月票：2027年1月1日至1月31日"></button>
@@ -38,7 +37,6 @@
 <section class="phone" aria-label="月票動畫示範">
 <h1 class="sr-only" tabindex="-1" id="detail-title">月票詳情動畫示範</h1>
 <canvas id="preview" width="589" height="1280" aria-label="月票圖片及順時針轉動的橙色圓環，動畫示範">請使用支援 Canvas 的瀏覽器。</canvas>
-<span class="device-time" data-live-time aria-label="現在時間"></span>
 <div id="loading" role="status">正在載入預覽…</div>
 <button id="detail-back" class="hit-target" data-box="13,90,55,55" aria-label="返回公眾游泳池月票"></button>
 </section>
@@ -60,7 +58,6 @@
 <div id="asset-gate" class="asset-gate" role="status">正在載入受保護月票…</div>
 <script src="secure-assets.js"></script>
 <script src="app.js?v=flow-1"></script>
-<script src="clock.js"></script>
 <script src="navigation.js?v=flow-1"></script>
 </body>
 </html>

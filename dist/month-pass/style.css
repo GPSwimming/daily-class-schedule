@@ -5,7 +5,20 @@
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .mobile-app{max-width:589px}
 .screen,.phone{container-type:inline-size}
-.device-time{position:absolute;z-index:2;left:12.5%;top:1.45%;width:18%;height:4%;padding-left:1%;display:flex;align-items:center;background:#fff;color:#080808;font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;font-size:4.5cqw;font-weight:650;letter-spacing:-.035em;line-height:1;font-variant-numeric:tabular-nums;pointer-events:none}
-#screen-passes .device-time,.phone .device-time{top:.45%}
 .asset-gate{position:fixed;inset:0;z-index:30;display:grid;place-items:center;padding:24px;background:#fff;color:#37434a;text-align:center;font-size:15px;line-height:1.6}
-.download:not([href]){pointer-events:none;opacity:.6}
+.download[aria-busy="true"]{opacity:.6}
+
+/* The source screenshots include a simulated iPhone status bar in their first 80px.
+   Keep that strip outside the viewport so the real device status bar is the only one shown. */
+html,body{height:100%;overflow:hidden;overscroll-behavior:none}
+.mobile-app{width:100%;max-width:none;height:100dvh;min-height:0;display:grid;justify-items:center;align-items:start;overflow:hidden}
+.screen{width:min(100vw,589px,49.083333dvh);aspect-ratio:589/1200;overflow:hidden}
+.screen-image{position:absolute;top:-6.666667%;left:0;width:100%;height:auto}
+.type-dialog{top:24.583333%;height:47.333333%}
+.detail-screen{width:min(100%,589px);height:100%;display:flex;flex-direction:column;align-items:center;overflow:hidden}
+.phone{flex:1 1 0;min-height:0;max-width:100%;aspect-ratio:589/1200;overflow:hidden}
+.phone canvas{position:absolute;top:-6.666667%;left:0;width:100%;height:auto}
+.controls{flex:0 0 auto;width:100%;padding:10px 16px max(12px,env(safe-area-inset-bottom))}
+.player-label{margin-bottom:8px}
+.player-buttons{margin:10px 0 12px}
+.format-note{margin-top:8px}

@@ -6,4 +6,6 @@
 
 部署時先在 Supabase 建立私有 bucket，執行 `supabase/month_pass_storage.sql`，並部署 `supabase/functions/swim-admin-gateway/index.ts`。月票素材由已登入管理員的權杖經 Edge Function 讀取。瀏覽器直接打開 `month-pass/` 不會取得素材。影片只在下載或分享時讀取，以減少流量。
 
+原始 589×1280 截圖保存在私有 bucket。網頁顯示時裁走頂部 80 像素的模擬手機狀態列，以 589×1200 的原比例縮放至可用視窗，避免重複顯示時間、訊號、Wi-Fi 和電池圖示。月票模組使用全螢幕並停用頁面捲動；設施圖片底部的「主頁」位置可返回泳堂管家。真正的手機狀態列由 iOS／瀏覽器顯示，網頁無法讀取其內容。
+
 若更換素材，應先在私有 bucket 更新，再確認無憑證或非管理員無法下載，最後部署 `dist/`。Supabase 免費方案的 Storage、流量及 Edge Function 額度由整個 organization 共用，請在 Supabase Usage 頁面監察。
