@@ -87,6 +87,23 @@
     return request("catalog", {}, accessToken);
   }
 
+  async function getMonthPassAsset(name) {
+    if (role !== "admin" || !accessToken) throw new Error("請先登入管理員帳戶。");
+    const response = await fetch(endpoint, {
+      method: "POST",
+      mode: "cors",
+      cache: "no-store",
+      referrerPolicy: "no-referrer",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + accessToken },
+      body: JSON.stringify({ action: "month-pass-asset", name })
+    });
+    if (!response.ok) {
+      const result = await response.json().catch(() => ({}));
+      throw new Error(result.message || "受保護月票檔案暫時無法讀取。");
+    }
+    return response.blob();
+  }
+
   async function getTutorPortal() {
     if (role !== "tutor") throw new Error("請先登入導師帳戶。");
     return request("tutor-portal", {}, accessToken);
@@ -160,6 +177,7 @@
     check,
     signOut,
     getCatalog,
+    getMonthPassAsset,
     getTutorPortal,
     requestTutorLeave,
     markTutorAttendance,

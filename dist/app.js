@@ -21,7 +21,10 @@
     { id: "help", icon: "❓", title: "說明中心", description: "開台流程與常見問題", accent: "#dceafd" }
   ];
 
-  const moduleMeta = Object.fromEntries(FEATURES.map((item) => [item.id, item]));
+  const moduleMeta = {
+    ...Object.fromEntries(FEATURES.map((item) => [item.id, item])),
+    "month-pass": { id: "month-pass", title: "月票", description: "公眾游泳池月票與動畫詳情" }
+  };
   const todayYmd = () => formatYmd(startOfToday());
   const makeId = () => Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
   const hadPoolLocationsAtStartup = (() => {
@@ -555,7 +558,7 @@
     elements.logoutButton.hidden = true;
     elements.peopleMoreButton.setAttribute("aria-expanded", String(meta.id === "people" && state.peopleMenuOpen));
     elements.locationMoreButton.setAttribute("aria-expanded", String(meta.id === "rooms" && state.locationMenuOpen));
-    elements.moduleHeading.hidden = meta.id === "schedule";
+    elements.moduleHeading.hidden = meta.id === "schedule" || meta.id === "month-pass";
     elements.moduleActions.innerHTML = moduleActionHtml(meta.id);
     const renderers = {
       schedule: renderSchedule,
@@ -569,7 +572,8 @@
       announcements: renderAnnouncements,
       settings: renderSettings,
       contact: renderContact,
-      help: renderHelp
+      help: renderHelp,
+      "month-pass": () => '<iframe class="month-pass-frame" title="月票" src="./month-pass/" allow="web-share"></iframe>'
     };
     elements.moduleContent.innerHTML = renderers[meta.id]();
   }
@@ -3823,6 +3827,23 @@
       state.loggedIn = false;
       showLoggedOut();
       elements.adminLoginError.textContent = "登入已失效，請重新登入。";
+    }
+  });
+
+  if (typeof window.addEventListener === "function") window.addEventListener("message", (event) => {
+    const frame = elements.moduleContent.querySelector(".month-pass-frame");
+    if (event.origin !== location.origin || event.source !== frame?.contentWindow) return;
+    if (event.data?.type === "month-pass:height") {
+      const height = Number(event.data.height);
+      if (Number.isFinite(height) && height > 0 && height < 4000) frame.style.height = Math.ceil(height) + "px";
+    }
+    if (event.data?.type === "month-pass:asset-request" && state.loggedIn && state.role === "admin") {
+      const name = event.data.name;
+      window.AdminAuth.getMonthPassAsset(name).then((blob) => {
+        if (frame.isConnected) frame.contentWindow.postMessage({ type: "month-pass:asset", name, blob }, location.origin);
+      }).catch((error) => {
+        if (frame.isConnected) frame.contentWindow.postMessage({ type: "month-pass:asset-error", name, message: error.message }, location.origin);
+      });
     }
   });
 

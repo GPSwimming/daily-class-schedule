@@ -98,6 +98,32 @@ Deno.serve(async (request) => {
     const role = token ? await roleForToken(token) : "";
     if (!role) return reply(401, { message: "登入已失效，請重新登入。" }, origin);
     if (body.action === "check") return reply(200, { ok: true, role }, origin);
+    if (body.action === "month-pass-asset") {
+      if (role !== "admin") return reply(403, { message: "月票只限管理員查閱。" }, origin);
+      const assets = new Map([
+        ["facilities.jpg", "image/jpeg"],
+        ["choose-type.jpg", "image/jpeg"],
+        ["monthly-passes.jpg", "image/jpeg"],
+        ["background.png", "image/png"],
+        ["ring.png", "image/png"],
+        ["pool-motion-15s.mp4", "video/mp4"]
+      ]);
+      const mime = typeof body.name === "string" ? assets.get(body.name) : undefined;
+      if (!mime) return reply(400, { message: "月票檔案無效。" }, origin);
+      const asset = await fetch(projectUrl + "/storage/v1/object/authenticated/swim-month-pass-private/" + encodeURIComponent(body.name), {
+        headers: { apikey: apiKey, Authorization: "Bearer " + token }
+      });
+      if (!asset.ok) return reply(503, { message: "受保護月票檔案暫時無法讀取。" }, origin);
+      return new Response(asset.body, {
+        status: 200,
+        headers: {
+          ...headers(origin),
+          "Content-Type": mime,
+          "Cache-Control": "private, no-store",
+          "X-Content-Type-Options": "nosniff"
+        }
+      });
+    }
     if (body.action === "reset-password") {
       if (typeof body.password !== "string" || body.password.length < 12 || body.password.length > 1024) {
         return reply(400, { message: "新密碼至少需要 12 個字元。" }, origin);

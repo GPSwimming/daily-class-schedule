@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-HK">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<meta name="description" content="手機版月票互動示範：設施、選擇類型、公眾游泳池月票及15秒動畫。">
+<title>月票動畫預覽</title>
+<link rel="stylesheet" href="style.css?v=iphone-1">
+</head>
+<body>
+<main class="mobile-app">
+<section id="screen-facilities" class="screen" aria-label="設施">
+<h1 class="sr-only">設施</h1>
+<img class="screen-image" data-private-asset="facilities.jpg" width="589" height="1280" alt="設施：設施申請清單、預訂設施、預訂營地、月票、未完成的預訂。">
+<span class="device-time" data-live-time aria-label="現在時間"></span>
+<button id="open-types" class="hit-target" data-box="25,810,539,134" aria-label="月票" aria-haspopup="dialog" aria-expanded="false"></button>
+<div id="type-overlay" class="type-overlay" hidden>
+<button id="modal-backdrop" class="modal-backdrop" tabindex="-1" aria-label="取消選擇類型"></button>
+<section id="type-dialog" class="type-dialog" role="dialog" aria-modal="true" aria-labelledby="type-title">
+<h2 id="type-title" class="sr-only">選擇類型</h2>
+<img class="dialog-image" data-private-asset="choose-type.jpg" alt="" aria-hidden="true">
+<button class="hit-target" data-box="32,110,444,125" data-coordinate-size="507,568" aria-label="健身室" aria-disabled="true" disabled></button>
+<button id="choose-pool" class="hit-target" data-box="32,267,444,125" data-coordinate-size="507,568" aria-label="公眾游泳池"></button>
+<button id="cancel-types" class="hit-target" data-box="76,439,355,81" data-coordinate-size="507,568" aria-label="取消"></button>
+</section>
+</div>
+</section>
+<section id="screen-passes" class="screen" aria-label="公眾游泳池月票" hidden>
+<h1 class="sr-only" tabindex="-1" id="passes-title">公眾游泳池月票</h1>
+<img class="screen-image" data-private-asset="monthly-passes.jpg" width="589" height="1280" alt="公眾游泳池有效月票：2027年1月1日至1月31日。">
+<span class="device-time" data-live-time aria-label="現在時間"></span>
+<button id="passes-back" class="hit-target" data-box="13,95,55,55" aria-label="返回設施"></button>
+<button id="passes-close" class="hit-target" data-box="517,95,59,55" aria-label="關閉月票頁面"></button>
+<button id="view-pass" class="hit-target" data-box="25,488,539,80" aria-label="查看月票：2027年1月1日至1月31日"></button>
+</section>
+<section id="screen-detail" class="detail-screen" aria-label="月票詳情" hidden>
+<section class="phone" aria-label="月票動畫示範">
+<h1 class="sr-only" tabindex="-1" id="detail-title">月票詳情動畫示範</h1>
+<canvas id="preview" width="589" height="1280" aria-label="月票圖片及順時針轉動的橙色圓環，動畫示範">請使用支援 Canvas 的瀏覽器。</canvas>
+<span class="device-time" data-live-time aria-label="現在時間"></span>
+<div id="loading" role="status">正在載入預覽…</div>
+<button id="detail-back" class="hit-target" data-box="13,90,55,55" aria-label="返回公眾游泳池月票"></button>
+</section>
+<section class="controls" aria-label="播放與下載">
+<div class="player-label"><span>動畫預覽</span><span class="time"><b id="elapsed">00:00</b> / 00:15</span></div>
+<input id="timeline" aria-label="動畫時間" type="range" min="0" max="15" step="0.01" value="0">
+<div class="player-buttons">
+<button id="play" class="round-button" aria-label="暫停動畫"><svg class="pause-icon" viewBox="0 0 24 24"><path d="M8 6v12M16 6v12"/></svg><svg class="play-icon" viewBox="0 0 24 24"><path d="m9 6 10 6-10 6Z"/></svg></button>
+<button id="replay" class="text-button"><svg viewBox="0 0 24 24"><path d="M4 10a8 8 0 1 1 1 8M4 4v6h6"/></svg>重新播放</button>
+<label class="loop"><input id="loop" type="checkbox" checked><span class="toggle"></span>循環</label>
+</div>
+<a class="download" id="download-video" download="月票動畫示範-15秒.mp4"><svg viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg>下載 15 秒影片 <span>MP4</span></a>
+<button class="share" id="share"><svg viewBox="0 0 24 24"><path d="M12 16V3m-5 5 5-5 5 5M5 12v9h14v-9"/></svg>分享影片至 WhatsApp</button>
+<p class="format-note">每圈 2 秒 · 順時針 · 15 秒無聲影片</p>
+<p id="status" role="status" class="status"></p>
+</section>
+</section>
+</main>
+<div id="asset-gate" class="asset-gate" role="status">正在載入受保護月票…</div>
+<script src="secure-assets.js"></script>
+<script src="app.js?v=flow-1"></script>
+<script src="clock.js"></script>
+<script src="navigation.js?v=flow-1"></script>
+</body>
+</html>

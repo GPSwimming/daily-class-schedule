@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 
 const root = new URL("../", import.meta.url);
 const [html, css, js] = await Promise.all([
@@ -54,13 +54,33 @@ for (const id of [
 }
 
 assert.match(html, /viewport-fit=cover/, "mobile viewport is configured");
-assert.match(html, /class="month-pass-link"[^>]*href="https:\/\/pool-motion-preview-nov2026\.pastelpeach7\.chatgpt\.site\/"[^>]*target="_blank"[^>]*rel="noopener noreferrer"/, "month pass opens the requested site in an isolated tab");
+assert.match(html, /class="month-pass-link"[^>]*data-module="month-pass"/, "month pass opens inside the existing app");
+assert.doesNotMatch(html, /pool-motion-preview-nov2026/, "month pass no longer points to the separate Site");
+assert.match(js, /src="\.\/month-pass\/"/, "month pass loads from the same GitHub Pages origin");
 assert.match(html, /src="\.\/month-pass\.svg"/, "month pass uses its own icon");
 assert.match(html, /class="month-pass-link"[\s\S]*class="workflow-button"/, "desktop month pass precedes the workflow button");
 assert.match(html, /個人資訊/);
 assert.match(html, /時間表/);
 assert.match(html, /付款/);
 assert.match(html, /數位手冊/);
+
+const [passHtml, passClock, passNav, passAssets, gateway, storagePolicy] = await Promise.all([
+  readFile(new URL("dist/month-pass/index.html", root), "utf8"),
+  readFile(new URL("dist/month-pass/clock.js", root), "utf8"),
+  readFile(new URL("dist/month-pass/navigation.js", root), "utf8"),
+  readFile(new URL("dist/month-pass/secure-assets.js", root), "utf8"),
+  readFile(new URL("supabase/functions/swim-admin-gateway/index.ts", root), "utf8"),
+  readFile(new URL("supabase/month_pass_storage.sql", root), "utf8"),
+]);
+assert.equal((passHtml.match(/data-live-time/g) || []).length, 3, "both image screens and the animated detail show the same live clock");
+assert.match(passClock, /new Date\(\)/, "month pass reads device time");
+assert.match(passNav, /month-pass:height/, "embedded page reports its height to the parent");
+assert.doesNotMatch(passHtml, /(?:src|href)="[^"]*\.(?:jpg|png|mp4)"/i, "month-pass markup has no public personal-data asset URL");
+assert.match(passAssets, /window\.parent === window/, "standalone month-pass page cannot request private assets");
+assert.match(gateway, /role !== "admin"[\s\S]*?swim-month-pass-private/, "private assets require admin role on the server");
+assert.match(storagePolicy, /set public = false[\s\S]*?swim_app_admin/, "storage policy keeps the bucket private and admin-only");
+const passFiles = await readdir(new URL("dist/month-pass/", root));
+assert.ok(passFiles.every((file) => !/\.(?:jpg|jpeg|png|mp4|webp)$/i.test(file)), "deploy bundle contains no private month-pass images or video");
 
 assert.match(js, /swim-class-balance\.v1/, "legacy student storage key is preserved");
 assert.match(js, /swim-class-suite\.v2/, "suite storage key is present");

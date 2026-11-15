@@ -152,8 +152,11 @@ summary:focus-visible {
   text-decoration: none;
 }
 .month-pass-link:hover { background: var(--blue-soft); }
+.month-pass-link { cursor: pointer; font: inherit; }
 .month-pass-link img { display: block; width: 26px; height: 26px; flex: 0 0 26px; }
 .month-pass-label { display: none; font-size: .85rem; font-weight: 750; white-space: nowrap; }
+.month-pass-frame { display: block; width: 100%; max-width: 589px; height: 1280px; margin: 0 auto; border: 0; background: #fff; }
+body[data-module="month-pass"] .module-content { padding: 0; }
 .workflow-button { display: none; }
 
 .people-top-actions { display: flex; align-items: center; gap: 6px; }
