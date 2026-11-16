@@ -18,6 +18,9 @@ const saved = new Map([
 const classList = () => ({ add() {}, remove() {}, toggle() {} });
 const nodes = new Map();
 const listeners = new Map();
+const windowListeners = new Map();
+let expireSession;
+let loginAttempts = 0;
 const node = (selector) => {
   if (!nodes.has(selector)) nodes.set(selector, { innerHTML: "", textContent: "", hidden: false, classList: classList(), addEventListener(name, callback) { this[`on${name}`] = callback; }, setAttribute() {} });
   return nodes.get(selector);
@@ -30,7 +33,9 @@ const context = {
   document,
   localStorage: { getItem: (key) => saved.get(key) ?? null, setItem: (key, value) => saved.set(key, value) },
   sessionStorage: { getItem: () => null },
-  window: { scrollTo() {}, AdminAuth: { signIn: async () => {}, signOut: async () => {}, check: async () => true, getCatalog: async () => catalog, setOnExpired() {} } },
+  window: { scrollTo() {}, addEventListener: (name, callback) => windowListeners.set(name, callback),
+    LoginUI: { setLoginBusy: (busy) => { node("#admin-login-submit").disabled = busy; } },
+    AdminAuth: { signIn: async () => { loginAttempts += 1; }, signOut: async () => {}, check: async () => true, getCatalog: async () => catalog, setOnExpired(callback) { expireSession = callback; } } },
   setTimeout: () => 1, clearTimeout() {}, console
 };
 vm.runInNewContext(locationSource, context);
@@ -186,7 +191,25 @@ assert.equal(customPoolStudent.roomName, "另一個泳池", "editing changes onl
 context.window.matchMedia = () => ({ matches: true });
 document.visibilityState = "hidden";
 await listeners.get("visibilitychange")();
-assert.equal(state.loggedIn, false, "leaving the mobile app hides the authenticated workspace");
-assert.match(node("#admin-login-error").textContent, /重新登入/, "returning to the mobile app asks for a fresh login");
+assert.equal(state.loggedIn, true, "briefly backgrounding the mobile browser preserves an unexpired login");
+document.visibilityState = "visible";
+await listeners.get("visibilitychange")();
+assert.equal(state.loggedIn, true, "returning to the browser checks and keeps a valid login");
+windowListeners.get("pagehide")();
+assert.equal(state.loggedIn, false, "closing the mobile page ends its session");
+assert.match(node("#admin-login-error").textContent, /重新登入/, "closing the page asks for a fresh login");
+assert.equal(node("#admin-login-submit").disabled, false, "logout resets the login button");
+assert.equal(node("#admin-login-form").elements.password.value, "", "logout clears the previous password");
+assert.equal(node("#admin-login-form").hidden, false, "logout shows the login form");
+node("#admin-login-form").elements.password.value = "test-again";
+await node("#admin-login-form").onsubmit({ preventDefault() {} });
+assert.equal(state.loggedIn, true, "login works again without reloading after mobile logout");
+expireSession();
+assert.equal(state.loggedIn, false, "the one-hour expiry still ends the session");
+assert.equal(node("#admin-login-submit").disabled, false, "expiry resets the login button");
+node("#admin-login-form").elements.password.value = "test-after-expiry";
+await node("#admin-login-form").onsubmit({ preventDefault() {} });
+assert.equal(state.loggedIn, true, "login works again without reloading after expiry");
+assert.equal(loginAttempts, 3, "all three login submissions reached the authentication service");
 
 console.log("Student profile tests passed: fiscal years, unique IDs, age groups and legacy storage.");

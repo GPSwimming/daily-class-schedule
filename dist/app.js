@@ -451,9 +451,17 @@
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function showLoggedOut() {
+  function showLoggedOut(resetLogin = false) {
     state.role = "";
     state.tutorPortal = null;
+    if (resetLogin) {
+      elements.adminLoginForm.hidden = false;
+      elements.adminResetForm.hidden = true;
+      document.querySelector("#auth-main-content").hidden = false;
+      document.querySelector("#auth-privacy-view").hidden = true;
+      elements.adminLoginForm.elements.password.value = "";
+      window.LoginUI?.setLoginBusy(false);
+    }
     document.body.classList.add("auth-logged-out");
     document.body.dataset.module = "";
     setMonthPassChrome();
@@ -3273,7 +3281,7 @@
     if (action === "go-home") return showHome();
     if (action === "logout") {
       state.loggedIn = false;
-      showLoggedOut();
+      showLoggedOut(true);
       return window.AdminAuth?.signOut();
     }
     if (action === "schedule-mode") { state.scheduleMode = button.dataset.value; return renderModule(); }
@@ -3795,7 +3803,7 @@
 
   window.AdminAuth?.setOnExpired(() => {
     state.loggedIn = false;
-    showLoggedOut();
+    showLoggedOut(true);
     elements.adminLoginError.textContent = "登入已到期，請重新登入。";
   });
 
@@ -3897,7 +3905,7 @@
   function logOutAfterMobileExit() {
     if (!window.matchMedia?.("(max-width: 767px)").matches || !state.loggedIn || studentTemplateDownloadPending) return;
     state.loggedIn = false;
-    showLoggedOut();
+    showLoggedOut(true);
     elements.adminLoginError.textContent = "離開 App 後請重新登入。";
     window.AdminAuth?.signOut();
   }
@@ -3906,7 +3914,6 @@
   document.addEventListener("visibilitychange", async () => {
     if (document.visibilityState !== "visible") {
       if (studentTemplateDownloadPending) studentTemplateWasHidden = true;
-      else logOutAfterMobileExit();
       return;
     }
     if (studentTemplateWasHidden) {
@@ -3916,7 +3923,7 @@
     if (!state.loggedIn) return;
     if (!await window.AdminAuth.check()) {
       state.loggedIn = false;
-      showLoggedOut();
+      showLoggedOut(true);
       elements.adminLoginError.textContent = "登入已失效，請重新登入。";
     }
   });
