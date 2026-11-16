@@ -896,6 +896,8 @@
     return month >= 4 ? year : year - 1;
   }
 
+  const STUDENT_JOIN_YEARS = [2026, 2025, 2024, 2023];
+
   const STUDENT_DATE_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
   function studentRecordDateYmd(value, allowIso = false) {
@@ -1661,13 +1663,12 @@
 
   function renderStudentYears(form, selectedYear) {
     const existing = findById(state.students, form.elements.id.value);
-    const year = fiscalYear(studentRecordDateYmd(form.elements.recordDate.value) || todayYmd());
     const holder = document.querySelector("#student-year-choices");
     if (existing && existing.studentNumber) {
       holder.innerHTML = '<span class="student-number-locked">' + escapeHtml(String(existing.enrollmentYear || selectedYear)) + ' 年度 · 編號已鎖定</span>';
       return;
     }
-    const main = [year, year - 1, year - 2, year - 3];
+    const main = [...STUDENT_JOIN_YEARS];
     if (existing && Number(selectedYear) && !main.includes(Number(selectedYear))) main.push(Number(selectedYear));
     holder.innerHTML = studentChoices("enrollmentYear", main.map(String), String(selectedYear), true);
   }
@@ -1706,7 +1707,7 @@
     const existing = findById(state.students, form.elements.id.value);
     const paid = form.elements.enrollmentStatus.value === "已付款";
     const recordDate = studentRecordDateYmd(form.elements.recordDate.value);
-    const year = Number(form.querySelector('input[name="enrollmentYear"]:checked')?.value) || fiscalYear(recordDate || todayYmd());
+    const year = Number(form.querySelector('input[name="enrollmentYear"]:checked')?.value) || STUDENT_JOIN_YEARS[0];
     document.querySelector("#student-number-hint").textContent = existing?.enrollmentStatus === "legacy" && !existing.studentNumber ? "舊學生資料可繼續編輯；補齊年齡、性別及 WhatsApp 後，儲存為已付款會自動補編號。" : paid ? "付款確認後，儲存時依年度和年齡自動編號。已編號學生不可取消或轉換成年／未成年類別。" : "待確認學員暫不編配學生編號。";
     let preview = "";
     try { preview = existing && existing.studentNumber ? existing.studentNumber : !recordDate ? "請先修正今日日期" : paid && age ? nextStudentNumber(year, age).value : ""; }
@@ -1724,10 +1725,7 @@
     if (ymd) {
       if (normalize) input.value = formatStudentRecordDate(ymd);
       document.querySelector("#student-record-date-picker").value = ymd;
-      if (form.dataset.recordDateYmd !== ymd) {
-        form.dataset.recordDateYmd = ymd;
-        renderStudentYears(form, fiscalYear(ymd));
-      }
+      form.dataset.recordDateYmd = ymd;
     }
     updateStudentForm(form);
     return ymd;
@@ -1742,7 +1740,7 @@
     state.studentFormPhoto = item ? item.photo || "" : "";
     const form = elements.dynamicForm;
     form.dataset.recordDateYmd = studentRecordDateYmd(form.elements.recordDate.value);
-    renderStudentYears(form, item && item.enrollmentYear || fiscalYear(form.dataset.recordDateYmd || todayYmd()));
+    renderStudentYears(form, item && item.enrollmentYear || STUDENT_JOIN_YEARS[0]);
     renderStudentEnrollments(form, item && item.enrollments || []);
     updateStudentForm(form);
     updateStudentOtherPoolField(form);
@@ -1765,7 +1763,7 @@
     if (existing && !paid && !legacyIncomplete && existing.enrollmentStatus !== "pending" &&
       (existing.remaining > 0 || state.suite.payments.some((payment) => payment.studentId === existing.id)))
       throw new Error("這位學生已有堂數或收款紀錄，不能改為待確認學員。");
-    const year = existing && existing.studentNumber ? existing.enrollmentYear : Number(data.enrollmentYear) || fiscalYear(recordDate);
+    const year = existing && existing.studentNumber ? existing.enrollmentYear : Number(data.enrollmentYear) || STUDENT_JOIN_YEARS[0];
     const rows = studentEnrollmentDrafts(form);
     if (rows.length > 4) throw new Error("每位學生最多可新增四個課堂。");
     const enrollments = rows.map((row) => {
@@ -2728,7 +2726,7 @@
       if (!["男", "女"].includes(String(gender || "").trim())) problems.push("性別必須選擇男或女");
       if (!["待確認，未付款", "已付款"].includes(String(statusText || "").trim())) problems.push("學生狀態必須選擇待確認，未付款或已付款");
       if (!recordDate) problems.push("今日日期必須為有效的 dd-mm-yy 日期");
-      if (recordDate && ![0, 1, 2, 3].some((offset) => joinYear === fiscalYear(recordDate) - offset)) problems.push("學生加入年份須為該日期所屬年度或之前三年");
+      if (!STUDENT_JOIN_YEARS.includes(joinYear)) problems.push("學生加入年份須為 2026、2025、2024 或 2023，與今日日期無關");
       if (!String(courseName || "").trim()) problems.push("課程名稱不能留空");
       if (!String(classSize || "").trim()) problems.push("課程人數不能留空");
       if (ageGroup && courseName && classSize && !course) problems.push("課程名稱及課程人數不適用於所選年齡組別");
