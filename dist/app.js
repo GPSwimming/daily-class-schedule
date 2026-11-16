@@ -74,8 +74,9 @@
   let tutorDuplicateConfirmations = { email: "", phone: "" };
   let studentTemplateFile = null;
   let studentTemplateShareFailed = false;
-  let studentTemplateDownloadPending = false;
-  let studentTemplateWasHidden = false;
+  let courseTemplateShareFailed = false;
+  let templateDownloadPending = false;
+  let templateWasHidden = false;
 
   for (const student of state.students) {
     const match = String(student.studentNumber || "").match(/^([KA]\d{2})(\d{4})$/);
@@ -1951,13 +1952,49 @@
     showToast("課程已新增 " + plan.add + " 組、更新 " + plan.update + " 組");
   }
 
-  function downloadCourseTemplate() {
+  async function downloadCourseTemplate() {
     const blob = new Blob([window.SwimCourseImport.toCsv()], { type: "text/csv;charset=utf-8" });
+    const filename = "泳堂管家-課程匯入範本.csv";
+    const isMobile = window.matchMedia?.("(max-width: 767px)").matches;
+    templateDownloadPending = isMobile;
+    templateWasHidden = false;
+    elements.courseImportDialog.close();
+    document.body.classList.remove("modal-open");
+    let file = null;
+    if (isMobile && !courseTemplateShareFailed && typeof File === "function" && navigator.share && navigator.canShare) {
+      try {
+        file = new File([blob], filename, { type: "text/csv" });
+        if (!navigator.canShare({ files: [file] })) file = null;
+      } catch { file = null; }
+    }
+    if (file) {
+      try { await navigator.share({ files: [file] }); }
+      catch (error) {
+        if (error.name === "AbortError") {
+          if (document.visibilityState === "visible") templateDownloadPending = false;
+          return;
+        }
+        courseTemplateShareFailed = true;
+        showToast("分享選單無法開啟，已改用獨立頁面下載範本。");
+        file = null;
+      }
+      if (file) {
+        if (document.visibilityState === "visible") templateDownloadPending = false;
+        return;
+      }
+    }
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = "泳堂管家-課程匯入範本.csv";
+    link.download = filename;
+    if (isMobile) {
+      link.target = "_blank";
+      link.rel = "noopener";
+    }
+    document.body.appendChild(link);
     link.click();
-    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(link.href), 60000);
+    if (isMobile) setTimeout(() => { if (!templateWasHidden) templateDownloadPending = false; }, 3000);
   }
 
   function saveReferenceCourse(id) {
@@ -3877,7 +3914,8 @@
 
   const studentTemplateLink = document.querySelector('#student-import-dialog a[download]');
   studentTemplateLink?.addEventListener("click", async (event) => {
-    studentTemplateDownloadPending = true;
+    templateDownloadPending = true;
+    templateWasHidden = false;
     elements.studentImportDialog.close();
     document.body.classList.remove("modal-open");
     showHome();
@@ -3896,14 +3934,14 @@
           showToast("分享選單無法開啟；請重新開啟匯入，再按下載使用獨立頁面。");
         }
       }
-      if (document.visibilityState === "visible") studentTemplateDownloadPending = false;
+      if (document.visibilityState === "visible") templateDownloadPending = false;
       return;
     }
-    setTimeout(() => { if (!studentTemplateWasHidden) studentTemplateDownloadPending = false; }, 3000);
+    setTimeout(() => { if (!templateWasHidden) templateDownloadPending = false; }, 3000);
   });
 
   function logOutAfterMobileExit() {
-    if (!window.matchMedia?.("(max-width: 767px)").matches || !state.loggedIn || studentTemplateDownloadPending) return;
+    if (!window.matchMedia?.("(max-width: 767px)").matches || !state.loggedIn || templateDownloadPending) return;
     state.loggedIn = false;
     showLoggedOut(true);
     elements.adminLoginError.textContent = "離開 App 後請重新登入。";
@@ -3913,12 +3951,12 @@
   if (typeof window.addEventListener === "function") window.addEventListener("pagehide", logOutAfterMobileExit);
   document.addEventListener("visibilitychange", async () => {
     if (document.visibilityState !== "visible") {
-      if (studentTemplateDownloadPending) studentTemplateWasHidden = true;
+      if (templateDownloadPending) templateWasHidden = true;
       return;
     }
-    if (studentTemplateWasHidden) {
-      studentTemplateWasHidden = false;
-      studentTemplateDownloadPending = false;
+    if (templateWasHidden) {
+      templateWasHidden = false;
+      templateDownloadPending = false;
     }
     if (!state.loggedIn) return;
     if (!await window.AdminAuth.check()) {
