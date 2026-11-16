@@ -47,6 +47,12 @@ assert.equal(cellFormat("B2"), 201, "age dropdown cells are preformatted as text
 assert.equal(cellFormat("B251"), 201, "the last import row keeps the age text format");
 assert.equal(cellFormat("G2"), 200, "record date cells retain a real dd-mm-yy date format");
 assert.equal(cellFormat("H2"), 0, "joining year is an independent general-format value");
+const validationTags = [...sheetXml.matchAll(/<x:dataValidation\b[^>]*>/g)].map((match) => match[0]);
+assert.equal(validationTags.length, 12, "date and course dropdown validation rules remain intact");
+for (const column of ["G", "H", "I", "J", "N"]) {
+  const rule = validationTags.find((tag) => tag.includes(`sqref="${column}2:${column}251"`));
+  assert.match(rule, /allowBlank="1"/, `${column} blank cells do not trigger Excel validation warnings`);
+}
 assert.match(sheetXml, /sqref="H2:H251"[\s\S]*?<x:formula1>"2026,2025,2024,2023"<\/x:formula1>/, "joining year offers the four requested choices");
 assert.doesNotMatch(sheetXml, /<x:f\b/, "blank import cells contain no date or year formulas");
 const template = await importer.parse({ name: "template.xlsx", size: bytes.length, arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) });
