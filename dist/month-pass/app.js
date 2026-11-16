@@ -15,6 +15,8 @@ function loadImage(im,url){return new Promise((resolve,reject)=>{im.onload=resol
 function draw(){
   if(!ready)return;
   ctx.drawImage(bg,0,0);
+  // The source image has a noninteractive demo pill in its otherwise blank footer.
+  ctx.fillStyle='#fff';ctx.fillRect(0,1180,canvas.width,canvas.height-1180);
   ctx.save();ctx.translate(294,263);ctx.rotate(rotationTime*Math.PI);
   ctx.drawImage(ring,-74,-74,148,148);ctx.restore();
   elapsed.textContent='00:'+Math.floor(Math.min(time,15)).toString().padStart(2,'0');
