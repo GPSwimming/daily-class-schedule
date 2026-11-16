@@ -30,6 +30,7 @@ html,body{height:100%;overflow:hidden;overscroll-behavior:none}
 .dialog-heading{left:50%;top:7.4%;height:8%;padding:0 2%;transform:translateX(-50%);background:#fff;font-size:6.1cqw;font-weight:600;color:#666}
 .sharp-nav{position:absolute;z-index:2;left:0;top:0;width:100%;height:5.9%;display:flex;align-items:center;background:#fff;border-bottom:max(1px,.28cqw) solid #f25b16;pointer-events:none;line-height:1}
 .sharp-nav{gap:5%;padding:0 4.7%;font-size:5.1cqw;font-weight:600;color:#101318}
+#screen-passes .sharp-nav{height:6.9%;border-bottom:0}
 .nav-chevron{width:3.2cqw;height:3.2cqw;border-left:.7cqw solid #f35c17;border-bottom:.7cqw solid #f35c17;transform:rotate(45deg)}
 .nav-close{margin-left:auto;color:#444;font-size:7cqw;font-weight:400}
 .month-pass-overlay-open,.month-pass-overlay-open .mobile-app{background:#757575}
