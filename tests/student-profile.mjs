@@ -35,16 +35,20 @@ const context = {
 };
 vm.runInNewContext(locationSource, context);
 vm.runInNewContext(courseSource, context);
-const instrumented = appSource.replace(/\n\}\)\(\);\s*$/, "\n  globalThis.studentTest = { fiscalYear, isMinorAge, nextStudentNumber, studentAgeGroups, studentCoursesForAge, studentRecordDateYmd, formatStudentRecordDate, studentFormHtml, studentEnrollmentHtml, studentLocationPickerHtml, renderStudentYears, prepareStudentImport, saveStudentProfile, renderPeople, state };\n})();");
+const instrumented = appSource.replace(/\n\}\)\(\);\s*$/, "\n  globalThis.studentTest = { fiscalYear, studentJoiningYears, latestEnrolledCourseForStudent, studentMobileCardHtml, isMinorAge, nextStudentNumber, studentAgeGroups, studentCoursesForAge, studentRecordDateYmd, formatStudentRecordDate, studentFormHtml, studentEnrollmentHtml, studentLocationPickerHtml, renderStudentYears, prepareStudentImport, saveStudentProfile, renderPeople, state };\n})();");
 vm.runInNewContext(instrumented, context);
 node("#admin-login-form").elements = { email: { value: "admin@example.com" }, password: { value: "test-only" } };
 await node("#admin-login-form").onsubmit({ preventDefault() {} });
-const { fiscalYear, isMinorAge, nextStudentNumber, studentAgeGroups, studentCoursesForAge, studentRecordDateYmd, formatStudentRecordDate, studentFormHtml, studentEnrollmentHtml, studentLocationPickerHtml, renderStudentYears, prepareStudentImport, saveStudentProfile, renderPeople, state } = context.studentTest;
+const { fiscalYear, studentJoiningYears, latestEnrolledCourseForStudent, studentMobileCardHtml, isMinorAge, nextStudentNumber, studentAgeGroups, studentCoursesForAge, studentRecordDateYmd, formatStudentRecordDate, studentFormHtml, studentEnrollmentHtml, studentLocationPickerHtml, renderStudentYears, prepareStudentImport, saveStudentProfile, renderPeople, state } = context.studentTest;
 
 assert.equal(fiscalYear("2026-03-31"), 2025);
 assert.equal(fiscalYear("2026-04-01"), 2026);
 assert.equal(fiscalYear("2027-03-31"), 2026);
 assert.equal(fiscalYear("2027-04-01"), 2027);
+assert.deepEqual([...studentJoiningYears("2023-04-01")], [2023, 2022, 2021, 2020]);
+assert.deepEqual([...studentJoiningYears("2024-03-31")], [2023, 2022, 2021, 2020]);
+assert.deepEqual([...studentJoiningYears("2026-04-01")], [2026, 2025, 2024, 2023]);
+assert.deepEqual([...studentJoiningYears("2027-03-31")], [2026, 2025, 2024, 2023]);
 assert.equal(studentRecordDateYmd("03-Dec-2026"), "2026-12-03", "typed student date uses day-month-year order");
 assert.equal(studentRecordDateYmd("31/12/2026"), "", "slash-separated dates are rejected");
 assert.equal(studentRecordDateYmd("31-Feb-2026"), "", "impossible dates are rejected");
@@ -53,12 +57,23 @@ assert.equal(isMinorAge("12 - 17"), true);
 assert.equal(isMinorAge("18 - 29"), false);
 assert.equal(nextStudentNumber(2026, "6 - 11").value, "K260013", "counter prevents reusing deleted numbers");
 assert.equal(nextStudentNumber(2025, "18 - 29").value, "A250009", "adult sequence is separate");
+const pinky = { id: "pinky", name: "Pinky", enrollments: [
+  { courseName: "感統改良課程", firstDate: "2026-11-01" },
+  { courseName: "進階游泳課程", firstDate: "2026-12-01" }
+] };
+assert.equal(latestEnrolledCourseForStudent(pinky).name, "進階游泳課程", "latest starting enrollment supplies the student summary");
+assert.match(studentMobileCardHtml(pinky), /<h2>Pinky<\/h2><p>進階游泳課程<\/p>/, "mobile student card shows the latest course");
 const yearForm = { elements: { id: { value: "" }, recordDate: { value: "16-Nov-2026" } } };
 renderStudentYears(yearForm, 2025);
 assert.match(node("#student-year-choices").innerHTML, /name="enrollmentYear" value="2025" checked/, "2025 stays selected in the student form");
 yearForm.elements.recordDate.value = "16-Nov-2027";
 renderStudentYears(yearForm, 2025);
-assert.match(node("#student-year-choices").innerHTML, /name="enrollmentYear" value="2025" checked/, "changing the record date does not alter the joining year choices");
+assert.match(node("#student-year-choices").innerHTML, /name="enrollmentYear" value="2027"/, "the first joining-year choice follows the record date's fiscal year");
+assert.match(node("#student-year-choices").innerHTML, /name="enrollmentYear" value="2025" checked/, "a selected year remains selected when still in the four-year window");
+yearForm.elements.recordDate.value = "16-Nov-2023";
+renderStudentYears(yearForm, 2025);
+assert.match(node("#student-year-choices").innerHTML, /name="enrollmentYear" value="2023" checked/, "the first year is selected when the previous year falls outside the window");
+assert.match(node("#student-year-choices").innerHTML, /name="enrollmentYear" value="2020"/, "the four choices extend back three years");
 const importedYear = prepareStudentImport([{ rowNumber: 2, values: ["年份測試", "6 - 11", "", "", "女", "已付款", "16-11-26", "2025", "課程甲", "1:1", "", "85200000001", "", "", "", ""] }]);
 assert.equal(importedYear.errors.length, 0, "joining year does not depend on the record date");
 assert.equal(importedYear.students[0].enrollmentYear, 2025, "Excel joining year maps to the student profile");
@@ -167,5 +182,11 @@ assert.match(studentFormHtml(customPoolStudent), /name="roomId" value="other-poo
 assert.equal(JSON.parse(saved.get("swim-class-balance.v1")).at(-1).roomName, "私人泳池", "custom pool survives browser storage");
 saveStudentProfile({ id: customPoolStudent.id, name: customPoolStudent.name, ageGroup: customPoolStudent.ageGroup, gender: customPoolStudent.gender, whatsapp: customPoolStudent.whatsapp, recordDate: customPoolStudent.recordDate, enrollmentStatus: "待確認，未付款", roomId: "other-pool", otherPoolName: "另一個泳池" }, emptyForm);
 assert.equal(customPoolStudent.roomName, "另一個泳池", "editing changes only this student's custom pool name");
+
+context.window.matchMedia = () => ({ matches: true });
+document.visibilityState = "hidden";
+await listeners.get("visibilitychange")();
+assert.equal(state.loggedIn, false, "leaving the mobile app hides the authenticated workspace");
+assert.match(node("#admin-login-error").textContent, /重新登入/, "returning to the mobile app asks for a fresh login");
 
 console.log("Student profile tests passed: fiscal years, unique IDs, age groups and legacy storage.");

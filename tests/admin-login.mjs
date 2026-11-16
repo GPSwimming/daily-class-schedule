@@ -97,6 +97,28 @@ assert.equal((await send({ action: "logout" }, "admin-token")).status, 200, "adm
 assert.equal(logoutCalls, 1, "logout revokes the Supabase session");
 assert.doesNotMatch(browserSource, /SUPABASE_ANON_KEY|SUPABASE_PUBLISHABLE_KEY|service_role|sb_secret_/, "frontend contains no API key");
 assert.doesNotMatch(browserSource, /localStorage|sessionStorage/, "access token is kept only in memory");
+for (const mobile of [true, false]) {
+  let auth;
+  let now = 1_000_000;
+  let scheduledDelay;
+  vm.runInNewContext(browserSource, {
+    window: {
+      location: { hash: "", search: "" },
+      matchMedia: () => ({ matches: mobile }),
+      set AdminAuth(value) { auth = value; }
+    },
+    Date: { now: () => now }, URLSearchParams,
+    setTimeout: (_callback, delay) => { scheduledDelay = delay; }, clearTimeout: () => {},
+    fetch: async (_url, options) => {
+      assert.equal(JSON.parse(options.body).action, "login");
+      return Response.json({ accessToken: "test-token", expiresIn: 7200, role: "admin" });
+    }
+  });
+  assert.equal(await auth.signIn("admin@example.com", "test-password"), "admin");
+  assert.equal(scheduledDelay, (mobile ? 3600 : 7200) * 1000 - 5000, "mobile login is capped at one hour");
+  now += 3600 * 1000;
+  if (mobile) assert.equal(await auth.check(), false, "mobile token is rejected at the one-hour deadline");
+}
 let browserAuth;
 let scrubbedUrl = "";
 vm.runInNewContext(browserSource, {

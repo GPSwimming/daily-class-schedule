@@ -3,6 +3,7 @@
 
   // This public URL identifies the project, but contains no API key or credential.
   const endpoint = "https://qflrsblacjukooikvfyx.supabase.co/functions/v1/swim-admin-gateway";
+  const mobileSessionLimitMs = 60 * 60 * 1000;
   let accessToken = "";
   let expiresAt = 0;
   let role = "";
@@ -50,10 +51,12 @@
   async function signIn(email, password) {
     clearSession();
     const result = await request("login", { email, password });
-    if (!result.accessToken || !Number.isFinite(result.expiresIn) || ![undefined, "admin", "tutor"].includes(result.role)) throw new Error("登入服務回應無效，請稍後再試。");
+    if (!result.accessToken || !Number.isFinite(result.expiresIn) || result.expiresIn <= 0 || ![undefined, "admin", "tutor"].includes(result.role)) throw new Error("登入服務回應無效，請稍後再試。");
     accessToken = result.accessToken;
     role = result.role || "admin";
-    expiresAt = Date.now() + result.expiresIn * 1000;
+    const issuedForMs = result.expiresIn * 1000;
+    const mobile = window.matchMedia?.("(max-width: 767px)").matches;
+    expiresAt = Date.now() + (mobile ? Math.min(issuedForMs, mobileSessionLimitMs) : issuedForMs);
     expiryTimer = setTimeout(() => {
       clearSession();
       onExpired();
