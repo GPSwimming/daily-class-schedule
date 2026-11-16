@@ -585,7 +585,7 @@
       settings: renderSettings,
       contact: renderContact,
       help: renderHelp,
-      "month-pass": () => '<iframe class="month-pass-frame" title="月票" src="./month-pass/?v=month-pass-safe-2" allow="web-share"></iframe>'
+      "month-pass": () => '<iframe class="month-pass-frame" title="月票" src="./month-pass/?v=month-pass-safe-3" allow="web-share"></iframe>'
     };
     elements.moduleContent.innerHTML = renderers[meta.id]();
   }

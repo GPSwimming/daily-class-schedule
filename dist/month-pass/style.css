@@ -33,3 +33,4 @@ html,body{height:100%;overflow:hidden;overscroll-behavior:none}
 .nav-chevron{width:3.2cqw;height:3.2cqw;border-left:.7cqw solid #f35c17;border-bottom:.7cqw solid #f35c17;transform:rotate(45deg)}
 .nav-close{margin-left:auto;color:#444;font-size:7cqw;font-weight:400}
 .month-pass-overlay-open,.month-pass-overlay-open .mobile-app{background:#757575}
+html:has(body.month-pass-overlay-open){background:#757575}

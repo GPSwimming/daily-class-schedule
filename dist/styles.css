@@ -158,6 +158,7 @@ summary:focus-visible {
 .month-pass-frame { display: block; width: 100%; height: 100dvh; margin: 0 auto; border: 0; background: #fff; }
 html:has(body[data-module="month-pass"]), body[data-module="month-pass"] { overflow: hidden; overscroll-behavior: none; }
 html:has(body[data-module="month-pass"]), body[data-module="month-pass"] { background: #fff; }
+html:has(body[data-module="month-pass"].month-pass-modal-open), body[data-module="month-pass"].month-pass-modal-open { background: #757575; }
 body[data-module="month-pass"] { padding-left: 0; }
 body[data-module="month-pass"].month-pass-modal-open::before { content: ""; position: fixed; z-index: 20; inset: 0 0 auto; height: env(safe-area-inset-top); background: #757575; pointer-events: none; }
 body[data-module="month-pass"] .app-shell { height: 100dvh; min-height: 0; width: 100%; padding: 0; }
@@ -165,6 +166,7 @@ body[data-module="month-pass"] .app-shell > main { height: 100%; }
 body[data-module="month-pass"] .topbar, body[data-module="month-pass"] .bottom-nav { display: none; }
 body[data-module="month-pass"] .module-view, body[data-module="month-pass"] .module-content { height: 100%; max-width: none; padding: 0; }
 body[data-module="month-pass"] .module-content { padding-top: env(safe-area-inset-top); background: #fff; }
+body[data-module="month-pass"].month-pass-modal-open .module-content { background: #757575; }
 body[data-module="month-pass"] .month-pass-frame { height: calc(100dvh - env(safe-area-inset-top)); }
 .workflow-button { display: none; }
 
