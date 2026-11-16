@@ -56,7 +56,7 @@ for (const id of [
 assert.match(html, /viewport-fit=cover/, "mobile viewport is configured");
 assert.match(html, /class="month-pass-link"[^>]*data-module="month-pass"/, "month pass opens inside the existing app");
 assert.doesNotMatch(html, /pool-motion-preview-nov2026/, "month pass no longer points to the separate Site");
-assert.match(js, /src="\.\/month-pass\/"/, "month pass loads from the same GitHub Pages origin");
+assert.match(js, /src="\.\/month-pass\/\?v=month-pass-safe-2"/, "month pass loads the refreshed page from the same GitHub Pages origin");
 assert.match(html, /src="\.\/month-pass\.svg"/, "month pass uses its own icon");
 assert.match(html, /class="month-pass-link"[\s\S]*class="workflow-button"/, "desktop month pass precedes the workflow button");
 assert.match(html, /個人資訊/);
