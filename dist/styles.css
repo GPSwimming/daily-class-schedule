@@ -157,7 +157,9 @@ summary:focus-visible {
 .month-pass-label { display: none; font-size: .85rem; font-weight: 750; white-space: nowrap; }
 .month-pass-frame { display: block; width: 100%; height: 100dvh; margin: 0 auto; border: 0; background: #fff; }
 html:has(body[data-module="month-pass"]), body[data-module="month-pass"] { overflow: hidden; overscroll-behavior: none; }
+html:has(body[data-module="month-pass"]), body[data-module="month-pass"] { background: #fff; }
 body[data-module="month-pass"] { padding-left: 0; }
+body[data-module="month-pass"].month-pass-modal-open::before { content: ""; position: fixed; z-index: 20; inset: 0 0 auto; height: env(safe-area-inset-top); background: #757575; pointer-events: none; }
 body[data-module="month-pass"] .app-shell { height: 100dvh; min-height: 0; width: 100%; padding: 0; }
 body[data-module="month-pass"] .app-shell > main { height: 100%; }
 body[data-module="month-pass"] .topbar, body[data-module="month-pass"] .bottom-nav { display: none; }

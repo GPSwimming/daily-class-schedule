@@ -79,10 +79,13 @@ assert.match(passStyle, /\.controls\{display:none\}/, "month pass detail omits p
 assert.match(passAssets, /pool-motion-15s\.mp4/, "the existing 15-second month-pass video remains available as a private asset");
 assert.match(passStyle, /\.phone\{width:min\(100vw,589px,49\.083333dvh\);height:auto/, "month pass detail keeps the same fixed iPhone proportions as the other screens");
 assert.match(passHtml, /class="clear-heading facilities-heading"/, "facilities title is rendered as sharp native text");
-assert.match(passHtml, /class="sharp-app-header"/, "facilities uses a sharp vector header");
-assert.match(passHtml, /mobile-header-logo\.svg/, "facilities brand mark is vector artwork");
+assert.doesNotMatch(passHtml, /sharp-app-header|mobile-header-logo/, "facilities keeps the original SmartPLAY logo without a second white header");
 assert.match(passHtml, /class="sharp-nav"/, "passes and detail use sharp native navigation headings");
 assert.match(css, /padding-top: env\(safe-area-inset-top\)/, "month pass leaves the iPhone system status area free");
+assert.match(css, /month-pass-modal-open::before[^{]*\{[^}]*background: #757575/, "the iPhone safe area uses a solid modal backdrop");
+assert.match(passNav, /type:'month-pass:overlay',open:modal/, "month pass reports modal changes to its host");
+assert.match(passNav, /classList\.toggle\('month-pass-overlay-open',modal\)/, "month pass dims its full viewport when the dialog opens");
+assert.match(js, /type === "month-pass:overlay"[\s\S]*setMonthPassChrome/, "host syncs its safe area with the private month pass modal");
 assert.doesNotMatch(passNav, /月票詳情 · 動畫示範/, "month pass detail has no demo title");
 assert.match(passNav, /const crop=button\.dataset\.coordinateSize\?0:80/, "image hotspots follow the cropped screenshot");
 assert.match(passNav, /month-pass:home/, "the image home control returns to the host app");

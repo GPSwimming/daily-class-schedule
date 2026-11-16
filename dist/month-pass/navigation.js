@@ -25,6 +25,8 @@
     if(current==='detail'&&next!=='detail')document.dispatchEvent(new Event('preview:leave'));
     facilities.hidden=next!=='facilities'&&!modal;
     passes.hidden=next!=='passes';detail.hidden=next!=='detail';overlay.hidden=!modal;
+    document.body.classList.toggle('month-pass-overlay-open',modal);
+    if(window.parent!==window)window.parent.postMessage({type:'month-pass:overlay',open:modal},location.origin);
     openTypes.inert=modal;openTypes.setAttribute('aria-expanded',String(modal));
     if(next==='detail'&&current!=='detail')document.dispatchEvent(new Event('preview:enter'));
     document.title=next==='detail'?'月票詳情':next==='passes'?'公眾游泳池月票':modal?'選擇類型':'設施';

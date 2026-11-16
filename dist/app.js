@@ -146,6 +146,14 @@
     toast: document.querySelector("#toast")
   };
 
+  const pageThemeColor = document.querySelector('meta[name="theme-color"]');
+  const defaultThemeColor = pageThemeColor?.content || "#fbfaf6";
+  function setMonthPassChrome(modalOpen = false) {
+    const inMonthPass = state.currentModule === "month-pass" && state.loggedIn;
+    document.body.classList.toggle("month-pass-modal-open", inMonthPass && modalOpen);
+    if (pageThemeColor) pageThemeColor.content = inMonthPass ? (modalOpen ? "#757575" : "#ffffff") : defaultThemeColor;
+  }
+
   function defaultSuite() {
     return {
       settings: {
@@ -423,6 +431,7 @@
     if (state.currentModule === "month-pass") elements.moduleContent.innerHTML = "";
     state.currentModule = null;
     document.body.dataset.module = "";
+    setMonthPassChrome();
     elements.peopleTopActions.hidden = true;
     elements.peopleMoreButton.hidden = true;
     elements.locationTopActions.hidden = true;
@@ -443,6 +452,7 @@
     state.tutorPortal = null;
     document.body.classList.add("auth-logged-out");
     document.body.dataset.module = "";
+    setMonthPassChrome();
     document.body.classList.remove("nav-expanded");
     document.body.classList.remove("modal-open");
     document.querySelectorAll("dialog[open]").forEach((dialog) => dialog.close());
@@ -551,6 +561,7 @@
     elements.moduleTitle.textContent = meta.title;
     elements.moduleDescription.textContent = moduleDescription(meta.id);
     document.body.dataset.module = meta.id;
+    setMonthPassChrome();
     elements.peopleTopActions.hidden = meta.id !== "people";
     elements.peopleMoreButton.hidden = meta.id !== "people";
     elements.locationTopActions.hidden = meta.id !== "rooms";
@@ -3834,6 +3845,10 @@
   if (typeof window.addEventListener === "function") window.addEventListener("message", (event) => {
     const frame = elements.moduleContent.querySelector(".month-pass-frame");
     if (event.origin !== location.origin || event.source !== frame?.contentWindow) return;
+    if (event.data?.type === "month-pass:overlay" && state.loggedIn && state.role === "admin" && state.currentModule === "month-pass") {
+      setMonthPassChrome(event.data.open === true);
+      return;
+    }
     if (event.data?.type === "month-pass:home" && state.loggedIn && state.role === "admin") return showHome();
     if (event.data?.type === "month-pass:asset-request" && state.loggedIn && state.role === "admin") {
       const name = event.data.name;
