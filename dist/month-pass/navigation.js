@@ -27,7 +27,7 @@
     passes.hidden=next!=='passes';detail.hidden=next!=='detail';overlay.hidden=!modal;
     openTypes.inert=modal;openTypes.setAttribute('aria-expanded',String(modal));
     if(next==='detail'&&current!=='detail')document.dispatchEvent(new Event('preview:enter'));
-    document.title=next==='detail'?'月票詳情 · 動畫示範':next==='passes'?'公眾游泳池月票':modal?'選擇類型':'設施';
+    document.title=next==='detail'?'月票詳情':next==='passes'?'公眾游泳池月票':modal?'選擇類型':'設施';
     window.scrollTo(0,0);
     const focusTarget=modal?pool:next==='passes'?document.getElementById('passes-title'):next==='detail'?document.getElementById('detail-title'):current==='choose-type'?openTypes:null;
     if(focusTarget)focusTarget.focus({preventScroll:true});

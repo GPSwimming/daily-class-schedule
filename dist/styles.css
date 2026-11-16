@@ -162,6 +162,8 @@ body[data-module="month-pass"] .app-shell { height: 100dvh; min-height: 0; width
 body[data-module="month-pass"] .app-shell > main { height: 100%; }
 body[data-module="month-pass"] .topbar, body[data-module="month-pass"] .bottom-nav { display: none; }
 body[data-module="month-pass"] .module-view, body[data-module="month-pass"] .module-content { height: 100%; max-width: none; padding: 0; }
+body[data-module="month-pass"] .module-content { padding-top: env(safe-area-inset-top); background: #fff; }
+body[data-module="month-pass"] .month-pass-frame { height: calc(100dvh - env(safe-area-inset-top)); }
 .workflow-button { display: none; }
 
 .people-top-actions { display: flex; align-items: center; gap: 6px; }

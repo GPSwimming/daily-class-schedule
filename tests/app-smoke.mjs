@@ -75,6 +75,15 @@ const [passHtml, passStyle, passNav, passAssets, gateway, storagePolicy] = await
 assert.doesNotMatch(passHtml, /data-live-time|clock\.js/, "month pass does not duplicate the phone status bar");
 assert.match(passStyle, /aspect-ratio:589\/1200/, "status-bar crop retains the source image proportions");
 assert.match(passStyle, /top:-6\.666667%/, "original screenshot status row is outside the fixed viewport");
+assert.match(passStyle, /\.controls\{display:none\}/, "month pass detail omits playback and download controls");
+assert.match(passAssets, /pool-motion-15s\.mp4/, "the existing 15-second month-pass video remains available as a private asset");
+assert.match(passStyle, /\.phone\{width:min\(100vw,589px,49\.083333dvh\);height:auto/, "month pass detail keeps the same fixed iPhone proportions as the other screens");
+assert.match(passHtml, /class="clear-heading facilities-heading"/, "facilities title is rendered as sharp native text");
+assert.match(passHtml, /class="sharp-app-header"/, "facilities uses a sharp vector header");
+assert.match(passHtml, /mobile-header-logo\.svg/, "facilities brand mark is vector artwork");
+assert.match(passHtml, /class="sharp-nav"/, "passes and detail use sharp native navigation headings");
+assert.match(css, /padding-top: env\(safe-area-inset-top\)/, "month pass leaves the iPhone system status area free");
+assert.doesNotMatch(passNav, /月票詳情 · 動畫示範/, "month pass detail has no demo title");
 assert.match(passNav, /const crop=button\.dataset\.coordinateSize\?0:80/, "image hotspots follow the cropped screenshot");
 assert.match(passNav, /month-pass:home/, "the image home control returns to the host app");
 assert.match(css, /body\[data-module="month-pass"\] \.topbar, body\[data-module="month-pass"\] \.bottom-nav \{ display: none; \}/, "month pass uses the full phone viewport");

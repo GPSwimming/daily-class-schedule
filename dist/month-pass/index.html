@@ -13,6 +13,8 @@
 <section id="screen-facilities" class="screen" aria-label="設施">
 <h1 class="sr-only">設施</h1>
 <img class="screen-image" data-private-asset="facilities.jpg" width="589" height="1280" alt="設施：設施申請清單、預訂設施、預訂營地、月票、未完成的預訂。">
+<div class="sharp-app-header" aria-hidden="true"><img src="mobile-header-logo.svg" alt=""><span class="header-actions"><span class="header-bell"><svg viewBox="0 0 24 24"><path d="M5 17h14c-2-2-2-4-2-7a5 5 0 0 0-10 0c0 3 0 5-2 7Zm5 3h4"/></svg><span>29</span></span><svg class="header-menu" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg></span></div>
+<span class="clear-heading facilities-heading" aria-hidden="true">設施</span>
 <button id="open-types" class="hit-target" data-box="25,810,539,134" aria-label="月票" aria-haspopup="dialog" aria-expanded="false"></button>
 <button id="return-home" class="hit-target" data-box="8,1152,140,128" aria-label="返回泳堂管家主頁"></button>
 <div id="type-overlay" class="type-overlay" hidden>
@@ -20,6 +22,7 @@
 <section id="type-dialog" class="type-dialog" role="dialog" aria-modal="true" aria-labelledby="type-title">
 <h2 id="type-title" class="sr-only">選擇類型</h2>
 <img class="dialog-image" data-private-asset="choose-type.jpg" alt="" aria-hidden="true">
+<span class="clear-heading dialog-heading" aria-hidden="true">選擇類型</span>
 <button class="hit-target" data-box="32,110,444,125" data-coordinate-size="507,568" aria-label="健身室" aria-disabled="true" disabled></button>
 <button id="choose-pool" class="hit-target" data-box="32,267,444,125" data-coordinate-size="507,568" aria-label="公眾游泳池"></button>
 <button id="cancel-types" class="hit-target" data-box="76,439,355,81" data-coordinate-size="507,568" aria-label="取消"></button>
@@ -29,14 +32,16 @@
 <section id="screen-passes" class="screen" aria-label="公眾游泳池月票" hidden>
 <h1 class="sr-only" tabindex="-1" id="passes-title">公眾游泳池月票</h1>
 <img class="screen-image" data-private-asset="monthly-passes.jpg" width="589" height="1280" alt="公眾游泳池有效月票：2027年1月1日至1月31日。">
+<div class="sharp-nav" aria-hidden="true"><span class="nav-chevron"></span><span>公眾游泳池月票</span><span class="nav-close">×</span></div>
 <button id="passes-back" class="hit-target" data-box="13,95,55,55" aria-label="返回設施"></button>
 <button id="passes-close" class="hit-target" data-box="517,95,59,55" aria-label="關閉月票頁面"></button>
 <button id="view-pass" class="hit-target" data-box="25,488,539,80" aria-label="查看月票：2027年1月1日至1月31日"></button>
 </section>
 <section id="screen-detail" class="detail-screen" aria-label="月票詳情" hidden>
-<section class="phone" aria-label="月票動畫示範">
-<h1 class="sr-only" tabindex="-1" id="detail-title">月票詳情動畫示範</h1>
-<canvas id="preview" width="589" height="1280" aria-label="月票圖片及順時針轉動的橙色圓環，動畫示範">請使用支援 Canvas 的瀏覽器。</canvas>
+<section class="phone" aria-label="月票詳情">
+<h1 class="sr-only" tabindex="-1" id="detail-title">月票詳情</h1>
+<canvas id="preview" width="589" height="1280" aria-label="月票圖片及順時針轉動的橙色圓環">請使用支援 Canvas 的瀏覽器。</canvas>
+<div class="sharp-nav" aria-hidden="true"><span class="nav-chevron"></span><span>月票詳情</span></div>
 <div id="loading" role="status">正在載入預覽…</div>
 <button id="detail-back" class="hit-target" data-box="13,90,55,55" aria-label="返回公眾游泳池月票"></button>
 </section>
