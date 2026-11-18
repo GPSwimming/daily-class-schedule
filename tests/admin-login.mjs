@@ -119,6 +119,41 @@ for (const mobile of [true, false]) {
   now += 3600 * 1000;
   if (mobile) assert.equal(await auth.check(), false, "mobile token is rejected at the one-hour deadline");
 }
+let raceAuth;
+let finishOldCheck;
+const expiryCallbacks = [];
+vm.runInNewContext(browserSource, {
+  window: {
+    location: { hash: "", search: "" },
+    matchMedia: () => ({ matches: true }),
+    set AdminAuth(value) { raceAuth = value; }
+  },
+  URLSearchParams, setTimeout: (callback) => { expiryCallbacks.push(callback); }, clearTimeout: () => {},
+  fetch: async (_url, options) => {
+    const action = JSON.parse(options.body).action;
+    if (action === "login") return Response.json({ accessToken: JSON.parse(options.body).email, expiresIn: 7200, role: "admin" });
+    if (options.headers.Authorization === "Bearer first@example.com") return new Promise((resolve) => { finishOldCheck = resolve; });
+    return Response.json({ role: "admin" });
+  }
+});
+await raceAuth.signIn("first@example.com", "test-password");
+const oldCheck = raceAuth.check();
+await raceAuth.signIn("second@example.com", "test-password");
+finishOldCheck(Response.json({ message: "old session expired" }, { status: 401 }));
+assert.equal(await oldCheck, false, "old session check returns false after a newer login");
+expiryCallbacks[0]();
+assert.equal(await raceAuth.check(), true, "a late old check or timer cannot clear the new login");
+let cancelledAuth;
+let finishPendingLogin;
+vm.runInNewContext(browserSource, {
+  window: { location: { hash: "", search: "" }, set AdminAuth(value) { cancelledAuth = value; } },
+  URLSearchParams, setTimeout, clearTimeout,
+  fetch: async () => new Promise((resolve) => { finishPendingLogin = resolve; })
+});
+const pendingLogin = cancelledAuth.signIn("admin@example.com", "test-password");
+await cancelledAuth.signOut();
+finishPendingLogin(Response.json({ accessToken: "late-token", expiresIn: 3600, role: "admin" }));
+await assert.rejects(pendingLogin, /登入流程已重設/, "closing the page cancels a pending login response");
 let browserAuth;
 let scrubbedUrl = "";
 vm.runInNewContext(browserSource, {

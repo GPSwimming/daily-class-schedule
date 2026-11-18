@@ -1229,11 +1229,15 @@ body[data-module="month-pass"] .month-pass-frame { height: calc(100dvh - env(saf
 
 /* Administrator entry, password recovery and privacy pages. */
 body.auth-logged-out { background: #faf8f3; }
+html:has(body.auth-logged-out:not(.auth-dark)),
+html:has(body.auth-logged-out:not(.auth-dark)) body { background: #faf8f3; }
 body.auth-logged-out .app-shell { width: 100%; max-width: none; padding: 0; }
 body.auth-logged-out .topbar { display: none; }
 body.auth-logged-out .logged-out-view { min-height: 100vh; display: block; }
 .auth-page { --auth-bg: #faf8f3; --auth-panel: #fbf9f4; --auth-ink: #24221f; --auth-muted: #67645e; --auth-line: #d0cabc; --auth-blue: #82cbe8; --auth-link: #1682ae; width: min(760px, 100%); margin: 0 auto; padding: clamp(24px, 5vw, 52px) 18px 32px; color: var(--auth-ink); background: var(--auth-bg); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft JhengHei", "PingFang TC", sans-serif; }
 body.auth-logged-out.auth-dark { background: #001526; }
+html:has(body.auth-logged-out.auth-dark),
+html:has(body.auth-logged-out.auth-dark) body { background: #001526; }
 body.auth-dark .auth-page { --auth-bg: #001526; --auth-panel: #082c47; --auth-ink: #f4f7fa; --auth-muted: #b8c6d0; --auth-line: #677481; --auth-blue: #82cbe8; --auth-link: #9cd8f1; }
 .auth-brand { width: 100%; padding: 16px 22px 17px; background: var(--auth-blue); border-radius: 17px; color: #143750; }
 .auth-brand img { display: block; width: min(90%, 570px); height: auto; max-height: 226px; object-fit: contain; margin: 0 auto -8px; }
@@ -1305,6 +1309,30 @@ body.auth-dark .auth-consent { background: #103955; }
 @media (max-width: 360px) {
   .auth-options { flex-wrap: wrap; }
   .auth-language-list { order: 2; flex: 1 1 100%; justify-content: center; }
+}
+@media (max-width: 650px) {
+  html:has(body.auth-logged-out) { height: 100%; overflow: hidden; overscroll-behavior: none; }
+  body.auth-logged-out { height: 100dvh; min-height: 0; overflow: hidden; overscroll-behavior: none; }
+  body.auth-logged-out .app-shell { height: 100%; min-height: 0; }
+  body.auth-logged-out .app-shell > main { height: 100%; min-height: 0; }
+  body.auth-logged-out .logged-out-view { height: 100%; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: none; }
+  body.auth-logged-out .logged-out-view.auth-fits-viewport { overflow-y: hidden; }
+  .auth-page { min-height: 100%; display: flex; flex-direction: column; justify-content: center; padding-top: max(12px, env(safe-area-inset-top)); padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+  .auth-footer { margin-top: 12px; }
+}
+@media (max-width: 650px) and (max-height: 900px) {
+  .auth-page { padding-top: max(8px, env(safe-area-inset-top)); padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+  .auth-brand { padding-top: 10px; padding-bottom: 10px; }
+  .auth-brand img { max-height: 20dvh; }
+  .auth-panel { margin-top: 12px; padding-top: 18px; padding-bottom: 18px; }
+  .auth-options { margin-bottom: 20px; }
+  .auth-panel h1 { margin-bottom: 18px; }
+  .auth-floating-field { margin-bottom: 14px; }
+  .auth-forgot { margin-bottom: 16px; }
+  .auth-consent { margin-bottom: 16px; padding: 14px; }
+  .auth-primary-button { min-height: 54px; }
+  .auth-text-button { margin-top: 11px; }
+  .auth-policy-link { margin-top: 5px; }
 }
 
 .modal {

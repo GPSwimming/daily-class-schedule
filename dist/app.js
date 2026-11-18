@@ -77,6 +77,8 @@
   let courseTemplateShareFailed = false;
   let templateDownloadPending = false;
   let templateWasHidden = false;
+  let loginGeneration = 0;
+  let loginAttemptActive = false;
 
   for (const student of state.students) {
     const match = String(student.studentNumber || "").match(/^([KA]\d{2})(\d{4})$/);
@@ -452,16 +454,35 @@
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  function syncLoginViewport() {
+    const view = elements.loggedOutView;
+    const page = view.querySelector?.(".auth-page");
+    if (!page || !view.clientHeight) return;
+    const fits = page.scrollHeight <= view.clientHeight + 1;
+    view.classList.toggle("auth-fits-viewport", fits);
+    if (fits) view.scrollTop = 0;
+  }
+
   function showLoggedOut(resetLogin = false) {
+    state.loggedIn = false;
     state.role = "";
     state.tutorPortal = null;
     if (resetLogin) {
+      loginGeneration += 1;
+      state.currentModule = null;
       elements.adminLoginForm.hidden = false;
       elements.adminResetForm.hidden = true;
       document.querySelector("#auth-main-content").hidden = false;
       document.querySelector("#auth-privacy-view").hidden = true;
+      elements.adminLoginForm.reset?.();
+      elements.adminLoginForm.elements.email.value = "";
       elements.adminLoginForm.elements.password.value = "";
+      elements.adminLoginForm.elements.password.type = "password";
+      document.querySelector('#admin-login-form [data-auth-visibility="admin-password"]')?.setAttribute("aria-pressed", "false");
+      document.querySelector("#auth-consent").checked = false;
+      elements.adminLoginError.textContent = "";
       window.LoginUI?.setLoginBusy(false);
+      window.LoginUI?.translate?.();
     }
     document.body.classList.add("auth-logged-out");
     document.body.dataset.module = "";
@@ -481,6 +502,9 @@
     elements.loggedOutView.hidden = false;
     elements.bottomNav.hidden = true;
     elements.pageLabel.textContent = "泳堂管家";
+    window.scrollTo(0, 0);
+    elements.loggedOutView.scrollTop = 0;
+    window.requestAnimationFrame?.(syncLoginViewport);
   }
 
   function renderTutorPortal() {
@@ -3870,8 +3894,18 @@
     elements.adminLoginError.textContent = "登入已到期，請重新登入。";
   });
 
+  if (typeof ResizeObserver === "function") {
+    const loginLayoutObserver = new ResizeObserver(syncLoginViewport);
+    loginLayoutObserver.observe(elements.loggedOutView);
+    loginLayoutObserver.observe(elements.loggedOutView.querySelector(".auth-page"));
+  }
+  window.addEventListener?.("resize", syncLoginViewport);
+  window.visualViewport?.addEventListener("resize", syncLoginViewport);
+
   elements.adminLoginForm.addEventListener("submit", async (event) => {
     event.preventDefault();
+    const generation = loginGeneration;
+    loginAttemptActive = true;
     const email = elements.adminLoginForm.elements.email.value.trim();
     const password = elements.adminLoginForm.elements.password.value;
     elements.adminLoginError.textContent = "";
@@ -3879,10 +3913,14 @@
     try {
       if (!window.AdminAuth) throw new Error("登入服務尚未載入，請重新整理頁面。");
       const role = await window.AdminAuth.signIn(email, password) || "admin";
+      if (generation !== loginGeneration) return;
       if (role === "tutor") {
-        state.tutorPortal = await window.AdminAuth.getTutorPortal();
+        const portal = await window.AdminAuth.getTutorPortal();
+        if (generation !== loginGeneration) return;
+        state.tutorPortal = portal;
       } else {
         const catalog = await window.AdminAuth.getCatalog();
+        if (generation !== loginGeneration) return;
         window.SwimCourseImport.setReferenceRows(catalog.courses);
         window.SwimLocationImport.setReferenceRows(catalog.locations);
         if (!hadPoolLocationsAtStartup) {
@@ -3890,14 +3928,17 @@
           saveAll();
         }
       }
+      if (generation !== loginGeneration) return;
       state.role = role;
       state.loggedIn = true;
+      loginGeneration += 1;
       elements.adminLoginForm.elements.password.value = "";
       renderShell();
     } catch (error) {
-      elements.adminLoginError.textContent = error.message || "登入失敗，請稍後再試。";
+      if (generation === loginGeneration) elements.adminLoginError.textContent = error.message || "登入失敗，請稍後再試。";
     } finally {
-      window.LoginUI?.setLoginBusy(false);
+      loginAttemptActive = false;
+      if (generation === loginGeneration || state.loggedIn) window.LoginUI?.setLoginBusy(false);
     }
   });
 
@@ -3967,7 +4008,7 @@
   });
 
   function logOutAfterMobileExit() {
-    if (!window.matchMedia?.("(max-width: 767px)").matches || !state.loggedIn || templateDownloadPending) return;
+    if (!window.matchMedia?.("(max-width: 767px)").matches || (!state.loggedIn && !loginAttemptActive) || templateDownloadPending) return;
     state.loggedIn = false;
     showLoggedOut(true);
     elements.adminLoginError.textContent = "離開 App 後請重新登入。";
@@ -3985,8 +4026,8 @@
       templateDownloadPending = false;
     }
     if (!state.loggedIn) return;
-    if (!await window.AdminAuth.check()) {
-      state.loggedIn = false;
+    const generation = loginGeneration;
+    if (!await window.AdminAuth.check() && state.loggedIn && generation === loginGeneration) {
       showLoggedOut(true);
       elements.adminLoginError.textContent = "登入已失效，請重新登入。";
     }

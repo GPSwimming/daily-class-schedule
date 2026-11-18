@@ -8,6 +8,7 @@
   let expiresAt = 0;
   let role = "";
   let expiryTimer;
+  let sessionRevision = 0;
   let onExpired = () => {};
   let recoveryToken = "";
   let recoveryError = "";
@@ -25,6 +26,7 @@
   }
 
   function clearSession() {
+    sessionRevision += 1;
     accessToken = "";
     expiresAt = 0;
     role = "";
@@ -50,7 +52,9 @@
 
   async function signIn(email, password) {
     clearSession();
+    const revision = sessionRevision;
     const result = await request("login", { email, password });
+    if (revision !== sessionRevision) throw new Error("登入流程已重設，請重新登入。");
     if (!result.accessToken || !Number.isFinite(result.expiresIn) || result.expiresIn <= 0 || ![undefined, "admin", "tutor"].includes(result.role)) throw new Error("登入服務回應無效，請稍後再試。");
     accessToken = result.accessToken;
     role = result.role || "admin";
@@ -58,6 +62,7 @@
     const mobile = window.matchMedia?.("(max-width: 767px)").matches;
     expiresAt = Date.now() + (mobile ? Math.min(issuedForMs, mobileSessionLimitMs) : issuedForMs);
     expiryTimer = setTimeout(() => {
+      if (revision !== sessionRevision) return;
       clearSession();
       onExpired();
     }, Math.max(0, expiresAt - Date.now() - 5000));
@@ -65,16 +70,18 @@
   }
 
   async function check() {
-    if (!accessToken || Date.now() >= expiresAt - 5000) {
+    const token = accessToken;
+    if (!token || Date.now() >= expiresAt - 5000) {
       clearSession();
       return false;
     }
     try {
-      const result = await request("check", {}, accessToken);
+      const result = await request("check", {}, token);
+      if (token !== accessToken) return false;
       if ((result.role || "admin") !== role) throw new Error("登入權限已變更。");
       return true;
     } catch {
-      clearSession();
+      if (token === accessToken) clearSession();
       return false;
     }
   }
