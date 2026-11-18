@@ -1460,8 +1460,8 @@ body[data-module="rooms"] .module-heading p { max-width: 78ch; line-height: 1.65
 :root[data-theme="dark"] .people-status.needs-payment { background: var(--coral-soft); }
 :root[data-theme="dark"] .people-status.is-pending { color: var(--ink); background: var(--purple-soft); }
 
-.student-dialog { width: min(620px, calc(100% - 24px)); max-height: calc(100dvh - 80px); padding: 0; overflow: hidden; background: var(--paper); border: 1px solid #c9c3b8; border-radius: 20px; }
-.student-dialog form { max-height: calc(100dvh - 102px); margin: 10px; padding: 14px 10px 10px 14px; overflow-y: scroll; overscroll-behavior: contain; scrollbar-gutter: stable; scrollbar-color: #92918d #e7e4dd; }
+.student-dialog { width: min(620px, calc(100% - 24px)); max-height: calc(100dvh - 80px); margin-inline: auto; padding: 0; overflow: hidden; background: var(--paper); border: 1px solid #c9c3b8; border-radius: 20px; }
+.student-dialog form { min-width: 0; max-height: calc(100dvh - 102px); margin: 10px; padding: 14px 10px 10px 14px; overflow-x: hidden; overflow-y: scroll; overscroll-behavior: contain; touch-action: pan-y; scrollbar-gutter: stable; scrollbar-color: #92918d #e7e4dd; }
 .student-dialog form::-webkit-scrollbar { width: 12px; }
 .student-dialog form::-webkit-scrollbar-track { background: #e7e4dd; border-radius: 999px; }
 .student-dialog form::-webkit-scrollbar-thumb { background: #92918d; border: 2px solid #e7e4dd; border-radius: 999px; }
@@ -1492,6 +1492,7 @@ body[data-module="rooms"] .module-heading p { max-width: 78ch; line-height: 1.65
 .tutor-hourly-field input[type=number]::-webkit-inner-spin-button { appearance: none; }
 .student-form-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 14px; }
 .student-form-fields > * { min-width: 0; }
+.student-demographics > *, .student-birth-fields > *, .student-number-section > *, .student-course-grid > * { min-width: 0; }
 .student-wide { grid-column: 1 / -1; }
 .student-demographics { display: grid; grid-template-columns: minmax(0, .72fr) minmax(0, 1.7fr) minmax(0, 1.12fr); gap: 12px; align-items: start; }
 .student-photo-row { display: flex; grid-column: 1 / -1; align-items: center; flex-wrap: wrap; gap: 12px; padding-bottom: 2px; }
@@ -1664,6 +1665,7 @@ label:has(> input[type="date"]) > input[type="date"]::-webkit-calendar-picker-in
   .tutor-leave-form { grid-template-columns: 1fr; }
   .pending-student-list { grid-template-columns: 1fr; }
   .student-dialog, .tutor-dialog { width: calc(100% - 12px); max-height: calc(100dvh - 20px); }
+  .student-dialog { max-width: calc(100vw - 12px); }
   .student-dialog form, .tutor-dialog form { max-height: calc(100dvh - 36px); margin: 7px; padding: 11px 7px 8px 11px; }
   .student-dialog .modal-header, .tutor-dialog .modal-header { top: -11px; }
   .student-dialog .modal-actions, .tutor-dialog .modal-actions { bottom: -8px; }

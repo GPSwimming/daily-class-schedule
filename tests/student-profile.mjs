@@ -15,7 +15,13 @@ const saved = new Map([
   ])],
   ["swim-class-suite.v2", JSON.stringify({ studentNumberCounters: { K26: 12, A25: 8 } })]
 ]);
-const classList = () => ({ add() {}, remove() {}, toggle() {} });
+const classList = () => {
+  const values = new Set();
+  return { add(value) { values.add(value); }, remove(value) { values.delete(value); }, toggle(value, force) {
+    if (force === false || (force === undefined && values.has(value))) values.delete(value);
+    else values.add(value);
+  }, contains(value) { return values.has(value); } };
+};
 const nodes = new Map();
 const listeners = new Map();
 const windowListeners = new Map();
@@ -40,11 +46,11 @@ const context = {
 };
 vm.runInNewContext(locationSource, context);
 vm.runInNewContext(courseSource, context);
-const instrumented = appSource.replace(/\n\}\)\(\);\s*$/, "\n  globalThis.studentTest = { fiscalYear, studentJoiningYears, latestEnrolledCourseForStudent, studentMobileCardHtml, isMinorAge, nextStudentNumber, studentAgeGroups, studentCoursesForAge, studentRecordDateYmd, formatStudentRecordDate, studentFormHtml, studentEnrollmentHtml, studentLocationPickerHtml, renderStudentYears, prepareStudentImport, saveStudentProfile, renderPeople, state };\n})();");
+const instrumented = appSource.replace(/\n\}\)\(\);\s*$/, "\n  globalThis.studentTest = { fiscalYear, studentJoiningYears, latestEnrolledCourseForStudent, studentMobileCardHtml, isMinorAge, nextStudentNumber, studentAgeGroups, studentCoursesForAge, studentRecordDateYmd, formatStudentRecordDate, studentFormHtml, studentEnrollmentHtml, studentLocationPickerHtml, renderStudentYears, prepareStudentImport, saveStudentProfile, syncStudentDatePicker, lessonsForDate, renderPeople, state };\n})();");
 vm.runInNewContext(instrumented, context);
 node("#admin-login-form").elements = { email: { value: "admin@example.com" }, password: { value: "test-only" } };
 await node("#admin-login-form").onsubmit({ preventDefault() {} });
-const { fiscalYear, studentJoiningYears, latestEnrolledCourseForStudent, studentMobileCardHtml, isMinorAge, nextStudentNumber, studentAgeGroups, studentCoursesForAge, studentRecordDateYmd, formatStudentRecordDate, studentFormHtml, studentEnrollmentHtml, studentLocationPickerHtml, renderStudentYears, prepareStudentImport, saveStudentProfile, renderPeople, state } = context.studentTest;
+const { fiscalYear, studentJoiningYears, latestEnrolledCourseForStudent, studentMobileCardHtml, isMinorAge, nextStudentNumber, studentAgeGroups, studentCoursesForAge, studentRecordDateYmd, formatStudentRecordDate, studentFormHtml, studentEnrollmentHtml, studentLocationPickerHtml, renderStudentYears, prepareStudentImport, saveStudentProfile, syncStudentDatePicker, lessonsForDate, renderPeople, state } = context.studentTest;
 
 assert.equal(fiscalYear("2026-03-31"), 2025);
 assert.equal(fiscalYear("2026-04-01"), 2026);
@@ -104,6 +110,7 @@ const oldBirthDateForm = studentFormHtml({ ageGroup: "6 - 11", birthDate: "2018-
 assert.match(oldBirthDateForm, /name="birthMonth"[\s\S]*?<option value="9" selected>9 月<\/option>/, "old birth date populates the month select");
 assert.match(oldBirthDateForm, /name="birthYear"[\s\S]*?<option value="2018" selected>2018<\/option>/, "old birth date populates the year select");
 assert.match(studentFormHtml(null), /<label class="student-record-date-calendar"[^>]*>[\s\S]*?<input id="student-record-date-picker" type="date"/, "today date icon directly contains the native date input for mobile tapping");
+assert.doesNotMatch(studentFormHtml({ recordDate: "2026-11-17" }), /id="student-record-date-picker" type="date" value=/, "editing gives the native today picker an empty reset default");
 assert.doesNotMatch(studentFormHtml(null), /課堂排程、導師與堂數|student-legacy-fields/, "new student form omits the retired scheduling section");
 assert.match(studentFormHtml(null), /studentLocationPickerHtml|student-location-field[\s\S]*?電郵（稍後登入用）[\s\S]*?name="email" type="email"/, "student email appears below the lesson location");
 assert.match(studentFormHtml(null), /密碼（接駁 Supabase 後設定）[\s\S]*?type="password"[^>]*disabled/, "student password cannot be entered before Supabase is connected");
@@ -112,6 +119,38 @@ assert.doesNotMatch(studentFormHtml(null), /data-action="student-record-date-cal
 const enrollmentHtml = studentEnrollmentHtml({ firstDate: "2026-11-02", discount: 0 }, 0, "6 - 11");
 assert.match(enrollmentHtml, /class="student-floating student-date-field is-filled"[\s\S]*?value="02\/11\/2026"[\s\S]*?placeholder="DD\/MM\/YYYY"/, "first lesson date keeps its day/month/year display and floating label");
 assert.match(enrollmentHtml, /<label class="student-date-calendar"[^>]*><svg[\s\S]*?<input data-course-date type="date"[^>]*><\/label><span>首堂日期<\/span>/, "first lesson calendar icon and native picker share one date box");
+assert.doesNotMatch(enrollmentHtml, /data-course-date type="date" value=/, "editing gives the first lesson picker an empty reset default");
+
+const dateForm = node("#dynamic-form");
+const recordDateText = { value: "17-Nov-2026", setCustomValidity(message) { this.validationMessage = message; }, closest: () => ({ classList: classList() }) };
+dateForm.elements = { id: { value: "" }, recordDate: recordDateText, ageGroup: { value: "6 - 11" }, birthMonth: { value: "" }, birthYear: { value: "" },
+  guardianName: { closest: () => ({ querySelector: () => ({ textContent: "" }) }) }, enrollmentStatus: { value: "已付款" } };
+dateForm.dataset = { recordDateYmd: "2026-11-17" };
+dateForm.contains = () => true;
+dateForm.querySelectorAll = () => [];
+dateForm.querySelector = () => null;
+node("#student-age-preview").parentElement = { classList: classList() };
+node("#form-dialog").open = true;
+node("#form-dialog").classList.add("student-dialog");
+const todayPicker = node("#student-record-date-picker");
+todayPicker.id = "student-record-date-picker";
+todayPicker.value = "";
+listeners.get("input")({ target: todayPicker });
+assert.equal(recordDateText.value, "", "native today reset clears the edit form display on input");
+assert.equal(todayPicker.value, "", "native today reset does not restore the saved date");
+todayPicker.value = "2026-11-18";
+listeners.get("change")({ target: todayPicker });
+assert.equal(recordDateText.value, "18-Nov-2026", "a new today date can be chosen after reset");
+const firstDateDisplay = { value: "13/07/2026" };
+const firstDateField = { classList: classList(), querySelector: () => firstDateDisplay };
+const firstDatePicker = { value: "", matches: (selector) => selector === "[data-course-date]", closest: () => firstDateField };
+listeners.get("input")({ target: firstDatePicker });
+assert.equal(firstDateDisplay.value, "", "native first lesson reset clears the edit form display on input");
+firstDatePicker.value = "2026-07-20";
+listeners.get("change")({ target: firstDatePicker });
+assert.equal(firstDateDisplay.value, "20/07/2026", "a new first lesson date can be chosen after reset");
+node("#form-dialog").open = false;
+node("#form-dialog").classList.remove("student-dialog");
 const childCourseNames = [...new Set(studentCoursesForAge("2.5 - 5").map((item) => item.name))];
 assert.deepEqual(childCourseNames, ["課程甲", "課程乙", "課程丙", "課程丁", "課程戊"], "youngest student group can select all five child courses");
 assert.equal(new Set(studentCoursesForAge("6 - 11").map((item) => item.name)).size, 5, "six to eleven group keeps all five courses");
@@ -177,6 +216,28 @@ assert.equal(savedChildCourse.courseName, "課程丙", "selected child course is
 assert.equal(savedChildCourse.ageGroup, "2.5 - 5", "student age group is preserved");
 assert.equal(savedChildCourse.pricingAgeGroup, "4 - 5", "pricing source remains traceable");
 assert.equal(savedChildCourse.originalFee, 200, "saved fee comes from course settings");
+const datedCourseCard = { ...courseCard, querySelector: (selector) => ({
+  "[data-course-name]": { value: "課程丙" }, "[data-course-size]": { value: "小組" },
+  "[data-course-date]": { value: "2027-04-10" }, "[data-course-discount]": { value: "" },
+  'input[readonly][type="number"]': { value: "200" }
+})[selector] };
+const datedCourseForm = { querySelectorAll: (selector) => selector === ".student-course-card" ? [datedCourseCard] : [] };
+const datedStudentData = { name: "首堂日期測試", ageGroup: "2.5 - 5", gender: "女", whatsapp: "91234567", recordDate: "2027-04-02", enrollmentStatus: "已付款" };
+saveStudentProfile(datedStudentData, datedCourseForm);
+const datedStudent = state.students.at(-1);
+assert.equal(datedStudent.enrollments[0].firstDate, "2027-04-10", "first lesson date stays in the enrollment");
+assert.equal(datedStudent.nextDate, "", "saving a first lesson date does not schedule a class at the default 18:00 time");
+assert.equal(lessonsForDate("2027-04-10").some((lesson) => lesson.student?.id === datedStudent.id), false, "the timetable has no class until a time is assigned");
+datedStudent.nextDate = "2027-04-10";
+datedStudent.nextTime = "18:00";
+assert.equal(lessonsForDate("2027-04-10").some((lesson) => lesson.student?.id === datedStudent.id), false, "an older automatically copied first date is not displayed as an 18:00 class");
+assert.match(studentMobileCardHtml(datedStudent), /未編排課堂/, "an older copied first date appears as unscheduled in the student profile");
+saveStudentProfile({ ...datedStudentData, id: datedStudent.id }, datedCourseForm);
+assert.equal(datedStudent.nextDate, "", "editing an enrolled student clears an inferred automatic date but retains the enrollment first date");
+datedStudent.nextDate = "2027-04-10";
+datedStudent.history.push({ type: "rescheduled", newDate: "2027-04-10" });
+assert.equal(lessonsForDate("2027-04-10").some((lesson) => lesson.student?.id === datedStudent.id), true, "a deliberately scheduled lesson on the first date remains visible");
+state.students = state.students.filter((student) => student.id !== datedStudent.id);
 
 assert.throws(() => saveStudentProfile({ name: "未填泳池", ageGroup: "6 - 11", gender: "女", whatsapp: "91234567", recordDate: "2026-11-05", enrollmentStatus: "待確認，未付款", roomId: "other-pool", otherPoolName: "  " }, emptyForm), /請註明其他泳池名稱/, "Other needs a named pool");
 saveStudentProfile({ name: "自訂泳池學員", ageGroup: "6 - 11", gender: "女", whatsapp: "91234567", recordDate: "2026-11-05", enrollmentStatus: "待確認，未付款", roomId: "other-pool", otherPoolName: "  私人泳池  " }, emptyForm);

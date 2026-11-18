@@ -677,8 +677,17 @@
     return addDays(date, -((date.getDay() + 6) % 7));
   }
 
+  function nextScheduledDate(student) {
+    const date = validDate(student?.nextDate) ? student.nextDate : "";
+    if (!date || student.enrollmentStatus !== "paid" || student.bookingManaged) return date;
+    const firstDate = student.enrollments?.[0]?.firstDate;
+    const hasLessonHistory = (student.history || []).some((item) => ["rescheduled", "completed", "cancelled"].includes(item.type));
+    if (date === firstDate && !hasLessonHistory && (student.nextTime || student.time) === "18:00") return "";
+    return date;
+  }
+
   function lessonsForDate(dateString) {
-    const legacy = state.students.filter((student) => !student.bookingManaged && student.nextDate === dateString && student.status !== "inactive" && student.enrollmentStatus !== "pending")
+    const legacy = state.students.filter((student) => !student.bookingManaged && nextScheduledDate(student) === dateString && student.status !== "inactive" && student.enrollmentStatus !== "pending")
       .map((student) => ({ kind: "legacy", student, time: student.nextTime || student.time }));
     const booked = state.suite.lessonBookings.filter((booking) => booking.date === dateString)
       .map((booking) => ({ kind: "booking", booking, time: booking.start }));
@@ -984,7 +993,7 @@
   function renderPeople() {
     const tutors = state.suite.accounts.filter((item) => item.role === "tutor");
     const low = state.students.filter((student) => student.enrollmentStatus !== "pending" && student.remaining <= lowBalance()).length;
-    const unassigned = state.students.filter((student) => student.enrollmentStatus !== "pending" && !validDate(student.nextDate)).length;
+    const unassigned = state.students.filter((student) => student.enrollmentStatus !== "pending" && !nextScheduledDate(student)).length;
     const pending = state.students.filter((student) => student.enrollmentStatus === "pending").length;
     const metrics = [
       ["all", "學生總數", state.students.length, "blue"],
@@ -1038,7 +1047,7 @@
     const students = state.students.filter((student) => {
       if (state.peopleFilter === "pending" && student.enrollmentStatus !== "pending") return false;
       if (state.peopleFilter === "low" && (student.enrollmentStatus === "pending" || student.remaining > lowBalance())) return false;
-      if (state.peopleFilter === "unassigned" && (student.enrollmentStatus === "pending" || validDate(student.nextDate))) return false;
+      if (state.peopleFilter === "unassigned" && (student.enrollmentStatus === "pending" || nextScheduledDate(student))) return false;
       const course = latestEnrolledCourseForStudent(student);
       return !search || [student.name, student.whatsapp, student.ageGroup, student.roomName, course && course.name].some((value) => String(value || "").toLocaleLowerCase().includes(search));
     }).sort((a, b) => a.name.localeCompare(b.name, "zh-Hant"));
@@ -1080,21 +1089,24 @@
 
   function studentDetailHtml(student) {
     const course = latestEnrolledCourseForStudent(student);
+    const nextDate = nextScheduledDate(student);
     const tutor = findById(state.suite.accounts, student.tutorId);
     return '<article class="people-detail-card"><div class="people-person-head">' + studentAvatarHtml(student) + '<div><h2>' + escapeHtml(student.name) + '</h2><p>' + escapeHtml(course ? course.name : student.enrollmentStatus === "pending" ? "待確認，未付款" : "未指定課程") + '</p></div><button class="people-edit-button" type="button" data-action="edit-student" data-id="' + escapeHtml(student.id) + '" aria-label="編輯 ' + escapeHtml(student.name) + '">✎</button></div>' + studentStatusHtml(student) + '</article>' +
-      '<article class="people-detail-card"><h3>基本資料</h3><dl class="people-facts"><div><dt>學生狀態</dt><dd>' + escapeHtml(student.enrollmentStatus === "pending" ? "待確認，未付款" : student.enrollmentStatus === "paid" ? "已付款" : "舊資料") + '</dd></div><div><dt>學生編號</dt><dd>' + escapeHtml(student.studentNumber || "未編配") + '</dd></div><div><dt>年齡組別</dt><dd>' + escapeHtml(student.ageGroup || "未設定") + '</dd></div><div><dt>WhatsApp</dt><dd>' + escapeHtml(student.whatsapp || "未設定") + '</dd></div><div><dt>課堂地點</dt><dd>' + escapeHtml(locationNameForId(student.roomId, student.roomName) || "未設定") + '</dd></div><div><dt>課程</dt><dd>' + escapeHtml(course ? course.name : "未指定") + '</dd></div><div><dt>負責導師</dt><dd>' + escapeHtml(tutor ? tutor.name : "未指定") + '</dd></div>' + (student.enrollmentStatus === "pending" ? '' : '<div><dt>下一堂</dt><dd>' + escapeHtml(student.nextDate ? student.nextDate + " " + (student.nextTime || student.time) : "未編排") + '</dd></div><div><dt>剩餘堂數</dt><dd>' + student.remaining + ' 堂</dd></div>') + '</dl>' + studentActionsHtml(student) + '</article>';
+      '<article class="people-detail-card"><h3>基本資料</h3><dl class="people-facts"><div><dt>學生狀態</dt><dd>' + escapeHtml(student.enrollmentStatus === "pending" ? "待確認，未付款" : student.enrollmentStatus === "paid" ? "已付款" : "舊資料") + '</dd></div><div><dt>學生編號</dt><dd>' + escapeHtml(student.studentNumber || "未編配") + '</dd></div><div><dt>年齡組別</dt><dd>' + escapeHtml(student.ageGroup || "未設定") + '</dd></div><div><dt>WhatsApp</dt><dd>' + escapeHtml(student.whatsapp || "未設定") + '</dd></div><div><dt>課堂地點</dt><dd>' + escapeHtml(locationNameForId(student.roomId, student.roomName) || "未設定") + '</dd></div><div><dt>課程</dt><dd>' + escapeHtml(course ? course.name : "未指定") + '</dd></div><div><dt>負責導師</dt><dd>' + escapeHtml(tutor ? tutor.name : "未指定") + '</dd></div>' + (student.enrollmentStatus === "pending" ? '' : '<div><dt>下一堂</dt><dd>' + escapeHtml(nextDate ? nextDate + " " + (student.nextTime || student.time) : "未編排") + '</dd></div><div><dt>剩餘堂數</dt><dd>' + student.remaining + ' 堂</dd></div>') + '</dl>' + studentActionsHtml(student) + '</article>';
   }
 
   function studentMobileCardHtml(student) {
     const course = latestEnrolledCourseForStudent(student);
-    return '<article class="people-mobile-card"><div class="people-person-head">' + studentAvatarHtml(student) + '<div><h2>' + escapeHtml(student.name) + '</h2><p>' + escapeHtml(course ? course.name : "未指定課程") + '</p><small>' + escapeHtml(student.enrollmentStatus === "pending" ? [student.whatsapp, student.ageGroup, locationNameForId(student.roomId, student.roomName)].filter(Boolean).join(" · ") : student.nextDate ? student.nextDate + " · " + (student.nextTime || student.time) : "未編排課堂") + '</small></div><button class="people-edit-button" type="button" data-action="edit-student" data-id="' + escapeHtml(student.id) + '" aria-label="編輯 ' + escapeHtml(student.name) + '">✎</button></div>' + studentStatusHtml(student) + '<details class="people-card-more"><summary>' + (student.enrollmentStatus === "pending" ? "跟進操作" : "課堂操作") + '</summary>' + studentActionsHtml(student) + '</details></article>';
+    const nextDate = nextScheduledDate(student);
+    return '<article class="people-mobile-card"><div class="people-person-head">' + studentAvatarHtml(student) + '<div><h2>' + escapeHtml(student.name) + '</h2><p>' + escapeHtml(course ? course.name : "未指定課程") + '</p><small>' + escapeHtml(student.enrollmentStatus === "pending" ? [student.whatsapp, student.ageGroup, locationNameForId(student.roomId, student.roomName)].filter(Boolean).join(" · ") : nextDate ? nextDate + " · " + (student.nextTime || student.time) : "未編排課堂") + '</small></div><button class="people-edit-button" type="button" data-action="edit-student" data-id="' + escapeHtml(student.id) + '" aria-label="編輯 ' + escapeHtml(student.name) + '">✎</button></div>' + studentStatusHtml(student) + '<details class="people-card-more"><summary>' + (student.enrollmentStatus === "pending" ? "跟進操作" : "課堂操作") + '</summary>' + studentActionsHtml(student) + '</details></article>';
   }
 
   function studentTableHtml(students) {
     return '<div class="people-table-wrap"><table class="people-table"><thead><tr><th>學生</th><th>課程</th><th>負責導師</th><th>下一堂</th><th>剩餘堂數</th><th>操作</th></tr></thead><tbody>' + students.map((student) => {
       const course = latestEnrolledCourseForStudent(student);
       const tutor = findById(state.suite.accounts, student.tutorId);
-      return '<tr><td>' + escapeHtml(student.name) + '</td><td>' + escapeHtml(course ? course.name : "—") + '</td><td>' + escapeHtml(tutor ? tutor.name : "—") + '</td><td>' + escapeHtml(student.enrollmentStatus === "pending" ? "待確認" : student.nextDate ? student.nextDate + " " + (student.nextTime || student.time) : "未編排") + '</td><td>' + student.remaining + '</td><td><button type="button" class="mini-button" data-action="edit-student" data-id="' + escapeHtml(student.id) + '">編輯</button></td></tr>';
+      const nextDate = nextScheduledDate(student);
+      return '<tr><td>' + escapeHtml(student.name) + '</td><td>' + escapeHtml(course ? course.name : "—") + '</td><td>' + escapeHtml(tutor ? tutor.name : "—") + '</td><td>' + escapeHtml(student.enrollmentStatus === "pending" ? "待確認" : nextDate ? nextDate + " " + (student.nextTime || student.time) : "未編排") + '</td><td>' + student.remaining + '</td><td><button type="button" class="mini-button" data-action="edit-student" data-id="' + escapeHtml(student.id) + '">編輯</button></td></tr>';
     }).join('') + '</tbody></table></div>';
   }
 
@@ -1579,7 +1591,7 @@
   function studentRecordDateFieldHtml(value) {
     return '<div class="student-record-date"><label for="student-record-date-text">今日日期</label><div class="student-record-date-control">' +
       '<input id="student-record-date-text" name="recordDate" type="text" value="' + escapeHtml(formatStudentRecordDate(value)) + '" placeholder="DD-MMM-YYYY" autocomplete="off" spellcheck="false" required aria-describedby="student-record-date-error">' +
-      '<label class="student-record-date-calendar" title="開啟日曆選擇今日日期"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 2v4M17 2v4M4 9h16M5 5h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/><path d="M9 13h6v5H9z"/></svg><input id="student-record-date-picker" type="date" value="' + escapeHtml(value) + '" aria-label="開啟日曆選擇今日日期"></label></div><small id="student-record-date-error" class="student-record-date-error" aria-live="polite"></small></div>';
+      '<label class="student-record-date-calendar" title="開啟日曆選擇今日日期"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 2v4M17 2v4M4 9h16M5 5h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/><path d="M9 13h6v5H9z"/></svg><input id="student-record-date-picker" type="date" aria-label="開啟日曆選擇今日日期"></label></div><small id="student-record-date-error" class="student-record-date-error" aria-live="polite"></small></div>';
   }
 
   function studentChoices(name, values, selected, required = false, disabled = () => false) {
@@ -1680,7 +1692,7 @@
     return '<article class="student-course-card" data-course-index="' + index + '" data-enrollment-id="' + escapeHtml(row.id || "") + '" data-age-group="' + escapeHtml(ageGroup) + '" data-duration="' + (selected ? Number(selected.duration) || 60 : Number(row.duration) || 60) + '"><div class="student-section-heading"><h4>課堂 ' + (index + 1) + '</h4><button class="mini-button danger" type="button" data-action="student-remove-course" data-index="' + index + '">移除</button></div><div class="student-course-grid">' +
       '<label class="student-floating student-select' + (row.courseName ? ' is-filled' : '') + '"><select data-course-name required><option value="" hidden></option>' + names.map((value) => '<option value="' + escapeHtml(value) + '"' + (sameCourseValue(value, row.courseName) ? ' selected' : '') + '>' + escapeHtml(value) + '</option>').join('') + '</select>' + studentDropdownArrowHtml() + '<span>課程名稱</span></label>' +
       '<label class="student-floating student-select' + (row.classSize ? ' is-filled' : '') + '"><select data-course-size required><option value="" hidden></option>' + sizes.map((value) => '<option value="' + escapeHtml(value) + '"' + (sameCourseValue(value, row.classSize) ? ' selected' : '') + '>' + escapeHtml(value) + '</option>').join('') + '</select>' + studentDropdownArrowHtml() + '<span>課程人數</span></label>' +
-      '<div class="student-floating student-date-field' + (dateLabel ? ' is-filled' : '') + '"><input class="student-date-display" type="text" value="' + escapeHtml(dateLabel) + '" placeholder="DD/MM/YYYY" readonly aria-label="首堂日期 DD/MM/YYYY"><label class="student-date-calendar" title="開啟日曆選擇首堂日期"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 2v4M17 2v4M4 9h16M5 5h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/><path d="M9 13h6v5H9z"/></svg><input data-course-date type="date" value="' + escapeHtml(row.firstDate || "") + '" aria-label="選擇首堂日期"></label><span>首堂日期</span></div>' +
+      '<div class="student-floating student-date-field' + (dateLabel ? ' is-filled' : '') + '"><input class="student-date-display" type="text" value="' + escapeHtml(dateLabel) + '" placeholder="DD/MM/YYYY" readonly aria-label="首堂日期 DD/MM/YYYY"><label class="student-date-calendar" title="開啟日曆選擇首堂日期"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 2v4M17 2v4M4 9h16M5 5h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/><path d="M9 13h6v5H9z"/></svg><input data-course-date type="date" aria-label="選擇首堂日期"></label><span>首堂日期</span></div>' +
       '<label class="student-floating' + (hasFee ? ' is-filled' : '') + '"><input type="number" value="' + (hasFee ? fee : '') + '" readonly><span>課堂原價 (HK$)</span></label>' +
       '<label class="student-floating' + (row.discount !== "" && row.discount != null ? ' is-filled' : '') + '"><input data-course-discount type="number" min="0" max="' + fee + '" step="0.01" inputmode="decimal" value="' + escapeHtml(row.discount == null ? "" : row.discount) + '" placeholder="折扣優惠"><span>折扣優惠</span></label>' +
       '<div class="student-net-fee">每堂費用 <strong>' + escapeHtml(formatMoney(Math.max(0, fee - discount), 2)) + '</strong></div></div>' +
@@ -1690,6 +1702,9 @@
   function renderStudentEnrollments(form, rows) {
     const age = form.elements.ageGroup?.value || "";
     document.querySelector("#student-course-list").innerHTML = rows.slice(0, 4).map((row, index) => studentEnrollmentHtml(row, index, age)).join("");
+    document.querySelectorAll("#student-course-list [data-course-date]").forEach((picker, index) => {
+      picker.value = validDate(rows[index]?.firstDate) ? rows[index].firstDate : "";
+    });
     document.querySelector("#student-add-course").disabled = rows.length >= 4;
   }
 
@@ -1760,9 +1775,29 @@
       document.querySelector("#student-record-date-picker").value = ymd;
       form.dataset.recordDateYmd = ymd;
       if (previousYear !== fiscalYear(ymd)) renderStudentYears(form, fiscalYear(ymd));
+    } else if (!input.value.trim()) {
+      document.querySelector("#student-record-date-picker").value = "";
+      form.dataset.recordDateYmd = "";
     }
     updateStudentForm(form);
     return ymd;
+  }
+
+  function syncStudentDatePicker(target) {
+    if (!elements.formDialog.open || !elements.formDialog.classList.contains("student-dialog") || !elements.dynamicForm.contains(target)) return false;
+    if (target.id === "student-record-date-picker") {
+      const form = elements.dynamicForm;
+      form.elements.recordDate.value = formatStudentRecordDate(target.value);
+      validateStudentRecordDate(form, Boolean(target.value), true);
+      return true;
+    }
+    if (target.matches("[data-course-date]")) {
+      const field = target.closest(".student-date-field");
+      field.querySelector(".student-date-display").value = validDate(target.value) ? target.value.split("-").reverse().join("/") : "";
+      field.classList.toggle("is-filled", Boolean(target.value));
+      return true;
+    }
+    return false;
   }
 
   function openStudentForm(student) {
@@ -1773,6 +1808,7 @@
     elements.formFields.innerHTML = studentFormHtml(item);
     state.studentFormPhoto = item ? item.photo || "" : "";
     const form = elements.dynamicForm;
+    document.querySelector("#student-record-date-picker").value = studentRecordDateYmd(form.elements.recordDate.value);
     form.dataset.recordDateYmd = studentRecordDateYmd(form.elements.recordDate.value);
     renderStudentYears(form, item && item.enrollmentYear || studentJoiningYears(form.dataset.recordDateYmd)[0]);
     renderStudentEnrollments(form, item && item.enrollments || []);
@@ -1815,7 +1851,7 @@
     });
     const first = enrollments[0];
     const assigned = paid && !(existing && existing.studentNumber) ? nextStudentNumber(year, ageGroup) : null;
-    const dateValue = validDate(data.nextDate) ? data.nextDate : (!existing || existing.enrollmentStatus === "pending") && first && first.firstDate && paid ? first.firstDate : existing?.nextDate || "";
+    const dateValue = validDate(data.nextDate) ? data.nextDate : existing ? nextScheduledDate(existing) : "";
     const roomId = data.roomId || "";
     const otherPoolName = roomId === OTHER_POOL_OPTION ? String(data.otherPoolName || "").trim() : "";
     if (roomId === OTHER_POOL_OPTION && !otherPoolName) throw new Error("請註明其他泳池名稱。");
@@ -2622,7 +2658,6 @@
           target.studentNumber = assigned.value;
           target.enrollmentStatus = "paid";
           state.suite.studentNumberCounters[assigned.key] = assigned.sequence;
-          target.nextDate = target.nextDate || target.enrollments?.[0]?.firstDate || "";
         }
         target.remaining += lessons;
         target.prepaid += lessons;
@@ -3640,6 +3675,7 @@
   });
 
   document.addEventListener("input", (event) => {
+    if (syncStudentDatePicker(event.target)) return;
     if (event.target.id === "quick-lesson-start") updateQuickEndFromStart(event.target.value);
     if (event.target.id === "quick-lesson-date") {
       document.querySelector("#quick-lesson-date-error").textContent = event.target.value && !studentRecordDateYmd(event.target.value) && event.target.value.length >= 11 ? "日期格式錯誤，請使用 DD-MMM-YYYY。" : "";
@@ -3672,6 +3708,7 @@
   }, true);
 
   document.addEventListener("change", (event) => {
+    if (syncStudentDatePicker(event.target)) return;
     if (event.target.id === "quick-lesson-date-picker") {
       document.querySelector("#quick-lesson-date").value = formatStudentRecordDate(event.target.value);
       document.querySelector("#quick-lesson-date-error").textContent = "";
@@ -3708,11 +3745,6 @@
         }
         return;
       }
-      if (event.target.id === "student-record-date-picker") {
-        form.elements.recordDate.value = formatStudentRecordDate(event.target.value);
-        validateStudentRecordDate(form, true, true);
-        return;
-      }
       if (event.target.name === "birthMonth" || event.target.name === "birthYear") { updateStudentAge(form); return; }
       if (event.target.name === "recordDate") { validateStudentRecordDate(form, true, true); return; }
       if (event.target.name === "roomId") {
@@ -3734,12 +3766,6 @@
         return;
       }
       if (event.target.matches("[data-course-size]")) { renderStudentEnrollments(form, studentEnrollmentDrafts(form)); return; }
-      if (event.target.matches("[data-course-date]")) {
-        const field = event.target.closest(".student-date-field");
-        field.querySelector(".student-date-display").value = validDate(event.target.value) ? event.target.value.split("-").reverse().join("/") : "";
-        field.classList.toggle("is-filled", Boolean(event.target.value));
-        return;
-      }
     }
     if (event.target.id === "schedule-date") {
       if (validDate(event.target.value)) {
