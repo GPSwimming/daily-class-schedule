@@ -687,7 +687,7 @@
       '<div class="schedule-navigation"><button type="button" class="schedule-nav-arrow" data-action="schedule-shift" data-delta="-1" aria-label="上一個">‹</button>' +
       '<strong>' + escapeHtml(rangeLabel) + '</strong><button type="button" class="schedule-nav-arrow" data-action="schedule-shift" data-delta="1" aria-label="下一個">›</button>' +
       '<label class="schedule-date-picker" title="選擇日期">▦<input id="schedule-date" type="date" value="' + escapeHtml(state.scheduleDate) + '" aria-label="選擇日期"></label>' +
-      '<button type="button" class="schedule-add-button" data-action="add-lesson" aria-label="編排課堂">＋</button></div>' +
+      '<label class="schedule-add-button" title="選擇新增課堂日期">＋<input id="schedule-add-date" type="date" aria-label="選擇新增課堂日期"></label></div>' +
       calendar +
       (isList ? '' : '<section class="schedule-agenda"><div class="schedule-agenda-heading"><div><h2>' + escapeHtml(formatYmd(selected) + " · " + WEEKDAYS[selected.getDay()]) + '</h2><p>中心開放 ' + escapeHtml(openText) + '</p></div><span>' + selectedLessons.length + ' 堂</span></div>' +
       scheduleRowsHtml(selectedLessons) + '</section>') + '</section>';
@@ -3795,6 +3795,15 @@
       if (validDate(event.target.value)) {
         state.scheduleDate = event.target.value;
         renderModule();
+      }
+      return;
+    }
+    if (event.target.id === "schedule-add-date") {
+      if (validDate(event.target.value)) {
+        state.scheduleDate = event.target.value;
+        const slot = nextQuickSlot();
+        renderModule();
+        openQuickLesson({ ...slot, date: state.scheduleDate });
       }
       return;
     }
