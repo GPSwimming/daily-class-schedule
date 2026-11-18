@@ -1041,14 +1041,14 @@ body[data-module="month-pass"] .month-pass-frame { height: calc(100dvh - env(saf
 .booking-chip:hover { border-color: #2c7cae; }
 .booking-chip.is-selected { border-color: #1677ad; color: #104f72; background: #e0f1f8; box-shadow: inset 0 0 0 1px #1677ad; }
 .booking-chip.is-selected::before { content: '✓'; margin-right: 7px; }
-:root[data-theme="dark"] .booking-dialog .booking-chip { border-color: #685a48; color: #eae3d9; background: #4c4236; }
-:root[data-theme="dark"] .booking-dialog .booking-chip:hover { border-color: #d9c39f; background: #5e5040; }
-:root[data-theme="dark"] .booking-dialog .booking-chip.is-selected { border-color: #d9c39f; color: #fff4dd; background: #68513c; box-shadow: inset 0 0 0 1px #d9c39f; }
+:root[data-theme="dark"] .booking-dialog .booking-chip { min-height: 36px; max-width: 100%; padding: 7px 14px; border-color: transparent; color: var(--ink); background: #514b3f; font-size: .79rem; font-weight: 700; line-height: 1.2; white-space: normal; text-align: left; }
+:root[data-theme="dark"] .booking-dialog .booking-chip:hover { border-color: #b6c9d0; }
+:root[data-theme="dark"] .booking-dialog .booking-chip.is-selected { border-color: #3486b1; color: #dceef6; background: #21495e; box-shadow: inset 0 0 0 1px #3486b1; }
 .booking-empty { margin: 0; color: var(--muted); font-size: .78rem; }
 .booking-pool-field { display: grid; gap: 8px; margin-top: 20px; font-size: .9rem; font-weight: 750; }
 .booking-pool-field select { width: 100%; min-height: 48px; padding: 0 12px; border: 1px solid #d4cec1; border-radius: 10px; color: var(--ink); background: var(--paper-strong); font: inherit; font-weight: 400; }
-:root[data-theme="dark"] .booking-dialog .booking-pool-field select { border-color: #685a48; color: #eae3d9; background: #4c4236; color-scheme: dark; }
-:root[data-theme="dark"] .booking-dialog .booking-pool-field option { color: #eae3d9; background: #4c4236; }
+:root[data-theme="dark"] .booking-dialog .booking-pool-field select { padding-inline: 16px; border-color: #514b3f; border-radius: 999px; color: var(--ink); background: #514b3f; color-scheme: dark; }
+:root[data-theme="dark"] .booking-dialog .booking-pool-field option { color: var(--ink); background: #514b3f; }
 .booking-calendar { margin-top: 22px; padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--paper); box-shadow: 0 2px 8px rgba(0,0,0,.07); }
 .booking-month-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; }
 .booking-month-head strong { font-size: 1.1rem; }
