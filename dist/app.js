@@ -1816,15 +1816,27 @@
       const form = elements.dynamicForm;
       form.elements.recordDate.value = formatStudentRecordDate(target.value);
       validateStudentRecordDate(form, Boolean(target.value), true);
+      dismissClearedStudentDatePicker(target);
       return true;
     }
     if (target.matches("[data-course-date]")) {
       const field = target.closest(".student-date-field");
       field.querySelector(".student-date-display").value = validDate(target.value) ? target.value.split("-").reverse().join("/") : "";
       field.classList.toggle("is-filled", Boolean(target.value));
+      dismissClearedStudentDatePicker(target);
       return true;
     }
     return false;
+  }
+
+  function dismissClearedStudentDatePicker(target) {
+    if (target.value) return;
+    // On iPhone, Reset clears the date but can leave the native picker open until Done.
+    // Detach the focused control after syncing its value; delegated events also work on its replacement.
+    target.blur();
+    const replacement = target.cloneNode();
+    replacement.value = "";
+    target.replaceWith(replacement);
   }
 
   function openStudentForm(student) {
