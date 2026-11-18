@@ -79,6 +79,7 @@
   let templateWasHidden = false;
   let loginGeneration = 0;
   let loginAttemptActive = false;
+  let pendingScheduleAddDate = "";
 
   for (const student of state.students) {
     const match = String(student.studentNumber || "").match(/^([KA]\d{2})(\d{4})$/);
@@ -2294,6 +2295,14 @@
     document.body.classList.add("modal-open");
   }
 
+  function confirmScheduleAddDate(date) {
+    if (!validDate(date) || !state.loggedIn || state.currentModule !== "schedule") return;
+    state.scheduleDate = date;
+    const slot = nextQuickSlot();
+    renderModule();
+    openQuickLesson({ ...slot, date });
+  }
+
   function updateQuickEndFromStart(value) {
     const start = timeMinutes(String(value || "").trim());
     if (!Number.isFinite(start)) return;
@@ -3720,6 +3729,14 @@
   });
 
   document.addEventListener("focusout", (event) => {
+    if (event.target.id === "schedule-add-date" && pendingScheduleAddDate) {
+      const date = pendingScheduleAddDate;
+      pendingScheduleAddDate = "";
+      // On iPhone, choosing a day fires change while the native calendar is still open.
+      // Its Done button blurs the input; wait for that picker to close before opening a dialog.
+      setTimeout(() => confirmScheduleAddDate(date), 120);
+      return;
+    }
     if (event.target.name === "recordDate" && elements.formDialog.open && elements.formDialog.classList.contains("student-dialog")) {
       validateStudentRecordDate(elements.dynamicForm, true, true);
     }
@@ -3800,10 +3817,10 @@
     }
     if (event.target.id === "schedule-add-date") {
       if (validDate(event.target.value)) {
-        state.scheduleDate = event.target.value;
-        const slot = nextQuickSlot();
-        renderModule();
-        openQuickLesson({ ...slot, date: state.scheduleDate });
+        if (window.matchMedia?.("(pointer: coarse)").matches) pendingScheduleAddDate = event.target.value;
+        else confirmScheduleAddDate(event.target.value);
+      } else {
+        pendingScheduleAddDate = "";
       }
       return;
     }

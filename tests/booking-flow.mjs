@@ -19,6 +19,8 @@ const saved = new Map([
 ]);
 const nodes = new Map();
 const handlers = new Map();
+const scheduledTimers = [];
+let coarsePointer = false;
 const classList = () => ({ add() {}, remove() {}, toggle() {} });
 const node = (selector) => {
   if (!nodes.has(selector)) nodes.set(selector, { value: "", innerHTML: "", textContent: "", hidden: false, classList: classList(),
@@ -29,7 +31,8 @@ const document = { documentElement: { dataset: {} }, body: { classList: classLis
   querySelectorAll: () => [], getElementById: (id) => node(`#${id}`), addEventListener: (name, handler) => handlers.set(name, handler) };
 const context = { document, localStorage: { getItem: (key) => saved.get(key) ?? null, setItem: (key, value) => saved.set(key, value) },
   sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} }, window: { scrollTo() {}, AdminAuth: { signIn: async () => {}, signOut: async () => {}, check: async () => true, getCatalog: async () => catalog, setOnExpired() {} } }, crypto: { randomUUID },
-  setTimeout: () => 1, clearTimeout() {}, console };
+  setTimeout: (callback, delay) => { if (delay === 120) scheduledTimers.push(callback); return 1; }, clearTimeout() {}, console };
+context.window.matchMedia = () => ({ matches: coarsePointer });
 for (let index = 0; index < files.length; index += 1) vm.runInNewContext(files[index], context, { filename: ["location-import.js", "course-import.js", "app.js"][index] });
 node("#admin-login-form").elements = { email: { value: "admin@example.com" }, password: { value: "test-only" } };
 await node("#admin-login-form").onsubmit({ preventDefault() {} });
@@ -66,6 +69,19 @@ assert.equal(node("#quick-lesson-date").value, "18-Nov-2026", "the chosen calend
 node("#quick-lesson-start").value = "18:00";
 handlers.get("input")({ target: { id: "quick-lesson-start", value: "18:00", closest: () => null } });
 assert.equal(node("#quick-lesson-end").value, "19:00", "editing the start time moves the end one hour later");
+await click({ close: "quick-lesson-dialog" });
+coarsePointer = true;
+handlers.get("change")({ target: { id: "schedule-add-date", value: "" } });
+handlers.get("focusout")({ target: { id: "schedule-add-date" } });
+assert.equal(node("#quick-lesson-dialog").open, false, "resetting the mobile calendar does not open quick add");
+handlers.get("change")({ target: { id: "schedule-add-date", value: "2026-11-19" } });
+assert.equal(node("#quick-lesson-dialog").open, false, "selecting a day keeps the native mobile calendar unobscured");
+handlers.get("focusout")({ target: { id: "schedule-add-date" } });
+assert.equal(node("#quick-lesson-dialog").open, false, "the quick dialog waits for the native calendar to close");
+scheduledTimers.shift()();
+assert.equal(node("#quick-lesson-dialog").open, true, "confirming the mobile calendar opens quick add after dismissal");
+assert.equal(node("#quick-lesson-date").value, "19-Nov-2026", "the confirmed mobile date reaches quick add");
+coarsePointer = false;
 
 node("#quick-lesson-date").value = "31/12/2026";
 handlers.get("submit")({ target: { id: "quick-lesson-form" }, preventDefault() {} });
