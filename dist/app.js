@@ -1717,7 +1717,9 @@
     return '<article class="student-course-card" data-course-index="' + index + '" data-enrollment-id="' + escapeHtml(row.id || "") + '" data-age-group="' + escapeHtml(ageGroup) + '" data-duration="' + (selected ? Number(selected.duration) || 60 : Number(row.duration) || 60) + '"><div class="student-section-heading"><h4>課堂 ' + (index + 1) + '</h4><button class="mini-button danger" type="button" data-action="student-remove-course" data-index="' + index + '">移除</button></div><div class="student-course-grid">' +
       '<label class="student-floating student-select' + (row.courseName ? ' is-filled' : '') + '"><select data-course-name required><option value="" hidden></option>' + names.map((value) => '<option value="' + escapeHtml(value) + '"' + (sameCourseValue(value, row.courseName) ? ' selected' : '') + '>' + escapeHtml(value) + '</option>').join('') + '</select>' + studentDropdownArrowHtml() + '<span>課程名稱</span></label>' +
       '<label class="student-floating student-select' + (row.classSize ? ' is-filled' : '') + '"><select data-course-size required><option value="" hidden></option>' + sizes.map((value) => '<option value="' + escapeHtml(value) + '"' + (sameCourseValue(value, row.classSize) ? ' selected' : '') + '>' + escapeHtml(value) + '</option>').join('') + '</select>' + studentDropdownArrowHtml() + '<span>課程人數</span></label>' +
+      '<div class="student-first-lesson-row">' +
       '<div class="student-floating student-date-field' + (dateLabel ? ' is-filled' : '') + '"><input class="student-date-display" type="text" value="' + escapeHtml(dateLabel) + '" placeholder="DD/MM/YYYY" readonly aria-label="首堂日期 DD/MM/YYYY"><label class="student-date-calendar" title="開啟日曆選擇首堂日期"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 2v4M17 2v4M4 9h16M5 5h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/><path d="M9 13h6v5H9z"/></svg><input data-course-date type="date" aria-label="選擇首堂日期"></label><span>首堂日期</span></div>' +
+      '<button class="mini-button student-add-lesson-button" type="button" data-action="student-add-lesson" data-index="' + index + '">新增課堂</button></div>' +
       '<label class="student-floating' + (hasFee ? ' is-filled' : '') + '"><input type="number" value="' + (hasFee ? fee : '') + '" readonly><span>課堂原價 (HK$)</span></label>' +
       '<label class="student-floating' + (row.discount !== "" && row.discount != null ? ' is-filled' : '') + '"><input data-course-discount type="number" min="0" max="' + fee + '" step="0.01" inputmode="decimal" value="' + escapeHtml(row.discount == null ? "" : row.discount) + '" placeholder="折扣優惠"><span>折扣優惠</span></label>' +
       '<div class="student-net-fee">每堂費用 <strong>' + escapeHtml(formatMoney(Math.max(0, fee - discount), 2)) + '</strong></div></div>' +
@@ -2586,7 +2588,7 @@
       errorNode.textContent = "瀏覽器儲存空間不足；未有新增課堂。請先備份。"; return;
     }
     elements.bookingDialog.close();
-    document.body.classList.remove("modal-open");
+    document.body.classList.toggle("modal-open", elements.formDialog.open);
     state.scheduleDate = dates[0][0];
     renderModule();
     showToast("已預約 " + created.length + " 個日期的課堂");
@@ -3240,7 +3242,7 @@
     }
     if (button.dataset.close) {
       document.querySelector("#" + button.dataset.close)?.close();
-      document.body.classList.remove("modal-open");
+      document.body.classList.toggle("modal-open", elements.formDialog.open);
       return;
     }
     if (button.dataset.module) return openModule(button.dataset.module);
@@ -3418,6 +3420,17 @@
       const form = elements.dynamicForm;
       const rows = studentEnrollmentDrafts(form);
       if (rows.length < 4) renderStudentEnrollments(form, rows.concat({ courseName: "", classSize: "", firstDate: "", discount: "" }));
+      return;
+    }
+    if (action === "student-add-lesson") {
+      const picker = button.closest(".student-course-card")?.querySelector("[data-course-date]");
+      const date = picker?.value || "";
+      if (!validDate(date)) {
+        showToast("請先選擇首堂日期。");
+        picker?.focus();
+        return;
+      }
+      openQuickLesson({ date, start: "09:00", end: "10:00" });
       return;
     }
     if (action === "student-remove-course") {

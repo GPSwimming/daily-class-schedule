@@ -120,6 +120,18 @@ const enrollmentHtml = studentEnrollmentHtml({ firstDate: "2026-11-02", discount
 assert.match(enrollmentHtml, /class="student-floating student-date-field is-filled"[\s\S]*?value="02\/11\/2026"[\s\S]*?placeholder="DD\/MM\/YYYY"/, "first lesson date keeps its day/month/year display and floating label");
 assert.match(enrollmentHtml, /<label class="student-date-calendar"[^>]*><svg[\s\S]*?<input data-course-date type="date"[^>]*><\/label><span>首堂日期<\/span>/, "first lesson calendar icon and native picker share one date box");
 assert.doesNotMatch(enrollmentHtml, /data-course-date type="date" value=/, "editing gives the first lesson picker an empty reset default");
+assert.match(enrollmentHtml, /class="student-first-lesson-row"[\s\S]*?data-course-date type="date"[\s\S]*?data-action="student-add-lesson" data-index="0">新增課堂<\/button>/, "each first lesson date has an adjacent quick add button");
+const firstLessonPicker = { value: "2026-11-02" };
+const quickAddButton = { dataset: { action: "student-add-lesson" }, closest: (selector) => selector === ".student-course-card" ? { querySelector: () => firstLessonPicker } : null };
+node("#form-fields").innerHTML = "unsaved student fields";
+node("#form-dialog").open = true;
+node("#quick-lesson-dialog").showModal = function () { this.open = true; };
+await listeners.get("click")({ target: { closest: (selector) => selector === "button" ? quickAddButton : null } });
+assert.equal(node("#quick-lesson-date").value, "02-Nov-2026", "quick add inherits this course's first lesson date");
+assert.equal(node("#quick-lesson-start").value, "09:00", "quick add begins at 09:00");
+assert.equal(node("#quick-lesson-end").value, "10:00", "quick add ends at 10:00");
+assert.equal(node("#form-fields").innerHTML, "unsaved student fields", "opening quick add preserves the student form draft");
+node("#quick-lesson-dialog").open = false;
 
 const dateForm = node("#dynamic-form");
 const recordDateText = { value: "17-Nov-2026", setCustomValidity(message) { this.validationMessage = message; }, closest: () => ({ classList: classList() }) };
