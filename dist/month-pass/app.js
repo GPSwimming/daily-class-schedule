@@ -15,6 +15,11 @@ function loadImage(im,url){return new Promise((resolve,reject)=>{im.onload=resol
 function draw(){
   if(!ready)return;
   ctx.drawImage(bg,0,0);
+  // Draw the date into the animation canvas so every frame has the current pass period.
+  ctx.fillStyle='#f3f8fc';ctx.fillRect(80,517,307,68);
+  ctx.fillStyle='#101318';ctx.font='600 25px -apple-system, BlinkMacSystemFont, "PingFang HK", "Microsoft JhengHei", sans-serif';
+  ctx.fillText('2026年11月15日 -',81,544);
+  ctx.fillText('12月14日',81,572);
   // The source image has a noninteractive demo pill in its otherwise blank footer.
   ctx.fillStyle='#fff';ctx.fillRect(0,1180,canvas.width,canvas.height-1180);
   ctx.save();ctx.translate(294,263);ctx.rotate(rotationTime*Math.PI);
