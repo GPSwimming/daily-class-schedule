@@ -1618,6 +1618,11 @@ body[data-module="rooms"] .module-heading p { max-width: 78ch; line-height: 1.65
 /* A date input nested in an icon label makes the whole label the native picker target. */
 label:has(> input[type="date"]) > input[type="date"] { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; min-height: 0; margin: 0; padding: 0; border: 0; opacity: 0; cursor: pointer; }
 label:has(> input[type="date"]) > input[type="date"]::-webkit-calendar-picker-indicator { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; opacity: 0; cursor: pointer; }
+/* Keep the native picker inside its 42px icon; the adjacent action owns its full grid cell. */
+.student-first-lesson-row .student-date-calendar { flex: 0 0 42px; max-width: 42px; overflow: hidden; }
+.student-first-lesson-row .student-date-calendar > input[type=date] { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.student-first-lesson-row .student-date-calendar > input[type=date]::-webkit-calendar-picker-indicator { max-width: 100%; box-sizing: border-box; }
+.student-first-lesson-row .student-add-lesson-button { position: relative; z-index: 2; }
 .student-net-fee { display: flex; align-items: center; gap: 8px; padding: 10px 12px; color: var(--muted); font-size: .78rem; }
 .student-net-fee strong { color: var(--ink); font-size: .95rem; }
 .student-location-field { min-width: 0; margin: 0; padding: 0; border: 0; }
@@ -1677,6 +1682,13 @@ label:has(> input[type="date"]) > input[type="date"]::-webkit-calendar-picker-in
   .student-number-section .student-choice span { padding-inline: 6px; }
   .student-number-panel { padding: 10px; }
   .student-number-result > strong { font-size: .9rem; }
+}
+
+/* iOS enlarges the page when a focused form control uses text smaller than 16px. */
+@media (max-width: 650px) {
+  .student-dialog .student-floating input:not([readonly]),
+  .student-dialog .student-floating select,
+  .student-dialog .student-floating textarea { font-size: 16px; }
 }
 
 @media (max-width: 650px) {
