@@ -435,6 +435,7 @@
 
   function showHome() {
     if (state.role === "tutor") return renderTutorPortal();
+    document.documentElement.classList?.remove("auth-logged-out");
     document.body.classList.remove("auth-logged-out");
     if (state.currentModule === "month-pass") elements.moduleContent.innerHTML = "";
     state.currentModule = null;
@@ -485,6 +486,7 @@
       window.LoginUI?.setLoginBusy(false);
       window.LoginUI?.translate?.();
     }
+    document.documentElement.classList?.add("auth-logged-out");
     document.body.classList.add("auth-logged-out");
     document.body.dataset.module = "";
     setMonthPassChrome();
@@ -514,6 +516,7 @@
     const profiles = Array.isArray(snapshot.profiles) ? snapshot.profiles : [];
     const assignments = Array.isArray(snapshot.assignments) ? snapshot.assignments : [];
     const leaveRequests = Array.isArray(portal.leaveRequests) ? portal.leaveRequests : [];
+    document.documentElement.classList?.remove("auth-logged-out");
     document.body.classList.remove("auth-logged-out");
     document.body.dataset.module = "tutor-portal";
     elements.homeView.hidden = true;
@@ -553,6 +556,7 @@
 
   function openModule(id) {
     if (!state.loggedIn || state.role !== "admin") return;
+    document.documentElement.classList?.remove("auth-logged-out");
     document.body.classList.remove("auth-logged-out");
     if (!moduleMeta[id]) return;
     state.currentModule = id;

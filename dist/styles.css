@@ -1237,15 +1237,15 @@ body[data-module="month-pass"] .month-pass-frame { height: calc(100dvh - env(saf
 
 /* Administrator entry, password recovery and privacy pages. */
 body.auth-logged-out { background: #faf8f3; }
-html:has(body.auth-logged-out:not(.auth-dark)),
-html:has(body.auth-logged-out:not(.auth-dark)) body { background: #faf8f3; }
+html.auth-logged-out:not(.auth-dark),
+html.auth-logged-out:not(.auth-dark) body { background: #faf8f3; }
 body.auth-logged-out .app-shell { width: 100%; max-width: none; padding: 0; }
 body.auth-logged-out .topbar { display: none; }
 body.auth-logged-out .logged-out-view { min-height: 100vh; display: block; }
 .auth-page { --auth-bg: #faf8f3; --auth-panel: #fbf9f4; --auth-ink: #24221f; --auth-muted: #67645e; --auth-line: #d0cabc; --auth-blue: #82cbe8; --auth-link: #1682ae; width: min(760px, 100%); margin: 0 auto; padding: clamp(24px, 5vw, 52px) 18px 32px; color: var(--auth-ink); background: var(--auth-bg); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft JhengHei", "PingFang TC", sans-serif; }
 body.auth-logged-out.auth-dark { background: #001526; }
-html:has(body.auth-logged-out.auth-dark),
-html:has(body.auth-logged-out.auth-dark) body { background: #001526; }
+html.auth-logged-out.auth-dark,
+html.auth-logged-out.auth-dark body { background: #001526; }
 body.auth-dark .auth-page { --auth-bg: #001526; --auth-panel: #082c47; --auth-ink: #f4f7fa; --auth-muted: #b8c6d0; --auth-line: #677481; --auth-blue: #82cbe8; --auth-link: #9cd8f1; }
 .auth-brand { width: 100%; padding: 16px 22px 17px; background: var(--auth-blue); border-radius: 17px; color: #143750; }
 .auth-brand img { display: block; width: min(90%, 570px); height: auto; max-height: 226px; object-fit: contain; margin: 0 auto -8px; }
@@ -1319,7 +1319,7 @@ body.auth-dark .auth-consent { background: #103955; }
   .auth-language-list { order: 2; flex: 1 1 100%; justify-content: center; }
 }
 @media (max-width: 650px) {
-  html:has(body.auth-logged-out) { height: 100%; overflow: hidden; overscroll-behavior: none; }
+  html.auth-logged-out { height: 100%; overflow: hidden; overscroll-behavior: none; }
   body.auth-logged-out { height: 100dvh; min-height: 0; overflow: hidden; overscroll-behavior: none; }
   body.auth-logged-out .app-shell { height: 100%; min-height: 0; }
   body.auth-logged-out .app-shell > main { height: 100%; min-height: 0; }
@@ -1806,6 +1806,7 @@ label:has(> input[type="date"]) > input[type="date"]::-webkit-calendar-picker-in
 }
 
 @media (max-width: 620px) {
+  body:not(.auth-logged-out):not([data-module="month-pass"]) .app-shell { width: 100vw; max-width: 100vw; }
   .app-shell { padding-inline: 12px; }
   .topbar { min-height: 66px; }
   .logout-button { font-size: 0.75rem; }
@@ -1861,6 +1862,13 @@ label:has(> input[type="date"]) > input[type="date"]::-webkit-calendar-picker-in
   .booking-date-row input { padding-inline: 4px; font-size: .76rem; }
   .booking-date-row strong { font-size: .72rem; }
   .booking-date-row button { width: 25px; }
+}
+
+@media (max-width: 650px) {
+  input:not([type]),
+  input:is([type="text"], [type="email"], [type="password"], [type="search"], [type="tel"], [type="number"], [type="date"], [type="time"]),
+  select,
+  textarea { font-size: 16px !important; }
 }
 
 @media print {

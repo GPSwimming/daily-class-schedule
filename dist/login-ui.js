@@ -116,6 +116,7 @@
   document.querySelector("#auth-theme-toggle").addEventListener("click", () => {
     document.body.classList.toggle("auth-dark");
     const dark = document.body.classList.contains("auth-dark");
+    document.documentElement.classList?.toggle("auth-dark", dark);
     const button = document.querySelector("#auth-theme-toggle");
     button.textContent = dark ? "☀" : "☾";
     translate();
