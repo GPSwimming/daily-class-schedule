@@ -1022,6 +1022,9 @@ body[data-module="month-pass"] .month-pass-frame { height: calc(100dvh - env(saf
 .booking-dialog .modal-header { position: sticky; z-index: 2; top: -18px; align-items: center; padding: 7px 0 12px; background: var(--paper); }
 .booking-dialog .modal-header h2 { font-size: 1.4rem; }
 .booking-dialog .modal-actions { position: sticky; z-index: 2; bottom: -12px; padding: 13px 0 2px; background: var(--paper); border-top: 1px solid var(--line); }
+.booking-dialog .booking-cancel-button { color: #fff; background: #b42318; border-color: #b42318; box-shadow: 0 8px 18px rgba(180, 35, 24, .2); }
+.booking-dialog .booking-cancel-button:hover { background: #8f1d14; border-color: #8f1d14; }
+.booking-dialog .booking-cancel-button:focus-visible { outline: 3px solid #ffb4ad; outline-offset: 2px; }
 .booking-search { display: flex; min-height: 55px; align-items: center; gap: 12px; padding: 0 15px; border: 1px solid #d4cec1; border-radius: 10px; background: var(--paper-strong); }
 .booking-search span { color: var(--muted); font-size: 1.65rem; line-height: 1; }
 .booking-search input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--ink); font: inherit; font-size: .95rem; }
@@ -1036,8 +1039,9 @@ body[data-module="month-pass"] .month-pass-frame { height: calc(100dvh - env(saf
 .booking-pick { min-width: 0; margin: 20px 0 0; padding: 0; border: 0; }
 .booking-pick legend { margin-bottom: 10px; font-size: .9rem; font-weight: 750; }
 .booking-help { margin: 6px 0 0; color: var(--muted); font-size: .72rem; }
+.booking-subheading { margin: 14px 0 8px; font-size: .8rem; font-weight: 700; }
 .booking-chips { display: flex; flex-wrap: wrap; gap: 7px; }
-.booking-chip { min-height: 38px; padding: 7px 13px; border: 1px solid #ded7c9; border-radius: 999px; color: var(--ink); background: #eee7d7; font: inherit; font-size: .85rem; cursor: pointer; }
+.booking-chip { min-height: 38px; max-width: 100%; padding: 7px 13px; border: 1px solid #ded7c9; border-radius: 999px; color: var(--ink); background: #eee7d7; font: inherit; font-size: .85rem; overflow-wrap: anywhere; text-align: left; white-space: normal; cursor: pointer; }
 .booking-chip:hover { border-color: #2c7cae; }
 .booking-chip.is-selected { border-color: #1677ad; color: #104f72; background: #e0f1f8; box-shadow: inset 0 0 0 1px #1677ad; }
 .booking-chip.is-selected::before { content: '✓'; margin-right: 7px; }
@@ -1045,6 +1049,14 @@ body[data-module="month-pass"] .month-pass-frame { height: calc(100dvh - env(saf
 :root[data-theme="dark"] .booking-dialog .booking-chip:hover { border-color: #b6c9d0; }
 :root[data-theme="dark"] .booking-dialog .booking-chip.is-selected { border-color: #3486b1; color: #dceef6; background: #21495e; box-shadow: inset 0 0 0 1px #3486b1; }
 .booking-empty { margin: 0; color: var(--muted); font-size: .78rem; }
+.booking-selected-student { display: inline-flex; align-items: center; gap: 10px; min-height: 38px; max-width: 100%; padding: 6px 9px 6px 13px; border: 1px solid #1677ad; border-radius: 999px; color: #104f72; background: #e0f1f8; font: inherit; font-size: .85rem; overflow-wrap: anywhere; text-align: left; cursor: pointer; }
+.booking-selected-student span { display: grid; flex: 0 0 22px; place-items: center; width: 22px; height: 22px; border-radius: 50%; font-size: 1.15rem; line-height: 1; }
+.booking-selected-student:hover span { background: rgba(22,119,173,.14); }
+:root[data-theme="dark"] .booking-selected-student { color: #dceef6; background: #21495e; border-color: #3486b1; }
+.booking-other-location { display: flex; align-items: stretch; gap: 9px; margin-top: 12px; min-width: 0; }
+.booking-floating { flex: 1 1 auto; min-width: 0; }
+.booking-add-location.quick-add-class { flex: 0 0 auto; width: auto; min-width: 72px; min-height: 50px; margin: 0; padding: 0 16px; background: #11866c; font-size: .86rem; }
+.booking-add-location:hover { background: #0b6f59; }
 .booking-pool-field { display: grid; gap: 8px; margin-top: 20px; font-size: .9rem; font-weight: 750; }
 .booking-pool-field select { width: 100%; min-height: 48px; padding: 0 12px; border: 1px solid #d4cec1; border-radius: 10px; color: var(--ink); background: var(--paper-strong); font: inherit; font-weight: 400; }
 :root[data-theme="dark"] .booking-dialog .booking-pool-field select { padding-inline: 16px; border-color: #514b3f; border-radius: 999px; color: var(--ink); background: #514b3f; color-scheme: dark; }

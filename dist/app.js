@@ -42,6 +42,7 @@
     scheduleDate: todayYmd(),
     quickLesson: null,
     bookingDraft: null,
+    bookingLocationReturn: null,
     timePicker: null,
     peopleTab: "students",
     peopleFilter: "all",
@@ -1290,6 +1291,13 @@
     return uniquePoolValues(state.suite.poolLocations, "pool").map((name) => ({ value: poolOptionId(name), label: name }));
   }
 
+  function studentPreferredPoolId(student) {
+    const roomId = String(student.roomId || "");
+    if (roomId.startsWith("pool:")) return roomId;
+    const name = locationNameForId(roomId, student.roomName);
+    return name ? poolOptionId(name) : "";
+  }
+
   function renderRooms() {
     const records = state.suite.poolLocations;
     const pools = uniquePoolValues(records, "pool");
@@ -2117,7 +2125,7 @@
     });
   }
 
-  function openPoolForm(record) {
+  function openPoolForm(record, initialPoolName = "") {
     state.locationMenuOpen = false;
     if (elements.locationManageDialog.open) elements.locationManageDialog.close();
     if (state.currentModule === "rooms") renderModule();
@@ -2126,7 +2134,7 @@
       title: record ? "編輯泳池地點" : "新增泳池",
       fields: [
         { name: "id", type: "hidden", value: record ? record.id : "" },
-        { name: "pool", label: "課堂泳池", type: "text", value: record ? record.pool : "", required: true, wide: true },
+        { name: "pool", label: "課堂泳池", type: "text", value: record ? record.pool : initialPoolName, required: true, wide: true },
         { name: "place", label: "泳池地點", type: "text", value: record ? record.place : "", required: true },
         { name: "meetingPoint", label: "集合位置", type: "textarea", value: record ? record.meetingPoint : "", required: true, wide: true },
         { name: "cleaningDay", label: "泳池清潔日", type: "text", value: record ? record.cleaningDay : "", required: true },
@@ -2148,7 +2156,8 @@
         }
         state.locationSelection = { pool: payload.pool, place: payload.place };
         closeForm();
-        renderModule();
+        if (state.bookingLocationReturn) returnToBookingFromPoolForm(payload.pool);
+        else renderModule();
         showToast(existing ? "這組泳班地點已更新" : "這組泳班地點已新增");
       }
     });
@@ -2422,14 +2431,10 @@
     elements.timePickerDialog.close();
   }
 
-  function bookingStudentsForCourse(courseName, ageGroup = "", classSize = "") {
+  function bookingStudentsForCourse(courseName) {
     return state.students.filter((student) => student.status !== "inactive" && student.enrollmentStatus !== "pending" &&
-      ((student.enrollments || []).some((item) => sameCourseValue(item.courseName, courseName) &&
-        (!ageGroup || sameCourseValue(item.ageGroup, ageGroup) || sameCourseValue(item.pricingAgeGroup, ageGroup)) &&
-        (!classSize || sameCourseValue(item.classSize, classSize))) ||
-        (!(student.enrollments || []).length && sameCourseValue(courseForStudent(student)?.name, courseName) &&
-          (!ageGroup || sameCourseValue(courseForStudent(student)?.ageGroup, ageGroup) || sameCourseValue(student.ageGroup, ageGroup)) &&
-          (!classSize || sameCourseValue(courseForStudent(student)?.classSize, classSize)))));
+      ((student.enrollments || []).some((item) => sameCourseValue(item.courseName, courseName)) ||
+        (!(student.enrollments || []).length && sameCourseValue(courseForStudent(student)?.name, courseName))));
   }
 
   function renderBookingChoices() {
@@ -2437,27 +2442,44 @@
     const search = draft.search.trim().toLocaleLowerCase();
     const matches = (name) => !search || String(name || "").toLocaleLowerCase().includes(search);
     const chips = (rows, selected, action, index) => rows.map((item) => '<button class="booking-chip' + (selected.has(item.value) ? ' is-selected' : '') + '" type="button" data-action="' + action + '" data-group="' + index + '" data-value="' + escapeHtml(item.value) + '" aria-pressed="' + selected.has(item.value) + '">' + escapeHtml(item.label) + '</button>').join('') || '<p class="booking-empty">未有符合的項目。</p>';
+    const pools = locationSelectOptions();
     document.querySelector("#booking-add-group").disabled = draft.groups.length >= 5;
     document.querySelector("#booking-groups").innerHTML = draft.groups.map((group, index) => {
       const usedTutors = new Set(draft.groups.filter((_, other) => other !== index).flatMap((item) => [...item.tutorIds]));
       const tutors = state.suite.accounts.filter((item) => item.role === "tutor" && !usedTutors.has(item.id) && (matches(item.name) || group.tutorIds.has(item.id)))
         .map((item) => ({ value: item.id, label: item.name }));
-      const allowedIds = new Set([...group.tutorIds].flatMap((id) => findById(state.suite.accounts, id)?.courseIds || []));
-      const courses = displayCourses().filter((item) => item.active !== false && allowedIds.has(item.id));
+      const allowedNames = [...group.tutorIds].flatMap((id) => tutorCourseNames(findById(state.suite.accounts, id) || {}));
+      const courses = displayCourses().filter((item) => item.active !== false && allowedNames.some((name) => sameCourseValue(name, item.name)));
       const chosen = courses.find((item) => item.id === group.courseId);
-      const preserved = !chosen && group.courseName ? { id: group.courseId || "legacy-course", name: "既有預約：" + group.courseName, ageGroup: group.ageGroup, classSize: group.classSize } : null;
+      const preserved = !chosen && group.courseName ? { id: group.courseId || "legacy-course", name: group.courseName, ageGroup: group.ageGroup, classSize: group.classSize } : null;
       const courseRows = (preserved ? courses.concat(preserved) : courses).filter((item) => matches(item.name) || group.courseId === item.id)
-        .map((item) => ({ value: item.id, label: [item.name, item.ageGroup, item.classSize].filter(Boolean).join(" · ") }));
-      const eligibleStudents = group.courseName ? bookingStudentsForCourse(group.courseName, group.ageGroup, group.classSize) : [];
+        .reduce((rows, item) => {
+          const existing = rows.findIndex((row) => sameCourseValue(row.label, item.name));
+          const option = { value: item.id, label: item.name };
+          if (existing === -1) rows.push(option);
+          else if (group.courseId === item.id) rows[existing] = option;
+          return rows;
+        }, []);
+      const eligibleStudents = group.courseName ? bookingStudentsForCourse(group.courseName) : [];
       const selectedLegacy = [...group.studentIds].map((id) => findById(state.students, id)).filter((item) => item && !eligibleStudents.some((other) => other.id === item.id));
-      const students = eligibleStudents.concat(selectedLegacy).filter((item) => matches(item.name) || group.studentIds.has(item.id))
+      const usedStudents = new Set(draft.groups.filter((_, other) => other !== index).flatMap((item) => [...item.studentIds]));
+      const students = eligibleStudents.filter((item) => !group.studentIds.has(item.id) && !usedStudents.has(item.id) && group.filterPoolIds.has(studentPreferredPoolId(item)) && matches(item.name))
         .map((item) => ({ value: item.id, label: item.name }));
-      const pools = locationSelectOptions();
+      const selectedStudents = eligibleStudents.concat(selectedLegacy).filter((item) => group.studentIds.has(item.id))
+        .map((item) => '<button class="booking-selected-student" type="button" data-action="booking-remove-student" data-group="' + index + '" data-value="' + escapeHtml(item.id) + '" aria-label="移除課堂學生 ' + escapeHtml(item.name) + '">' + escapeHtml(item.name) + '<span aria-hidden="true">×</span></button>').join('');
+      const otherLocation = group.roomId === OTHER_POOL_OPTION;
+      const locationRows = pools.map((item) => ({ value: item.value, label: item.label }));
+      if (draft.editingId && group.roomId && group.roomId !== OTHER_POOL_OPTION && !locationRows.some((item) => item.value === group.roomId)) {
+        locationRows.push({ value: group.roomId, label: "既有預約：" + (group.roomName || "舊有地點") });
+      }
+      locationRows.push({ value: OTHER_POOL_OPTION, label: "其他" });
       return '<article class="booking-group-card"><div class="student-section-heading"><h4>課堂 ' + (index + 1) + '</h4>' + (draft.groups.length > 1 ? '<button class="mini-button danger" type="button" data-action="booking-remove-group" data-group="' + index + '">移除</button>' : '') + '</div>' +
         '<fieldset class="booking-pick"><legend>導師</legend><div class="booking-chips">' + chips(tutors, group.tutorIds, "booking-tutor", index) + '</div></fieldset>' +
-        '<fieldset class="booking-pick"><legend>可任教課程・年齡・人數</legend><div class="booking-chips">' + (group.tutorIds.size ? chips(courseRows, new Set(group.courseId ? [group.courseId] : group.courseName ? ["legacy-course"] : []), "booking-course", index) : '<p class="booking-empty">請先選擇導師。</p>') + '</div></fieldset>' +
-        '<fieldset class="booking-pick"><legend>已報讀學生</legend><div class="booking-chips">' + (group.courseName ? chips(students, group.studentIds, "booking-student", index) : '<p class="booking-empty">請先選擇小組課堂。</p>') + '</div></fieldset>' +
-        '<label class="booking-pool-field">課堂泳池<select data-booking-pool data-group="' + index + '" aria-label="課堂 ' + (index + 1) + ' 泳池"><option value="">未指定課堂泳池</option>' + pools.map((item) => '<option value="' + escapeHtml(item.value) + '"' + (item.value === group.roomId ? ' selected' : '') + '>' + escapeHtml(item.label) + '</option>').join('') + '</select></label></article>';
+        '<fieldset class="booking-pick"><legend>課程</legend><div class="booking-chips">' + (group.tutorIds.size ? chips(courseRows, new Set(group.courseId ? [group.courseId] : group.courseName ? ["legacy-course"] : []), "booking-course", index) : '<p class="booking-empty">請先選擇導師。</p>') + '</div></fieldset>' +
+        '<fieldset class="booking-pick"><legend>學生</legend><p class="booking-help">先選擇一個或多個課堂泳池，按學生原先登記的地點及課程名稱縮窄名單；待確認未付款學生暫不列出，實際上課地點可另外選擇。</p><div class="booking-subheading">課堂泳池</div><div class="booking-chips">' + chips(pools, group.filterPoolIds, "booking-filter-pool", index) + '</div><div class="booking-subheading">可選學生</div><div class="booking-chips">' + (!group.courseName ? '<p class="booking-empty">請先選擇課程。</p>' : !group.filterPoolIds.size ? '<p class="booking-empty">請先選擇課堂泳池。</p>' : chips(students, new Set(), "booking-student", index)) + '</div></fieldset>' +
+        '<fieldset class="booking-pick"><legend>課堂學生</legend><div class="booking-chips">' + (selectedStudents || '<p class="booking-empty">尚未選擇學生。</p>') + '</div></fieldset>' +
+        '<fieldset class="booking-pick booking-location-pick"><legend>課堂地點</legend><div class="booking-chips">' + chips(locationRows, new Set(group.roomId ? [group.roomId] : []), "booking-location", index) + '</div>' +
+        (otherLocation ? '<div class="booking-other-location"><label class="student-floating booking-floating' + (group.roomName ? ' is-filled' : '') + '"><input type="text" data-booking-other-name data-group="' + index + '" value="' + escapeHtml(group.roomName) + '" placeholder=" " maxlength="120"><span>其他泳池</span></label><button class="quick-add-class booking-add-location" type="button" data-action="booking-add-location" data-group="' + index + '">新增</button></div>' : '') + '</fieldset></article>';
     }).join('');
   }
 
@@ -2489,17 +2511,39 @@
       groups: [{ tutorIds: new Set(existing?.tutorIds || []), courseId: existing?.courseId || "",
         courseName: existing?.courseName || "", ageGroup: existing?.ageGroup || "",
         classSize: existing?.classSize || "", studentIds: new Set(existing?.studentIds || []),
+        filterPoolIds: new Set((existing?.studentIds || []).map((id) => studentPreferredPoolId(findById(state.students, id) || {})).filter(Boolean)),
         roomId: existing?.roomId || "", roomName: existing?.roomName || "" }],
       dates: { [firstDate]: { start: slot.start, end: slot.end } }, defaultSlot: { start: slot.start, end: slot.end }, month: parseDate(firstDate)
     };
-    document.querySelector("#booking-title").textContent = existing ? "編輯預約課堂" : "預約課堂";
-    document.querySelector("#booking-search").value = "";
+    showBookingDraft();
+  }
+
+  function showBookingDraft() {
+    const editing = Boolean(state.bookingDraft.editingId);
+    document.querySelector("#booking-title").textContent = editing ? "編輯預約課堂" : "預約課堂";
+    document.querySelector("#booking-dismiss-button").hidden = editing;
+    document.querySelector("#booking-cancel-button").hidden = !editing;
+    document.querySelector("#booking-search").value = state.bookingDraft.search;
     document.querySelector("#booking-error").textContent = "";
     renderBookingChoices();
     renderBookingCalendar();
     renderBookingDates();
     elements.bookingDialog.showModal();
     document.body.classList.add("modal-open");
+  }
+
+  function returnToBookingFromPoolForm(poolName = "") {
+    const target = state.bookingLocationReturn;
+    state.bookingLocationReturn = null;
+    if (!target || !state.bookingDraft) return renderModule();
+    const group = state.bookingDraft.groups[target.groupIndex];
+    if (group && poolName) {
+      group.roomId = poolOptionId(poolName);
+      group.roomName = poolName;
+    }
+    openModule("schedule");
+    showBookingDraft();
+    document.querySelectorAll(".booking-location-pick")[target.groupIndex]?.scrollIntoView({ block: "center" });
   }
 
   function syncBookingStudent(studentId) {
@@ -2537,6 +2581,9 @@
       if (!group.courseName || !group.tutorIds.size || !group.studentIds.size) {
         errorNode.textContent = "課堂 " + (index + 1) + "：請選擇導師、可任教課程及至少一位已報讀學生。"; return;
       }
+      if (group.roomId === OTHER_POOL_OPTION && !group.roomName.trim()) {
+        errorNode.textContent = "課堂 " + (index + 1) + "：請填寫其他泳池名稱，或按「新增」建立課堂地點。"; return;
+      }
       if (group.tutorIds.size > 1 && !(draft.editingId && index === 0)) {
         errorNode.textContent = "每個新課堂只可選一位導師。"; return;
       }
@@ -2544,18 +2591,18 @@
         if (!validTutors.has(id) || selectedTutorIds.has(id)) { errorNode.textContent = "同一時段的課堂必須由不同導師身分負責。"; return; }
         selectedTutorIds.add(id);
       }
-      const course = displayCourses().find((item) => item.id === group.courseId && sameCourseValue(item.name, group.courseName));
+      const course = displayCourses().find((item) => item.active !== false && sameCourseValue(item.name, group.courseName));
       const old = state.suite.lessonBookings.find((item) => item.id === draft.editingId);
       const preserved = old && index === 0 && sameCourseValue(old.courseName, group.courseName) &&
         old.tutorIds.length === group.tutorIds.size && old.tutorIds.every((id) => group.tutorIds.has(id)) &&
         old.studentIds.length === group.studentIds.size && old.studentIds.every((id) => group.studentIds.has(id));
       if (!course && !preserved) { errorNode.textContent = "課堂 " + (index + 1) + "：課程設定已變更，請重新選擇。"; return; }
-      if (!preserved && [...group.tutorIds].some((id) => !validTutors.get(id).courseIds?.includes(group.courseId))) {
+      if (!preserved && [...group.tutorIds].some((id) => !tutorCourseNames(validTutors.get(id)).some((name) => sameCourseValue(name, group.courseName)))) {
         errorNode.textContent = "課堂 " + (index + 1) + "：導師未獲設定任教所選課程。"; return;
       }
-      const eligible = new Set(bookingStudentsForCourse(group.courseName, group.ageGroup, group.classSize).map((item) => item.id));
+      const eligible = new Set(bookingStudentsForCourse(group.courseName).map((item) => item.id));
       for (const id of group.studentIds) {
-        if ((!preserved && !eligible.has(id)) || selectedStudentIds.has(id)) { errorNode.textContent = "同一時段的學生只能編入一班，並須已報讀該課程組合。"; return; }
+        if ((!preserved && !eligible.has(id)) || selectedStudentIds.has(id)) { errorNode.textContent = "同一時段的學生只能編入一班，並須已報讀該課程。"; return; }
         selectedStudentIds.add(id);
       }
     }
@@ -2628,7 +2675,12 @@
   }
 
   function cancelBooking(booking) {
-    if (!booking || !window.confirm("確認取消 " + booking.date + " 的預約課堂？學生堂數不會扣減。")) return;
+    if (!booking || !window.confirm("警告：確定取消並刪除 " + booking.date + " " + booking.start + " 的預約課堂？涉及 " + booking.studentIds.length + " 位學生。未完成的預約沒有扣堂，取消後不會扣堂或新增需付款課堂。此操作不能復原。")) return;
+    const previous = state.suite.lessonBookings;
+    const snapshots = booking.studentIds.map((id) => findById(state.students, id)).filter(Boolean).map((student) => ({
+      student, history: student.history.slice(), nextDate: student.nextDate, nextTime: student.nextTime,
+      bookingManaged: student.bookingManaged, bookingFallbackDate: student.bookingFallbackDate, bookingFallbackTime: student.bookingFallbackTime
+    }));
     for (const id of booking.studentIds) {
       const student = findById(state.students, id);
       if (!student) continue;
@@ -2637,7 +2689,21 @@
     }
     state.suite.lessonBookings = state.suite.lessonBookings.filter((item) => item.id !== booking.id);
     booking.studentIds.forEach(syncBookingStudent);
-    saveAll(); renderModule(); showToast("課堂已取消，沒有扣堂");
+    try { saveAll(); }
+    catch {
+      state.suite.lessonBookings = previous;
+      snapshots.forEach(({ student, history, nextDate, nextTime, bookingManaged, bookingFallbackDate, bookingFallbackTime }) =>
+        Object.assign(student, { history, nextDate, nextTime, bookingManaged, bookingFallbackDate, bookingFallbackTime }));
+      try { saveAll(); } catch { /* Keep the original records in memory for export. */ }
+      showToast("取消預約未能儲存，請先備份再試");
+      return;
+    }
+    if (elements.bookingDialog.open && state.bookingDraft?.editingId === booking.id) {
+      elements.bookingDialog.close();
+      document.body.classList.toggle("modal-open", elements.formDialog.open);
+      state.bookingDraft = null;
+    }
+    renderModule(); showToast("預約已取消，沒有扣堂");
   }
 
   function openLessonForm(student) {
@@ -3189,6 +3255,13 @@
     document.body.classList.remove("modal-open");
   }
 
+  elements.formDialog.addEventListener("cancel", (event) => {
+    if (!state.bookingLocationReturn) return;
+    event.preventDefault();
+    closeForm();
+    returnToBookingFromPoolForm();
+  });
+
   function deleteFrom(collectionName, id, label) {
     if (!window.confirm("確定刪除這項" + label + "？")) return;
     state.suite[collectionName] = state.suite[collectionName].filter((item) => item.id !== id);
@@ -3257,6 +3330,10 @@
       return;
     }
     if (button.dataset.close) {
+      if (button.dataset.close === "form-dialog" && state.bookingLocationReturn) {
+        closeForm();
+        return returnToBookingFromPoolForm();
+      }
       document.querySelector("#" + button.dataset.close)?.close();
       document.body.classList.toggle("modal-open", elements.formDialog.open);
       return;
@@ -3347,7 +3424,7 @@
       return renderTimePicker();
     }
     if (action === "booking-add-group") {
-      if (state.bookingDraft.groups.length < 5) state.bookingDraft.groups.push({ tutorIds: new Set(), courseId: "", courseName: "", ageGroup: "", classSize: "", studentIds: new Set(), roomId: "", roomName: "" });
+      if (state.bookingDraft.groups.length < 5) state.bookingDraft.groups.push({ tutorIds: new Set(), courseId: "", courseName: "", ageGroup: "", classSize: "", studentIds: new Set(), filterPoolIds: new Set(), roomId: "", roomName: "" });
       return renderBookingChoices();
     }
     if (action === "booking-remove-group") {
@@ -3373,8 +3450,37 @@
     if (action === "booking-student") {
       const group = state.bookingDraft.groups[Number(button.dataset.group)];
       if (!group) return;
-      group.studentIds.has(button.dataset.value) ? group.studentIds.delete(button.dataset.value) : group.studentIds.add(button.dataset.value);
+      group.studentIds.add(button.dataset.value);
       return renderBookingChoices();
+    }
+    if (action === "booking-remove-student") {
+      const group = state.bookingDraft.groups[Number(button.dataset.group)];
+      if (!group) return;
+      group.studentIds.delete(button.dataset.value);
+      return renderBookingChoices();
+    }
+    if (action === "booking-filter-pool") {
+      const group = state.bookingDraft.groups[Number(button.dataset.group)];
+      if (!group) return;
+      group.filterPoolIds.has(button.dataset.value) ? group.filterPoolIds.delete(button.dataset.value) : group.filterPoolIds.add(button.dataset.value);
+      return renderBookingChoices();
+    }
+    if (action === "booking-location") {
+      const group = state.bookingDraft.groups[Number(button.dataset.group)];
+      if (!group) return;
+      group.roomId = group.roomId === button.dataset.value ? "" : button.dataset.value;
+      group.roomName = group.roomId === OTHER_POOL_OPTION ? "" : locationNameForId(group.roomId, "");
+      return renderBookingChoices();
+    }
+    if (action === "booking-add-location") {
+      const groupIndex = Number(button.dataset.group);
+      const group = state.bookingDraft.groups[groupIndex];
+      if (!group) return;
+      state.bookingLocationReturn = { groupIndex };
+      elements.bookingDialog.close();
+      document.body.classList.remove("modal-open");
+      openModule("rooms");
+      return openPoolForm(null, group.roomName);
     }
     if (action === "booking-month") {
       state.bookingDraft.month.setMonth(state.bookingDraft.month.getMonth() + Number(button.dataset.delta));
@@ -3394,6 +3500,7 @@
       const booking = findById(state.suite.lessonBookings, id);
       return booking && openBookingForm(booking, booking);
     }
+    if (action === "cancel-editing-booking") return cancelBooking(findById(state.suite.lessonBookings, state.bookingDraft?.editingId));
     if (action === "complete-booking") return completeBooking(findById(state.suite.lessonBookings, id));
     if (action === "cancel-booking") return cancelBooking(findById(state.suite.lessonBookings, id));
     if (action === "booking-message") {
@@ -3746,6 +3853,12 @@
       state.bookingDraft.search = event.target.value;
       renderBookingChoices();
     }
+    if (event.target.matches?.("[data-booking-other-name]") && state.bookingDraft) {
+      const group = state.bookingDraft.groups[Number(event.target.dataset.group)];
+      if (group) group.roomName = event.target.value;
+      event.target.parentElement?.classList.toggle("is-filled", Boolean(event.target.value));
+      return;
+    }
     const bookingRow = event.target.closest(".booking-date-row");
     if (bookingRow && state.bookingDraft) {
       const slot = state.bookingDraft.dates[bookingRow.dataset.date];
@@ -3790,11 +3903,6 @@
         event.target.value = formatStudentRecordDate(value);
         document.querySelector("#quick-lesson-date-picker").value = value;
       }
-      return;
-    }
-    if (event.target.matches?.("[data-booking-pool]") && state.bookingDraft) {
-      const group = state.bookingDraft.groups[Number(event.target.dataset.group)];
-      if (group) { group.roomId = event.target.value; group.roomName = ""; }
       return;
     }
     if (elements.formDialog.open && elements.formDialog.classList.contains("student-dialog") && elements.dynamicForm.contains(event.target)) {
