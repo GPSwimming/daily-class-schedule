@@ -103,8 +103,16 @@ assert.match(content(), /height:739\.2px/, "day timeline height uses saved hours
 await click({ action: "schedule-mode", value: "week" });
 assert.match(content(), /height:739\.2px/, "week timeline uses the same saved hour range");
 let prevented = false;
+handlers.get("touchstart")({ touches: [{}], preventDefault() { prevented = true; } });
+assert.equal(prevented, false, "one-finger scrolling remains available on the timetable");
+handlers.get("touchstart")({ touches: [{}, {}], preventDefault() { prevented = true; } });
+assert.equal(prevented, true, "second touch is cancelled before iOS can start page zoom");
+prevented = false;
 handlers.get("gesturestart")({ preventDefault() { prevented = true; } });
 assert.equal(prevented, true, "native page pinch is blocked on the timetable");
+prevented = false;
+handlers.get("gestureend")({ preventDefault() { prevented = true; } });
+assert.equal(prevented, true, "ending a pinch cannot commit native page zoom");
 prevented = false;
 handlers.get("touchmove")({ touches: [{}, {}], preventDefault() { prevented = true; } });
 assert.equal(prevented, true, "two-finger movement cannot resize the page itself");
@@ -132,6 +140,9 @@ await click({ action: "schedule-zoom", delta: "10" });
 assert.match(content(), /100%/, "zoom buttons remain available after a grid gesture");
 
 await click({ module: "people" });
+prevented = false;
+handlers.get("touchstart")({ touches: [{}, {}], preventDefault() { prevented = true; } });
+assert.equal(prevented, false, "timetable gesture guard does not affect other pages");
 assert.doesNotMatch(content(), /新增課程/, "people header no longer has a course action");
 assert.match(content(), /匯入學生/, "people header has the clearly labelled student import action");
 assert.match(content(), /新增導師/, "people header has separate tutor action");

@@ -4048,12 +4048,19 @@
   elements.moduleContent.addEventListener("touchend", finishSchedulePinch, { passive: true });
   elements.moduleContent.addEventListener("touchcancel", finishSchedulePinch, { passive: true });
 
+  document.addEventListener("touchstart", (event) => {
+    // iOS can begin native page zoom before touchmove; cancel the second touch at the start.
+    if (state.currentModule === "schedule" && event.touches.length > 1) event.preventDefault();
+  }, { capture: true, passive: false });
   document.addEventListener("gesturestart", (event) => {
     if (state.currentModule === "schedule") event.preventDefault();
-  }, { passive: false });
+  }, { capture: true, passive: false });
   document.addEventListener("gesturechange", (event) => {
     if (state.currentModule === "schedule") event.preventDefault();
-  }, { passive: false });
+  }, { capture: true, passive: false });
+  document.addEventListener("gestureend", (event) => {
+    if (state.currentModule === "schedule") event.preventDefault();
+  }, { capture: true, passive: false });
   document.addEventListener("touchmove", (event) => {
     if (state.currentModule === "schedule" && event.touches.length > 1) event.preventDefault();
   }, { passive: false });
