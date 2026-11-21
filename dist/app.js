@@ -3360,6 +3360,11 @@
         closeForm();
         return returnToBookingFromPoolForm();
       }
+      if (button.dataset.close === "tutor-dialog") {
+        elements.tutorDialog.close();
+        document.body.classList.toggle("modal-open", elements.bookingDialog.open || elements.formDialog.open);
+        return;
+      }
       document.querySelector("#" + button.dataset.close)?.close();
       document.body.classList.toggle("modal-open", elements.formDialog.open);
       return;
@@ -3449,6 +3454,7 @@
       normalizeTimePicker();
       return renderTimePicker();
     }
+    if (action === "booking-add-tutor") return openTutorForm();
     if (action === "booking-add-group") {
       if (state.bookingDraft.groups.length < 5) state.bookingDraft.groups.push({ tutorIds: new Set(), courseId: "", courseName: "", ageGroup: "", classSize: "", studentIds: new Set(), filterPoolIds: new Set(), roomId: "", roomName: "" });
       return renderBookingChoices();
@@ -3729,6 +3735,11 @@
     }
   });
 
+  elements.tutorDialog.addEventListener("close", () => {
+    if (elements.bookingDialog.open) renderBookingChoices();
+    document.body.classList.toggle("modal-open", elements.bookingDialog.open || elements.formDialog.open);
+  });
+
   elements.tutorForm.addEventListener("submit", (event) => {
     event.preventDefault();
     if (!elements.tutorForm.reportValidity()) return;
@@ -3748,8 +3759,9 @@
     else state.suite.accounts.push(payload);
     saveAll();
     elements.tutorDialog.close();
-    document.body.classList.remove("modal-open");
+    document.body.classList.toggle("modal-open", elements.bookingDialog.open || elements.formDialog.open);
     renderModule();
+    if (elements.bookingDialog.open) renderBookingChoices();
     showToast(existing ? "導師資料已更新；請同步導師工作台" : "導師已新增；請同步導師工作台");
   });
 
@@ -4000,6 +4012,42 @@
     showToast("預約選項已儲存");
   });
 
+  let schedulePinch = null;
+  const touchDistance = (touches) => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+  const touchesInsideCard = (touches, card) => {
+    const bounds = card.getBoundingClientRect();
+    return [...touches].every((touch) => touch.clientX >= bounds.left && touch.clientX <= bounds.right && touch.clientY >= bounds.top && touch.clientY <= bounds.bottom);
+  };
+  elements.moduleContent.addEventListener("touchstart", (event) => {
+    if (state.currentModule !== "schedule" || state.scheduleMode !== "week" || state.scheduleDisplay !== "calendar" || event.touches.length !== 2) return;
+    const card = event.target.closest?.(".timeline-card");
+    if (!card) return;
+    if (!touchesInsideCard(event.touches, card)) return;
+    schedulePinch = { card, distance: touchDistance(event.touches), zoom: state.scheduleZoom };
+  }, { passive: true });
+  elements.moduleContent.addEventListener("touchmove", (event) => {
+    if (!schedulePinch || event.touches.length !== 2) return;
+    event.preventDefault();
+    if (!touchesInsideCard(event.touches, schedulePinch.card)) return;
+    const zoom = Math.max(50, Math.min(200, schedulePinch.zoom + Math.round((touchDistance(event.touches) - schedulePinch.distance) / 4)));
+    if (zoom === state.scheduleZoom) return;
+    state.scheduleZoom = zoom;
+    const hourHeight = timelineHourHeight(zoom);
+    const card = schedulePinch.card;
+    card.style.setProperty("--hour-height", hourHeight + "px");
+    card.style.setProperty("--slot-height", hourHeight * timelineSlotMinutes(zoom) / 60 + "px");
+    card.querySelector(".timeline-body").style.height = Number(card.dataset.totalHours) * hourHeight + "px";
+    card.querySelector(".schedule-zoom span").textContent = zoom + "%";
+  }, { passive: false });
+  const finishSchedulePinch = (event) => {
+    if (!schedulePinch || event.touches.length >= 2) return;
+    schedulePinch = null;
+    suppressTimelineClickUntil = Date.now() + 350;
+    renderModule();
+  };
+  elements.moduleContent.addEventListener("touchend", finishSchedulePinch, { passive: true });
+  elements.moduleContent.addEventListener("touchcancel", finishSchedulePinch, { passive: true });
+
   document.addEventListener("gesturestart", (event) => {
     if (state.currentModule === "schedule") event.preventDefault();
   }, { passive: false });
@@ -4060,7 +4108,7 @@
   document.querySelectorAll(".modal").forEach((dialog) => dialog.addEventListener("click", (event) => {
     if (event.target === dialog) {
       dialog.close();
-      document.body.classList.remove("modal-open");
+      document.body.classList.toggle("modal-open", elements.formDialog.open || elements.bookingDialog.open || elements.tutorDialog.open);
     }
   }));
 

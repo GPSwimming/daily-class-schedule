@@ -38,13 +38,20 @@ const document = { documentElement: { dataset: {} }, body: { classList: classLis
 let formValues = [];
 let confirmCancellation = true;
 let confirmationMessage = "";
-const context = { document, FormData: class { entries() { return formValues; } }, localStorage: { getItem: (key) => saved.get(key) ?? null, setItem: (key, value) => saved.set(key, value) },
+const context = { document, FormData: class {
+  entries() { return formValues; }
+  get(name) { return formValues.find(([key]) => key === name)?.[1] ?? null; }
+  getAll(name) { return formValues.filter(([key]) => key === name).map(([, value]) => value); }
+}, localStorage: { getItem: (key) => saved.get(key) ?? null, setItem: (key, value) => saved.set(key, value) },
   sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} }, window: { scrollTo() {}, confirm(message) { confirmationMessage = message; return confirmCancellation; }, AdminAuth: { signIn: async () => {}, signOut: async () => {}, check: async () => true, getCatalog: async () => catalog, setOnExpired() {} } }, crypto: { randomUUID },
   setTimeout: (callback, delay) => { if (delay === 120) scheduledTimers.push(callback); return 1; }, clearTimeout() {}, console };
 context.window.matchMedia = () => ({ matches: coarsePointer });
 for (let index = 0; index < files.length; index += 1) vm.runInNewContext(files[index], context, { filename: ["location-import.js", "course-import.js", "app.js"][index] });
 node("#admin-login-form").elements = { email: { value: "admin@example.com" }, password: { value: "test-only" } };
 await node("#admin-login-form").onsubmit({ preventDefault() {} });
+node("#tutor-form").reset = () => {};
+node("#tutor-form").elements = { namedItem: (name) => node(`#tutor-${name}`) };
+node("#tutor-form").querySelectorAll = () => [];
 
 const click = async (dataset) => handlers.get("click")({ target: { closest: () => ({ dataset }) } });
 await click({ module: "schedule" });
@@ -106,6 +113,19 @@ assert.equal(node("#booking-dialog").open, true, "quick add opens booking page")
 assert.equal(node("#booking-dismiss-button").hidden, false, "a new booking keeps the dismiss button");
 assert.equal(node("#booking-cancel-button").hidden, true, "a new booking cannot be deleted before it exists");
 assert.match(node("#booking-groups").innerHTML, /請先選擇導師/, "course choices wait for a tutor");
+await click({ action: "booking-add-tutor" });
+assert.equal(node("#tutor-dialog").open, true, "booking add tutor opens the existing tutor form");
+assert.equal(node("#booking-dialog").open, true, "unfinished booking stays open beneath the tutor form");
+await click({ close: "tutor-dialog" });
+assert.equal(node("#booking-dialog").open, true, "canceling tutor creation returns to booking");
+await click({ action: "booking-add-tutor" });
+formValues = [["id", ""], ["name", "新增測試導師"], ["phone", ""], ["hourlyRate", ""], ["email", ""], ["courseIds", "reference-0"]];
+node("#tutor-form").onsubmit({ preventDefault() {} });
+formValues = [];
+assert.equal(node("#tutor-dialog").open, false, "saving tutor closes the tutor form");
+assert.equal(node("#booking-dialog").open, true, "saving tutor returns to the unfinished booking");
+assert.match(node("#booking-groups").innerHTML, /新增測試導師/, "new tutor appears immediately in booking choices");
+assert.match(node("#booking-selected-count").textContent, /1/, "booking date survives tutor creation");
 await click({ action: "booking-tutor", group: "0", value: "t1" });
 assert.match(node("#booking-groups").innerHTML, /課程甲/, "tutor's permitted course appears");
 const courseChip = node("#booking-groups").innerHTML.match(/<button[^>]*data-action="booking-course"[^>]*data-value="reference-0"[^>]*>([^<]*)<\/button>/);

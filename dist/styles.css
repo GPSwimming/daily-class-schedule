@@ -1029,8 +1029,10 @@ body[data-module="month-pass"] .month-pass-frame { height: calc(100dvh - env(saf
 .booking-search span { color: var(--muted); font-size: 1.65rem; line-height: 1; }
 .booking-search input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--ink); font: inherit; font-size: .95rem; }
 .booking-groups-section { margin-top: 20px; }
-.booking-groups-section > .student-section-heading { margin-bottom: 12px; }
+.booking-groups-section > .student-section-heading { flex-wrap: wrap; margin-bottom: 12px; }
 .booking-groups-section > .student-section-heading p { margin: 3px 0 0; color: var(--muted); font-size: .78rem; }
+.booking-group-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-left: auto; }
+.booking-group-actions .button { min-width: 104px; min-height: 44px; padding: 0 13px; font-size: 1rem; white-space: nowrap; }
 .booking-groups { display: grid; gap: 12px; }
 .booking-group-card { min-width: 0; padding: 16px; border: 1px solid var(--line); border-radius: 15px; background: var(--paper-strong); }
 .booking-group-card > .student-section-heading h4 { margin: 0; }
