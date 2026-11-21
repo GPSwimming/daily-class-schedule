@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#fbfaf6" />
     <meta name="description" content="泳堂管家：游泳教練的一站式課堂、學生、付款與營運管理工具。" />
     <title>泳堂管家</title>
-    <link rel="stylesheet" href="./styles.css?v=booking-tutor-1" />
+    <link rel="stylesheet" href="./styles.css?v=student-save-prompt-1" />
   </head>
   <body>
     <div class="app-shell">
@@ -159,6 +159,19 @@
           <button class="button button-primary" id="form-submit" type="submit">儲存</button>
         </div>
       </form>
+    </dialog>
+
+    <dialog id="student-booking-prompt-dialog" class="modal modal-small student-booking-prompt" aria-labelledby="student-booking-prompt-title">
+      <div class="modal-header">
+        <div>
+          <span class="module-kicker">個人資訊</span>
+          <h2 id="student-booking-prompt-title">是否立即新增課堂？</h2>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="button button-secondary" type="button" data-action="student-booking-no">否</button>
+        <button class="button button-primary" type="button" data-action="student-booking-yes">是</button>
+      </div>
     </dialog>
 
     <dialog id="schedule-hours-dialog" class="modal modal-small schedule-hours-dialog">
@@ -342,6 +355,6 @@
     <script src="./location-import.js?v=pool-layout-1" defer></script>
     <script src="./admin-auth.js?v=auth-relogin-1" defer></script>
     <script src="./login-ui.js?v=mobile-viewport-1" defer></script>
-    <script src="./app.js?v=week-pinch-native-1" defer></script>
+    <script src="./app.js?v=student-save-prompt-1" defer></script>
   </body>
 </html>

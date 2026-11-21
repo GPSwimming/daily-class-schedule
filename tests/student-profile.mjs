@@ -126,6 +126,9 @@ const quickAddButton = { dataset: { action: "student-add-lesson" }, closest: (se
 node("#form-fields").innerHTML = "unsaved student fields";
 node("#form-dialog").open = true;
 node("#quick-lesson-dialog").showModal = function () { this.open = true; };
+node("#student-booking-prompt-dialog").open = false;
+node("#student-booking-prompt-dialog").showModal = function () { assert.equal(this.open, false, "a previous student prompt must be closed"); this.open = true; };
+node("#student-booking-prompt-dialog").close = function () { this.open = false; };
 await listeners.get("click")({ target: { closest: (selector) => selector === "button" ? quickAddButton : null } });
 assert.equal(node("#quick-lesson-date").value, "02-Nov-2026", "quick add inherits this course's first lesson date");
 assert.equal(node("#quick-lesson-start").value, "09:00", "quick add begins at 09:00");
@@ -196,6 +199,7 @@ state.students[0].tutorId = "tutor-1";
 state.students[0].weekday = 3;
 state.students[0].time = "17:30";
 saveStudentProfile({ id: "legacy", name: "舊學生", enrollmentStatus: "已付款", recordDate: "2026-10-30", prepaid: "8", remaining: "4", nextDate: "2026-10-30" }, emptyForm);
+assert.equal(node("#student-booking-prompt-dialog").open, false, "editing a student does not prompt to add a lesson");
 assert.equal(state.students[0].enrollmentStatus, "legacy", "editing incomplete legacy profile does not force an ID");
 assert.equal(state.students[0].remaining, 4, "editing incomplete legacy profile preserves balance");
 assert.equal(state.students[0].nextDate, "2026-10-30", "editing incomplete legacy profile preserves schedule");
@@ -203,6 +207,11 @@ assert.equal(state.students[0].tutorId, "tutor-1", "editing student preserves th
 assert.equal(state.students[0].weekday, 3, "editing student preserves the old lesson weekday");
 assert.equal(state.students[0].time, "17:30", "editing student preserves the old lesson time");
 saveStudentProfile({ name: "候補學生", ageGroup: "6 - 11", gender: "女", whatsapp: "91234567", email: " learner@example.com ", recordDate: "2026-10-30", enrollmentYear: "2026", enrollmentStatus: "待確認，未付款", birthMonth: "9", birthYear: "2018" }, emptyForm);
+assert.equal(node("#student-booking-prompt-dialog").open, true, "new student save opens the add lesson question");
+await listeners.get("click")({ target: { closest: () => ({ dataset: { action: "student-booking-no" } }) } });
+assert.equal(node("#student-booking-prompt-dialog").open, false, "No closes the question");
+assert.equal(state.currentModule, "people", "No returns to personal information");
+assert.equal(node("#quick-lesson-dialog").open, false, "No does not start quick add");
 const pending = state.students.at(-1);
 assert.equal(pending.email, "learner@example.com", "student email is stored without surrounding spaces");
 assert.match(studentFormHtml(pending), /name="email" type="email"[^>]*value="learner@example.com"/, "student email appears when editing");
@@ -236,6 +245,13 @@ const courseCard = { dataset: { enrollmentId: "", ageGroup: "2.5 - 5", duration:
 })[selector] };
 saveStudentProfile({ name: "幼兒組課程測試", ageGroup: "2.5 - 5", gender: "女", whatsapp: "91234567", recordDate: "2026-11-05", enrollmentStatus: "待確認，未付款" },
   { querySelectorAll: (selector) => selector === ".student-course-card" ? [courseCard] : [] });
+const bookingsBeforeQuickAdd = state.suite.lessonBookings.length;
+await listeners.get("click")({ target: { closest: () => ({ dataset: { action: "student-booking-yes" } }) } });
+assert.equal(node("#student-booking-prompt-dialog").open, false, "Yes closes the question");
+assert.equal(state.currentModule, "schedule", "Yes opens the timetable");
+assert.equal(node("#quick-lesson-dialog").open, true, "Yes opens the existing quick add dialog");
+assert.equal(state.suite.lessonBookings.length, bookingsBeforeQuickAdd, "Yes does not book a class before the quick add is submitted");
+node("#quick-lesson-dialog").open = false;
 const savedChildCourse = state.students.at(-1).enrollments[0];
 assert.equal(savedChildCourse.courseName, "課程丙", "selected child course is saved");
 assert.equal(savedChildCourse.ageGroup, "2.5 - 5", "student age group is preserved");
@@ -249,6 +265,7 @@ const datedCourseCard = { ...courseCard, querySelector: (selector) => ({
 const datedCourseForm = { querySelectorAll: (selector) => selector === ".student-course-card" ? [datedCourseCard] : [] };
 const datedStudentData = { name: "首堂日期測試", ageGroup: "2.5 - 5", gender: "女", whatsapp: "91234567", recordDate: "2027-04-02", enrollmentStatus: "已付款" };
 saveStudentProfile(datedStudentData, datedCourseForm);
+node("#student-booking-prompt-dialog").close();
 const datedStudent = state.students.at(-1);
 assert.equal(datedStudent.enrollments[0].firstDate, "2027-04-10", "first lesson date stays in the enrollment");
 assert.equal(datedStudent.nextDate, "", "saving a first lesson date does not schedule a class at the default 18:00 time");
@@ -266,6 +283,7 @@ state.students = state.students.filter((student) => student.id !== datedStudent.
 
 assert.throws(() => saveStudentProfile({ name: "未填泳池", ageGroup: "6 - 11", gender: "女", whatsapp: "91234567", recordDate: "2026-11-05", enrollmentStatus: "待確認，未付款", roomId: "other-pool", otherPoolName: "  " }, emptyForm), /請註明其他泳池名稱/, "Other needs a named pool");
 saveStudentProfile({ name: "自訂泳池學員", ageGroup: "6 - 11", gender: "女", whatsapp: "91234567", recordDate: "2026-11-05", enrollmentStatus: "待確認，未付款", roomId: "other-pool", otherPoolName: "  私人泳池  " }, emptyForm);
+node("#student-booking-prompt-dialog").close();
 const customPoolStudent = state.students.at(-1);
 assert.equal(customPoolStudent.roomId, "other-pool", "custom location stores a stable option ID");
 assert.equal(customPoolStudent.roomName, "私人泳池", "custom location stores the typed name");

@@ -1378,6 +1378,8 @@ body.auth-dark .auth-consent { background: #103955; }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
 .form-error { min-height: 18px; margin: 9px 0 0; color: var(--coral); font-size: 0.72rem; font-weight: 800; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+.student-booking-prompt .modal-actions { flex-direction: row; }
+.student-booking-prompt .modal-actions .button { min-width: 80px; }
 .message-tabs { margin-bottom: 15px; }
 
 .receipt-paper {

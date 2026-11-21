@@ -125,6 +125,7 @@
     formFields: document.querySelector("#form-fields"),
     formSubmit: document.querySelector("#form-submit"),
     formError: document.querySelector("#form-error"),
+    studentBookingPromptDialog: document.querySelector("#student-booking-prompt-dialog"),
     messageDialog: document.querySelector("#message-dialog"),
     messageTitle: document.querySelector("#message-title"),
     messageText: document.querySelector("#message-text"),
@@ -1945,6 +1946,11 @@
       }
       throw new Error("未能儲存學生資料；請檢查瀏覽器儲存空間。" + (error.message || ""));
     }
+    if (!existing) {
+      if (state.currentModule !== "people") openModule("people");
+      elements.studentBookingPromptDialog.showModal();
+      document.body.classList.add("modal-open");
+    }
   }
 
   function openCourseForm(course) {
@@ -3378,6 +3384,13 @@
 
     const action = button.dataset.action;
     const id = button.dataset.id;
+    if (action === "student-booking-no" || action === "student-booking-yes") {
+      elements.studentBookingPromptDialog.close();
+      document.body.classList.remove("modal-open");
+      openModule(action === "student-booking-yes" ? "schedule" : "people");
+      if (action === "student-booking-yes") openQuickLesson();
+      return;
+    }
     if (action === "exit-student-import") {
       elements.studentImportDialog.close();
       document.body.classList.remove("modal-open");
@@ -4118,6 +4131,9 @@
       document.body.classList.toggle("modal-open", elements.formDialog.open || elements.bookingDialog.open || elements.tutorDialog.open);
     }
   }));
+  elements.studentBookingPromptDialog.addEventListener("close", () => {
+    document.body.classList.toggle("modal-open", Boolean(document.querySelector("dialog[open]")));
+  });
 
   window.AdminAuth?.setOnExpired(() => {
     state.loggedIn = false;
