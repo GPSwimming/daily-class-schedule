@@ -57,9 +57,10 @@
     pendingCourseImport: null,
     courseSelection: { name: "", ageGroup: "", classSize: "" },
     pendingLocationImport: null,
-    locationSelection: { pool: "", place: "" },
+    locationSelection: { pool: "", poolType: "public", place: "" },
     locationMenuOpen: false,
     locationManagePool: "",
+    locationManagePoolType: "public",
     manualFilter: "all",
     messageStudentId: null,
     messageType: "lesson",
@@ -1271,12 +1272,12 @@
   function locationNameForId(id, fallbackName) {
     const room = id ? findById(state.suite.rooms, id) : null;
     if (room) return room.name;
-    const pool = state.suite.poolLocations.find((item) => poolOptionId(item.pool) === id);
+    const pool = state.suite.poolLocations.find((item) => poolOptionId(item.pool, item.poolType) === id);
     return pool ? pool.pool : String(fallbackName || "");
   }
 
-  function poolOptionId(name) {
-    return "pool:" + encodeURIComponent(String(name || "").trim().toLocaleLowerCase());
+  function poolOptionId(name, type = "public") {
+    return (type === "private" ? "pool-private:" : "pool:") + encodeURIComponent(String(name || "").trim().toLocaleLowerCase());
   }
 
   function uniquePoolValues(items, field) {
@@ -1288,27 +1289,31 @@
   }
 
   function locationSelectOptions() {
-    return uniquePoolValues(state.suite.poolLocations, "pool").map((name) => ({ value: poolOptionId(name), label: name }));
+    return [...new Map(state.suite.poolLocations.map((item) => [poolOptionId(item.pool, item.poolType), { value: poolOptionId(item.pool, item.poolType), label: item.pool }])).values()];
   }
 
   function studentPreferredPoolId(student) {
     const roomId = String(student.roomId || "");
-    if (roomId.startsWith("pool:")) return roomId;
+    if (roomId.startsWith("pool:") || roomId.startsWith("pool-private:")) return roomId;
     const name = locationNameForId(roomId, student.roomName);
     return name ? poolOptionId(name) : "";
   }
 
   function renderRooms() {
     const records = state.suite.poolLocations;
-    const pools = uniquePoolValues(records, "pool");
     const selection = state.locationSelection;
-    const places = uniquePoolValues(selection.pool ? records.filter((item) => item.pool === selection.pool) : records, "place");
-    const chosen = selection.pool && selection.place ? records.find((item) => item.pool === selection.pool && item.place === selection.place) : null;
+    const selectedRecords = selection.pool ? records.filter((item) => item.pool === selection.pool && (item.poolType || "public") === (selection.poolType || "public")) : records;
+    const places = uniquePoolValues(selectedRecords, "place");
+    const chosen = selection.pool && selection.place ? selectedRecords.find((item) => item.place === selection.place) : null;
+    const poolSection = (type, title) => {
+      const pools = uniquePoolValues(records.filter((item) => (item.poolType || "public") === type), "pool");
+      return '<section class="course-chip-panel"><div class="course-chip-heading"><span class="course-chip-icon">' + locationPanelIcon() + '</span><div><h2>' + title + '</h2><p>選擇泳班使用的泳池</p></div></div><div class="course-chip-list location-pool-list">' +
+        (pools.length ? pools.map((name, index) => '<div class="location-pool-option"><span class="location-pool-dot location-pool-dot-' + (index % 4) + '" aria-hidden="true"></span><button class="course-chip' + (selection.pool === name && (selection.poolType || "public") === type ? ' is-selected' : '') + '" type="button" data-action="select-location-pool" data-value="' + escapeHtml(name) + '" data-pool-type="' + type + '" aria-pressed="' + (selection.pool === name && (selection.poolType || "public") === type) + '">' + escapeHtml(name) + '</button><button class="location-pool-manage" type="button" data-action="manage-pool" data-value="' + escapeHtml(name) + '" data-pool-type="' + type + '" aria-label="管理 ' + escapeHtml(name) + ' 的地點組合" title="管理／刪除地點組合">' + trashIconHtml() + '</button></div>').join('') : '<span class="course-empty-options">尚未有' + title + '。按右上角「新增泳池」或「匯入」。</span>') + '</div></section>';
+    };
     return '<section class="course-page location-page"><div class="location-mobile-menu"' + (state.locationMenuOpen ? '' : ' hidden') + '><button type="button" data-action="add-pool">＋ 新增泳池</button><button type="button" data-action="import-locations">↧ 匯入</button><button type="button" data-action="manage-locations">✎ 更新／刪除</button></div>' +
       '<p class="course-source-note">內附 <a href="' + escapeHtml(window.SwimLocationImport.SOURCE_URL) + '" target="_blank" rel="noopener noreferrer">Google 泳班地點表</a>的 17 組首批資料作為初始清單。匯入新表格前可先預覽新增及更新內容。</p>' +
-      '<section class="course-chip-panel"><div class="course-chip-heading"><span class="course-chip-icon">' + locationPanelIcon() + '</span><div><h2>課堂泳池</h2><p>選擇泳班使用的泳池</p></div></div><div class="course-chip-list location-pool-list">' +
-      (pools.length ? pools.map((name, index) => '<div class="location-pool-option"><span class="location-pool-dot location-pool-dot-' + (index % 4) + '" aria-hidden="true"></span><button class="course-chip' + (selection.pool === name ? ' is-selected' : '') + '" type="button" data-action="select-location-pool" data-value="' + escapeHtml(name) + '" aria-pressed="' + (selection.pool === name) + '">' + escapeHtml(name) + '</button><button class="location-pool-manage" type="button" data-action="manage-pool" data-value="' + escapeHtml(name) + '" aria-label="管理 ' + escapeHtml(name) + ' 的地點組合" title="管理／刪除地點組合">' + trashIconHtml() + '</button></div>').join('') : '<span class="course-empty-options">尚未有課堂泳池。按右上角「新增泳池」或「匯入」。</span>') + '</div></section>' +
-      locationChipSection('泳池地點', '按課堂泳池顯示可選地點', places, selection.place, 'select-location-place') +
+      poolSection('public', '公眾泳池') + poolSection('private', '私人泳池/其他') +
+      locationChipSection('泳池地點', '按所選泳池顯示可選地點', places, selection.place, 'select-location-place') +
       '<section class="course-summary location-summary"><div class="course-summary-heading"><h2>所選泳班地點</h2><p>選定課堂泳池及泳池地點後，自動顯示該組的集合資訊。</p></div><div class="location-summary-grid">' +
       locationSummaryCard('課堂泳池', selection.pool || '請選擇', '') + locationSummaryCard('泳池地點', selection.place || '請選擇', '') +
       locationSummaryCard('集合位置', chosen ? chosen.meetingPoint : '—', 'location-summary-wide') +
@@ -1586,6 +1591,7 @@
   function openForm(config) {
     elements.formDialog.classList.remove("student-dialog");
     elements.formFields.classList.remove("student-form-fields");
+    elements.formDialog.classList.remove("pool-location-form");
     state.formHandler = config.onSubmit;
     elements.formKicker.textContent = config.kicker || "資料管理";
     elements.formTitle.textContent = config.title;
@@ -1600,6 +1606,9 @@
 
   function formFieldHtml(field) {
     if (field.type === "hidden") return '<input type="hidden" name="' + field.name + '" value="' + escapeHtml(field.value || "") + '">';
+    if (field.floating) return '<label class="student-floating pool-floating' + (field.value ? ' is-filled' : '') + '">' +
+      (field.type === "textarea" ? '<textarea name="' + field.name + '" placeholder=" "' + (field.required ? ' required' : '') + '>' + escapeHtml(field.value || "") + '</textarea>' : '<input name="' + field.name + '" type="text" value="' + escapeHtml(field.value || "") + '" placeholder=" "' + (field.required ? ' required' : '') + '>') +
+      '<span>' + escapeHtml(field.label) + (field.required ? ' <b>*</b>' : '') + '</span></label>';
     const classes = "field " + (field.wide ? "field-wide" : "");
     const label = '<span>' + escapeHtml(field.label) + (field.required ? " <b>*</b>" : "") + "</span>";
     const attrs = (field.required ? " required" : "") + (field.min != null ? ' min="' + field.min + '"' : "") + (field.max != null ? ' max="' + field.max + '"' : "") +
@@ -1675,7 +1684,7 @@
     const birthYear = item.birthYear || (birthDate ? birthDate.slice(0, 4) : "");
     const latestBirthYear = Math.max(new Date().getFullYear(), Number(recordDate.slice(0, 4)) || 0, Number(birthYear) || 0);
     const birthYears = Array.from({ length: latestBirthYear - 1899 }, (_, index) => ({ value: String(latestBirthYear - index), label: String(latestBirthYear - index) }));
-    const roomOptions = locationSelectOptions().filter((option) => option.value.startsWith("pool:"));
+    const roomOptions = locationSelectOptions();
     if (item.roomId && item.roomId !== OTHER_POOL_OPTION && !roomOptions.some((option) => option.value === item.roomId)) roomOptions.push({ value: item.roomId, label: item.roomName || "舊有地點" });
     return '<input type="hidden" name="id" value="' + escapeHtml(item.id || "") + '">' +
       '<div class="student-photo-row"><span class="student-photo-preview" id="student-photo-preview">' + (item.photo ? '<img src="' + escapeHtml(item.photo) + '" alt="學生相片預覽">' : '<span aria-hidden="true">👤</span>') + '</span><label class="student-photo-upload"><input id="student-photo-file" class="sr-only" type="file" accept="image/png,image/jpeg,image/webp,image/gif">▣ 上載相片</label><small>PNG、JPG、WebP 或 GIF，最多 1MB</small></div>' +
@@ -2134,15 +2143,20 @@
       title: record ? "編輯泳池地點" : "新增泳池",
       fields: [
         { name: "id", type: "hidden", value: record ? record.id : "" },
-        { name: "pool", label: "課堂泳池", type: "text", value: record ? record.pool : initialPoolName, required: true, wide: true },
-        { name: "place", label: "泳池地點", type: "text", value: record ? record.place : "", required: true },
-        { name: "meetingPoint", label: "集合位置", type: "textarea", value: record ? record.meetingPoint : "", required: true, wide: true },
-        { name: "cleaningDay", label: "泳池清潔日", type: "text", value: record ? record.cleaningDay : "", required: true },
-        { name: "maintenanceTime", label: "年度維修時間", type: "text", value: record ? record.maintenanceTime : "", required: true }
+        { name: "publicPool", label: "公眾泳池", type: "text", value: record && record.poolType === "private" ? "" : record ? record.pool : "", floating: true },
+        { name: "privatePool", label: "私人泳池/其他", type: "text", value: record && record.poolType === "private" ? record.pool : initialPoolName, floating: true },
+        { name: "place", label: "泳池地點", type: "text", value: record ? record.place : "", required: true, floating: true },
+        { name: "meetingPoint", label: "集合位置", type: "textarea", value: record ? record.meetingPoint : "", required: true, floating: true },
+        { name: "cleaningDay", label: "泳池清潔日", type: "text", value: record ? record.cleaningDay : "", required: true, floating: true },
+        { name: "maintenanceTime", label: "年度維修時間", type: "text", value: record ? record.maintenanceTime : "", required: true, floating: true }
       ],
       onSubmit: (data) => {
-        const payload = Object.fromEntries(["pool", "place", "meetingPoint", "cleaningDay", "maintenanceTime"].map((field) => [field, String(data[field] || "").trim()]));
-        if (Object.values(payload).some((value) => !value)) throw new Error("請填妥五個欄位。");
+        const publicPool = String(data.publicPool || "").trim(), privatePool = String(data.privatePool || "").trim();
+        if (Boolean(publicPool) === Boolean(privatePool)) throw new Error("請只填寫公眾泳池或私人泳池/其他其中一項。");
+        const payload = Object.fromEntries(["place", "meetingPoint", "cleaningDay", "maintenanceTime"].map((field) => [field, String(data[field] || "").trim()]));
+        payload.pool = publicPool || privatePool;
+        payload.poolType = privatePool ? "private" : "public";
+        if ([payload.place, payload.meetingPoint, payload.cleaningDay, payload.maintenanceTime].some((value) => !value)) throw new Error("請填妥泳池地點、集合位置、清潔日及維修時間。");
         if (payload.pool.length > 80 || payload.place.length > 80 || payload.meetingPoint.length > 500 || payload.cleaningDay.length > 100 || payload.maintenanceTime.length > 100) throw new Error("資料過長，請縮短文字。");
         const existing = data.id ? findById(state.suite.poolLocations, data.id) : null;
         if (state.suite.poolLocations.some((item) => item.id !== (existing && existing.id) && window.SwimLocationImport.key(item) === window.SwimLocationImport.key(payload))) throw new Error("這個課堂泳池與泳池地點的組合已存在。");
@@ -2154,24 +2168,35 @@
           state.suite.poolLocations = previous;
           throw new Error("瀏覽器儲存空間不足；泳班地點未有儲存。請先備份資料。");
         }
-        state.locationSelection = { pool: payload.pool, place: payload.place };
+        state.locationSelection = { pool: payload.pool, poolType: payload.poolType, place: payload.place };
         closeForm();
-        if (state.bookingLocationReturn) returnToBookingFromPoolForm(payload.pool);
+        if (state.bookingLocationReturn) returnToBookingFromPoolForm(payload.pool, payload.poolType);
         else renderModule();
         showToast(existing ? "這組泳班地點已更新" : "這組泳班地點已新增");
       }
     });
+    elements.formDialog.classList.add("pool-location-form");
+    syncPoolFormFields();
+  }
+
+  function syncPoolFormFields() {
+    const publicInput = elements.dynamicForm.elements?.publicPool;
+    const privateInput = elements.dynamicForm.elements?.privatePool;
+    if (!publicInput || !privateInput) return;
+    publicInput.disabled = Boolean(privateInput.value.trim());
+    privateInput.disabled = Boolean(publicInput.value.trim());
   }
 
   function locationManageHtml() {
-    const records = state.locationManagePool ? state.suite.poolLocations.filter((item) => item.pool === state.locationManagePool) : state.suite.poolLocations;
+    const records = state.locationManagePool ? state.suite.poolLocations.filter((item) => item.pool === state.locationManagePool && (item.poolType || "public") === state.locationManagePoolType) : state.suite.poolLocations;
     return records.length ? records.map((item) => '<article class="location-manage-item"><div><strong>' + escapeHtml(item.pool) + '</strong><span>' + escapeHtml(item.place) + '</span></div><div class="row-actions"><button class="mini-button" type="button" data-action="edit-pool-location" data-id="' + escapeHtml(item.id) + '">✎ 編輯</button><button class="mini-button danger" type="button" data-action="delete-pool-location" data-id="' + escapeHtml(item.id) + '">' + trashIconHtml() + '<span>刪除</span></button></div></article>').join('') : '<p class="location-empty">沒有可管理的泳班地點組合。</p>';
   }
 
-  function openLocationManage(pool = "") {
+  function openLocationManage(pool = "", poolType = "public") {
     state.locationMenuOpen = false;
     if (state.currentModule === "rooms") renderModule();
     state.locationManagePool = pool;
+    state.locationManagePoolType = poolType;
     document.querySelector("#location-manage-list").innerHTML = locationManageHtml();
     elements.locationManageDialog.showModal();
     document.body.classList.add("modal-open");
@@ -2186,9 +2211,9 @@
       state.suite.poolLocations = previous;
       return showToast("瀏覽器儲存空間不足；未有刪除資料");
     }
-    if (state.locationSelection.pool === record.pool && state.locationSelection.place === record.place) {
+    if (state.locationSelection.pool === record.pool && (state.locationSelection.poolType || "public") === (record.poolType || "public") && state.locationSelection.place === record.place) {
       state.locationSelection.place = "";
-      if (!state.suite.poolLocations.some((item) => item.pool === record.pool)) state.locationSelection.pool = "";
+      if (!state.suite.poolLocations.some((item) => item.pool === record.pool && (item.poolType || "public") === (record.poolType || "public"))) state.locationSelection.pool = "";
     }
     if (elements.locationManageDialog.open) document.querySelector("#location-manage-list").innerHTML = locationManageHtml();
     renderModule();
@@ -2215,7 +2240,7 @@
       const plan = window.SwimLocationImport.plan(records, state.suite.poolLocations);
       state.pendingLocationImport = plan;
       elements.locationImportConfirm.disabled = !plan.add && !plan.update;
-      preview.innerHTML = '<p class="preview-good">共 ' + records.length + ' 組：新增 ' + plan.add + '、更新 ' + plan.update + '、未變更 ' + plan.same + '。</p><p>只更新相同「課堂泳池＋泳池地點」的集合位置、清潔日與年度維修時間；未列出的組合及舊學生資料都不會刪除。</p><ul>' + plan.changes.slice(0, 6).map((item) => '<li>' + escapeHtml(item.record.pool + ' · ' + item.record.place + ' · ' + (item.type === 'add' ? '新增' : item.type === 'update' ? '更新' : '未變更')) + '</li>').join('') + '</ul>';
+      preview.innerHTML = '<p class="preview-good">共 ' + records.length + ' 組：新增 ' + plan.add + '、更新 ' + plan.update + '、未變更 ' + plan.same + '。</p><p>只更新相同「公眾泳池／私人泳池/其他＋泳池地點」的集合位置、清潔日與年度維修時間；未列出的組合及舊學生資料都不會刪除。</p><ul>' + plan.changes.slice(0, 6).map((item) => '<li>' + escapeHtml(item.record.pool + ' · ' + item.record.place + ' · ' + (item.type === 'add' ? '新增' : item.type === 'update' ? '更新' : '未變更')) + '</li>').join('') + '</ul>';
     } catch (error) {
       state.pendingLocationImport = null;
       elements.locationImportConfirm.disabled = true;
@@ -2476,7 +2501,7 @@
       return '<article class="booking-group-card"><div class="student-section-heading"><h4>課堂 ' + (index + 1) + '</h4>' + (draft.groups.length > 1 ? '<button class="mini-button danger" type="button" data-action="booking-remove-group" data-group="' + index + '">移除</button>' : '') + '</div>' +
         '<fieldset class="booking-pick"><legend>導師</legend><div class="booking-chips">' + chips(tutors, group.tutorIds, "booking-tutor", index) + '</div></fieldset>' +
         '<fieldset class="booking-pick"><legend>課程</legend><div class="booking-chips">' + (group.tutorIds.size ? chips(courseRows, new Set(group.courseId ? [group.courseId] : group.courseName ? ["legacy-course"] : []), "booking-course", index) : '<p class="booking-empty">請先選擇導師。</p>') + '</div></fieldset>' +
-        '<fieldset class="booking-pick"><legend>學生</legend><p class="booking-help">先選擇一個或多個課堂泳池，按學生原先登記的地點及課程名稱縮窄名單；待確認未付款學生暫不列出，實際上課地點可另外選擇。</p><div class="booking-subheading">課堂泳池</div><div class="booking-chips">' + chips(pools, group.filterPoolIds, "booking-filter-pool", index) + '</div><div class="booking-subheading">可選學生</div><div class="booking-chips">' + (!group.courseName ? '<p class="booking-empty">請先選擇課程。</p>' : !group.filterPoolIds.size ? '<p class="booking-empty">請先選擇課堂泳池。</p>' : chips(students, new Set(), "booking-student", index)) + '</div></fieldset>' +
+        '<fieldset class="booking-pick"><legend>學生地區</legend><div class="booking-chips">' + chips(pools, group.filterPoolIds, "booking-filter-pool", index) + '</div><div class="booking-subheading">可選學生</div><div class="booking-chips">' + (!group.courseName ? '<p class="booking-empty">請先選擇課程。</p>' : !group.filterPoolIds.size ? '<p class="booking-empty">請先選擇學生地區。</p>' : chips(students, new Set(), "booking-student", index)) + '</div></fieldset>' +
         '<fieldset class="booking-pick"><legend>課堂學生</legend><div class="booking-chips">' + (selectedStudents || '<p class="booking-empty">尚未選擇學生。</p>') + '</div></fieldset>' +
         '<fieldset class="booking-pick booking-location-pick"><legend>課堂地點</legend><div class="booking-chips">' + chips(locationRows, new Set(group.roomId ? [group.roomId] : []), "booking-location", index) + '</div>' +
         (otherLocation ? '<div class="booking-other-location"><label class="student-floating booking-floating' + (group.roomName ? ' is-filled' : '') + '"><input type="text" data-booking-other-name data-group="' + index + '" value="' + escapeHtml(group.roomName) + '" placeholder=" " maxlength="120"><span>其他泳池</span></label><button class="quick-add-class booking-add-location" type="button" data-action="booking-add-location" data-group="' + index + '">新增</button></div>' : '') + '</fieldset></article>';
@@ -2532,13 +2557,13 @@
     document.body.classList.add("modal-open");
   }
 
-  function returnToBookingFromPoolForm(poolName = "") {
+  function returnToBookingFromPoolForm(poolName = "", poolType = "public") {
     const target = state.bookingLocationReturn;
     state.bookingLocationReturn = null;
     if (!target || !state.bookingDraft) return renderModule();
     const group = state.bookingDraft.groups[target.groupIndex];
     if (group && poolName) {
-      group.roomId = poolOptionId(poolName);
+      group.roomId = poolOptionId(poolName, poolType);
       group.roomName = poolName;
     }
     openModule("schedule");
@@ -2650,6 +2675,7 @@
       snapshots.forEach(([student, date, time, managed, fallbackDate, fallbackTime]) => Object.assign(student, { nextDate: date, nextTime: time, bookingManaged: managed, bookingFallbackDate: fallbackDate, bookingFallbackTime: fallbackTime }));
       errorNode.textContent = "瀏覽器儲存空間不足；未有新增課堂。請先備份。"; return;
     }
+    if (document.activeElement && elements.bookingDialog.contains?.(document.activeElement)) document.activeElement.blur();
     elements.bookingDialog.close();
     document.body.classList.toggle("modal-open", elements.formDialog.open);
     state.scheduleDate = dates[0][0];
@@ -3616,7 +3642,8 @@
     }
     if (action === "delete-course") return deleteCourse(id);
     if (action === "select-location-pool") {
-      state.locationSelection = { pool: state.locationSelection.pool === button.dataset.value ? "" : button.dataset.value, place: "" };
+      const poolType = button.dataset.poolType || "public";
+      state.locationSelection = { pool: state.locationSelection.pool === button.dataset.value && state.locationSelection.poolType === poolType ? "" : button.dataset.value, poolType, place: "" };
       return renderModule();
     }
     if (action === "select-location-place") {
@@ -3626,7 +3653,7 @@
     if (action === "add-pool") return openPoolForm();
     if (action === "import-locations") return openLocationImport();
     if (action === "manage-locations") return openLocationManage();
-    if (action === "manage-pool") return openLocationManage(button.dataset.value);
+    if (action === "manage-pool") return openLocationManage(button.dataset.value, button.dataset.poolType);
     if (action === "edit-pool-location") return openPoolForm(findById(state.suite.poolLocations, id));
     if (action === "delete-pool-location") return deletePoolLocation(findById(state.suite.poolLocations, id));
     if (action === "download-location-template") return downloadLocationTemplate();
@@ -3727,6 +3754,11 @@
   });
 
   document.addEventListener("input", (event) => {
+    if (elements.formDialog.open && elements.formDialog.classList.contains("pool-location-form") && elements.dynamicForm.contains(event.target)) {
+      const field = event.target.closest(".pool-floating");
+      if (field) field.classList.toggle("is-filled", Boolean(event.target.value));
+      if (event.target.name === "publicPool" || event.target.name === "privatePool") syncPoolFormFields();
+    }
     if (elements.tutorDialog.open && elements.tutorForm.contains(event.target)) {
       const field = event.target.closest(".tutor-floating");
       if (field) field.classList.toggle("is-filled", Boolean(event.target.value));
@@ -3968,34 +4000,15 @@
     showToast("預約選項已儲存");
   });
 
-  let schedulePinch = null;
-  const touchDistance = (touches) => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
-  elements.moduleContent.addEventListener("touchstart", (event) => {
-    const card = event.target.closest(".timeline-card");
-    if (state.currentModule !== "schedule" || !card || event.touches.length !== 2) return;
-    schedulePinch = { card, distance: touchDistance(event.touches), zoom: state.scheduleZoom };
-  }, { passive: true });
-  elements.moduleContent.addEventListener("touchmove", (event) => {
-    if (!schedulePinch || event.touches.length !== 2) return;
-    event.preventDefault();
-    const zoom = Math.max(50, Math.min(200, schedulePinch.zoom + Math.round((touchDistance(event.touches) - schedulePinch.distance) / 4)));
-    if (zoom === state.scheduleZoom) return;
-    state.scheduleZoom = zoom;
-    const hourHeight = timelineHourHeight(zoom);
-    const card = schedulePinch.card;
-    card.style.setProperty("--hour-height", hourHeight + "px");
-    card.style.setProperty("--slot-height", hourHeight * timelineSlotMinutes(zoom) / 60 + "px");
-    card.querySelector(".timeline-body").style.height = Number(card.dataset.totalHours) * hourHeight + "px";
-    card.querySelector(".schedule-zoom span").textContent = zoom + "%";
+  document.addEventListener("gesturestart", (event) => {
+    if (state.currentModule === "schedule") event.preventDefault();
   }, { passive: false });
-  const finishSchedulePinch = (event) => {
-    if (!schedulePinch || event.touches.length >= 2) return;
-    schedulePinch = null;
-    suppressTimelineClickUntil = Date.now() + 350;
-    renderModule();
-  };
-  elements.moduleContent.addEventListener("touchend", finishSchedulePinch, { passive: true });
-  elements.moduleContent.addEventListener("touchcancel", finishSchedulePinch, { passive: true });
+  document.addEventListener("gesturechange", (event) => {
+    if (state.currentModule === "schedule") event.preventDefault();
+  }, { passive: false });
+  document.addEventListener("touchmove", (event) => {
+    if (state.currentModule === "schedule" && event.touches.length > 1) event.preventDefault();
+  }, { passive: false });
 
   elements.timePickerDialog.addEventListener("wheel", (event) => {
     const column = event.target.closest(".lesson-time-column");

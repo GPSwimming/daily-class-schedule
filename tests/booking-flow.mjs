@@ -112,7 +112,7 @@ const courseChip = node("#booking-groups").innerHTML.match(/<button[^>]*data-act
 assert.equal(courseChip?.[1], "課程甲", "booking course choice shows only the course name");
 assert.equal((node("#booking-groups").innerHTML.match(/data-action="booking-course"/g) || []).length, 1, "tutor permission for one variant displays its course name once");
 await click({ action: "booking-course", group: "0", value: "reference-0" });
-assert.match(node("#booking-groups").innerHTML, /請先選擇課堂泳池/, "student choices wait for a pool filter");
+assert.match(node("#booking-groups").innerHTML, /請先選擇學生地區/, "student choices wait for a pool filter");
 await click({ action: "booking-filter-pool", group: "0", value: "pool:%E7%94%B2%E6%B3%B3%E6%B1%A0" });
 assert.match(node("#booking-groups").innerHTML, /測試學生/, "student enrolled in the selected pool appears");
 assert.match(node("#booking-groups").innerHTML, /不同年齡人數學生/, "same course name remains eligible across ages and class sizes");
@@ -165,11 +165,11 @@ handlers.get("input")({ target: { matches: (selector) => selector === "[data-boo
 await click({ action: "booking-add-location", group: "0" });
 assert.equal(node("#form-dialog").open, true, "new location shortcut opens the existing pool form");
 assert.match(node("#form-fields").innerHTML, /value="新泳池"/, "typed other pool name carries into the pool form");
-formValues = Object.entries({ id: "", pool: "新泳池", place: "主池", meetingPoint: "大門", cleaningDay: "星期一", maintenanceTime: "一月" });
+formValues = Object.entries({ id: "", publicPool: "", privatePool: "新泳池", place: "主池", meetingPoint: "大門", cleaningDay: "星期一", maintenanceTime: "一月" });
 await node("#dynamic-form").onsubmit({ preventDefault() {} });
 assert.equal(node("#form-dialog").open, false, "saving the new pool closes its form");
 assert.equal(node("#booking-dialog").open, true, "saving the new pool returns to the unfinished booking");
-assert.match(node("#booking-groups").innerHTML, /data-action="booking-location"[^>]+data-value="pool:%E6%96%B0%E6%B3%B3%E6%B1%A0"[^>]+aria-pressed="true"/, "new pool becomes the actual class location");
+assert.match(node("#booking-groups").innerHTML, /data-action="booking-location"[^>]+data-value="pool-private:%E6%96%B0%E6%B3%B3%E6%B1%A0"[^>]+aria-pressed="true"/, "new private pool becomes the actual class location");
 assert.match(node("#booking-groups").innerHTML, /測試學生/, "selected students remain in the booking draft after returning");
 const cancelledId = suite.lessonBookings[0].id;
 const beforeCancel = JSON.parse(saved.get("swim-class-balance.v1"));

@@ -1649,6 +1649,25 @@ label:has(> input[type="date"]) > input[type="date"]::-webkit-calendar-picker-in
 .student-location-options label:hover { background: var(--blue-soft); }
 .student-location-options input[type=radio] { width: auto; min-width: 13px; min-height: 0; flex: 0 0 auto; margin: 0; padding: 0; background: transparent; border: 0; accent-color: #2879a9; }
 .student-location-stack { display: grid; min-width: 0; gap: 16px; }
+.pool-location-form .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; gap: 13px; }
+.pool-location-form .pool-floating { min-width: 0; }
+.pool-location-form .pool-floating textarea { display: block; width: 100%; min-height: 50px; height: 50px; padding: 15px 13px 7px; color: var(--ink); background: var(--paper-strong); border: 1px solid #d4cec1; border-radius: 10px; resize: vertical; font: inherit; font-size: .94rem; }
+.pool-location-form .pool-floating textarea:focus { border-color: #2c7cae; outline: 2px solid #b9d9e8; outline-offset: 1px; }
+.pool-location-form .pool-floating textarea::placeholder { color: transparent; }
+.pool-location-form .pool-floating:has(textarea:not(:placeholder-shown)) > span { top: -8px; left: 11px; color: #2879a9; font-size: .72rem; font-weight: 750; }
+.pool-location-form .pool-floating input:disabled { color: var(--muted); background: var(--canvas); opacity: .58; cursor: not-allowed; }
+.pool-location-form .pool-floating:has(input:disabled) > span { background: var(--canvas); opacity: .58; }
+body[data-module="schedule"], body[data-module="schedule"] .module-view, body[data-module="schedule"] .module-content { touch-action: pan-y; }
+@media (max-width: 650px) {
+  .module-view, .module-content, .people-page, .people-mobile-cards, .people-mobile-card { min-width: 0; width: 100%; max-width: 100%; }
+  .people-mobile-cards { grid-template-columns: minmax(0, 1fr); }
+  .people-metrics { grid-template-columns: repeat(5, minmax(0, 1fr)); width: 100%; }
+  .people-metric { width: 100%; }
+  .people-tools > *, .people-person-head > * { min-width: 0; }
+  .topbar { min-width: 0; width: 100%; }
+  .header-actions { min-width: 0; flex-shrink: 0; }
+}
+@media (max-width: 359px) { .pool-location-form .form-grid { grid-template-columns: 1fr; } }
 @media (min-width: 651px) {
   .student-location-stack { display: contents; }
   .student-other-pool-field { grid-column: 1; min-width: 0; }
@@ -1921,4 +1940,9 @@ label:has(> input[type="date"]) > input[type="date"]::-webkit-calendar-picker-in
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
+}
+
+@media (max-width: 400px) {
+  .pool-location-form .modal-actions { flex-direction: row; justify-content: flex-end; }
+  .pool-location-form .modal-actions .button { width: auto; min-width: 82px; }
 }

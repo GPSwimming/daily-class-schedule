@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#fbfaf6" />
     <meta name="description" content="泳堂管家：游泳教練的一站式課堂、學生、付款與營運管理工具。" />
     <title>泳堂管家</title>
-    <link rel="stylesheet" href="./styles.css?v=booking-cancel-1" />
+    <link rel="stylesheet" href="./styles.css?v=pool-layout-1" />
   </head>
   <body>
     <div class="app-shell">
@@ -200,7 +200,7 @@
       <form id="booking-form" novalidate>
         <div class="modal-header"><h2 id="booking-title">預約課堂</h2><button class="icon-button" type="button" data-close="booking-dialog" aria-label="關閉">×</button></div>
         <label class="booking-search"><span aria-hidden="true">⌕</span><input id="booking-search" type="search" placeholder="搜尋導師 / 學生 / 課程..." aria-label="搜尋導師、學生或課程"></label>
-        <section class="booking-groups-section"><div class="student-section-heading"><div><h3>小組班別</h3><p>同一時段最多五班；每班先選導師與課程，再按課堂泳池篩選學生，最後選擇實際課堂地點。</p></div><button class="mini-button" type="button" data-action="booking-add-group" id="booking-add-group">新增班別</button></div><div id="booking-groups" class="booking-groups"></div></section>
+        <section class="booking-groups-section"><div class="student-section-heading"><div><h3>小組班別</h3><p>同一時段最多五班；每班先選導師與課程，再按學生地區篩選學生，最後選擇實際課堂地點。</p></div><button class="mini-button" type="button" data-action="booking-add-group" id="booking-add-group">新增班別</button></div><div id="booking-groups" class="booking-groups"></div></section>
         <section class="booking-calendar" aria-label="選擇課堂日期"><div class="booking-month-head"><button type="button" data-action="booking-month" data-delta="-1" aria-label="上一個月">‹</button><strong id="booking-month-label"></strong><button type="button" data-action="booking-month" data-delta="1" aria-label="下一個月">›</button></div><div class="booking-weekdays" aria-hidden="true"><span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span></div><div id="booking-calendar-days" class="booking-calendar-days"></div></section>
         <div class="booking-selected-heading"><strong id="booking-selected-count">已選日期 (0)</strong><button type="button" data-action="booking-clear-dates">清除所有日期</button></div>
         <div id="booking-selected-dates" class="booking-selected-dates"></div>
@@ -268,7 +268,7 @@
 
     <dialog id="location-import-dialog" class="modal import-dialog">
       <div class="modal-header"><div><span class="module-kicker">泳班地點</span><h2>匯入／更新泳班地點</h2></div><button class="icon-button" type="button" data-close="location-import-dialog" aria-label="關閉">×</button></div>
-      <p>使用五欄 CSV／XLSX 範本：課堂泳池、泳池地點、集合位置、泳池清潔日、年度維修時間。相同「課堂泳池＋泳池地點」只更新後三欄；不會刪除未列出的組合或現有學生資料。</p>
+      <p>新版 CSV／XLSX 範本有六欄：公眾泳池、私人泳池/其他、泳池地點、集合位置、泳池清潔日、年度維修時間。每行只填其中一種泳池。原有五欄表亦可匯入；相同泳池分類及地點只更新後三欄，不會刪除未列出的組合或現有學生資料。</p>
       <div class="course-import-tools"><button class="button button-secondary" type="button" data-action="download-location-template">下載地點匯入範本</button><button class="button button-secondary" type="button" data-action="location-reference-preview">選用 Google 表格 17 組</button></div>
       <label class="field import-file-field"><span>選擇已填寫的泳班地點表</span><input id="location-import-file" type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" /></label>
       <div id="location-import-preview" class="import-preview" aria-live="polite"></div>
@@ -339,9 +339,9 @@
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <script src="./student-import.js" defer></script>
     <script src="./course-import.js" defer></script>
-    <script src="./location-import.js" defer></script>
+    <script src="./location-import.js?v=pool-layout-1" defer></script>
     <script src="./admin-auth.js?v=auth-relogin-1" defer></script>
     <script src="./login-ui.js?v=mobile-viewport-1" defer></script>
-    <script src="./app.js?v=booking-cancel-1" defer></script>
+    <script src="./app.js?v=pool-layout-1" defer></script>
   </body>
 </html>
