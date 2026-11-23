@@ -47,6 +47,7 @@
     peopleTab: "students",
     peopleFilter: "all",
     peopleSearch: "",
+    peoplePool: "",
     peopleLayout: "cards",
     peopleMenuOpen: false,
     selectedStudentId: null,
@@ -126,6 +127,8 @@
     formSubmit: document.querySelector("#form-submit"),
     formError: document.querySelector("#form-error"),
     studentBookingPromptDialog: document.querySelector("#student-booking-prompt-dialog"),
+    studentProfileDialog: document.querySelector("#student-profile-dialog"),
+    studentProfileContent: document.querySelector("#student-profile-content"),
     messageDialog: document.querySelector("#message-dialog"),
     messageTitle: document.querySelector("#message-title"),
     messageText: document.querySelector("#message-text"),
@@ -240,6 +243,8 @@
         courseId: item.courseId || "",
         roomId: item.roomId || "",
         roomName: item.roomName || "",
+        initialRoomId: item.initialRoomId || item.roomId || "",
+        initialRoomName: item.initialRoomName || item.roomName || "",
         tutorId: item.tutorId || "",
         status: item.status || "active",
         ageGroup: String(item.ageGroup || ""),
@@ -343,6 +348,25 @@
 
   function validTime(value) {
     return /^([01]\d|2[0-3]):[0-5]\d$/.test(String(value || ""));
+  }
+
+  function normalizeEnteredTime(value, allowMidnight = false) {
+    const raw = String(value || "").trim();
+    const match = raw.match(/^(\d{1,2})(?:[:.](\d{1,2}))?$/);
+    const compact = raw.match(/^(\d{3,4})$/);
+    const hour = match ? Number(match[1]) : compact ? Number(raw.slice(0, -2)) : NaN;
+    const minute = match ? Number(match[2] || 0) : compact ? Number(raw.slice(-2)) : NaN;
+    if (!Number.isInteger(hour) || !Number.isInteger(minute) || minute > 59 || hour > 24 || (hour === 24 && (!allowMidnight || minute !== 0))) return "";
+    return String(hour).padStart(2, "0") + ":" + String(minute).padStart(2, "0");
+  }
+
+  function normalizeTimeInput(input) {
+    if (!input?.matches?.("[data-time-input]")) return;
+    const normalized = normalizeEnteredTime(input.value, input.dataset.timeEnd === "true");
+    if (normalized && normalized !== input.value) {
+      input.value = normalized;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    }
   }
 
   function startOfToday() {
@@ -1042,7 +1066,25 @@
       '<div class="people-tools"><label class="people-search"><span aria-hidden="true">⌕</span><input id="people-search" type="search" placeholder="' + (state.peopleTab === "tutors" ? '搜尋導師' : '搜尋學生') + '" value="' + escapeHtml(state.peopleSearch) + '" aria-label="搜尋個人資訊"></label>' +
       '<button class="people-round-button' + (state.peopleTab === "tutors" ? ' is-active' : '') + '" type="button" data-action="people-tab" data-value="' + (state.peopleTab === "tutors" ? 'students' : 'tutors') + '">♟ <span>' + (state.peopleTab === "tutors" ? '學員' : '導師') + '</span></button>' +
       (state.peopleTab === "students" ? '<button class="people-round-button people-table-toggle' + (state.peopleLayout === "table" ? ' is-active' : '') + '" type="button" data-action="people-layout">▦ <span>' + (state.peopleLayout === "table" ? '卡片' : '表格') + '</span></button>' : '') + '</div>' +
+      (state.peopleTab === "students" ? peoplePoolFilterHtml() : '') +
       '<div id="people-results">' + peopleResultsHtml() + '</div><p class="people-footnote">導師檔案先保存在此瀏覽器。要讓導師登入查看班別，須在 Supabase 建立帳戶並於「帳戶管理」同步導師資料。</p></section>';
+  }
+
+  function initialPoolKey(student) {
+    const id = student.initialRoomId || student.roomId || "";
+    const name = student.initialRoomName || student.roomName || "";
+    return id === OTHER_POOL_OPTION ? "other:" + encodeURIComponent(name.toLocaleLowerCase()) : id || (name ? poolOptionId(name) : "");
+  }
+
+  function peoplePoolFilterHtml() {
+    const listed = locationSelectOptions();
+    const extra = new Map();
+    state.students.forEach((student) => {
+      const key = initialPoolKey(student);
+      if (key && !listed.some((item) => item.value === key)) extra.set(key, student.initialRoomName || student.roomName || "舊有泳池");
+    });
+    const options = listed.concat([...extra].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label, "zh-Hant")));
+    return '<label class="people-pool-filter"><span>地區</span><select id="people-pool-filter" aria-label="按初選泳池地區篩選學生"><option value="">全部地區</option>' + options.map((item) => '<option value="' + escapeHtml(item.value) + '"' + (state.peoplePool === item.value ? ' selected' : '') + '>' + escapeHtml(item.label) + '</option>').join('') + '</select></label>';
   }
 
   function peopleActionIconHtml(action) {
@@ -1077,6 +1119,7 @@
       return tutorListHtml(tutors);
     }
     const students = state.students.filter((student) => {
+      if (state.peoplePool && initialPoolKey(student) !== state.peoplePool) return false;
       if (state.peopleFilter === "pending" && student.enrollmentStatus !== "pending") return false;
       if (state.peopleFilter === "low" && (student.enrollmentStatus === "pending" || student.remaining > lowBalance())) return false;
       if (state.peopleFilter === "unassigned" && (student.enrollmentStatus === "pending" || nextScheduledDate(student))) return false;
@@ -1093,12 +1136,32 @@
   }
 
   function studentAvatarHtml(student) {
-    return '<span class="people-avatar">' + (student.photo ? '<img src="' + escapeHtml(student.photo) + '" alt="" />' : escapeHtml([...student.name][0] || "?")) + '</span>';
+    return '<span class="people-avatar">' + (student.photo ? '<img src="' + escapeHtml(student.photo) + '" alt="" />' : escapeHtml([...studentCardName(student)][0] || "?")) + '</span>';
+  }
+
+  function studentCardName(student) {
+    return isMinorAge(student.ageGroup) ? student.guardianName || student.name : student.name;
+  }
+
+  function studentCardAge(student) {
+    const month = Number(student.birthMonth || (student.birthDate || "").slice(5, 7));
+    const year = Number(student.birthYear || (student.birthDate || "").slice(0, 4));
+    const today = todayYmd();
+    const age = Number(today.slice(0, 4)) - year - (Number(today.slice(5, 7)) < month ? 1 : 0);
+    return month >= 1 && month <= 12 && year >= 1900 && age >= 0 ? age + " 歲" : "未設定";
+  }
+
+  function studentCardSummaryHtml(student) {
+    const latest = [...(student.enrollments || [])].filter((row) => validDate(row.firstDate)).sort((a, b) => b.firstDate.localeCompare(a.firstDate))[0];
+    const courseName = latest?.courseName || courseForStudent(student)?.name || "未指定課程";
+    const location = locationNameForId(student.roomId, student.roomName) || "未設定";
+    return '<div class="people-card-summary">' + (isMinorAge(student.ageGroup) ? '<small>學生姓名：' + escapeHtml(student.name) + '</small>' : '') +
+      '<small>學生年齡：' + escapeHtml(studentCardAge(student)) + '</small><small>最新報讀課程：' + escapeHtml(courseName) + '</small><small>課堂地點：' + escapeHtml(location) + '</small></div>';
   }
 
   function pendingStudentHtml(student) {
     const id = escapeHtml(student.id);
-    return '<article class="people-mobile-card pending-student-card"><div class="people-person-head">' + studentAvatarHtml(student) + '<div><h2>' + escapeHtml(student.name) + '</h2><p>' + escapeHtml(student.whatsapp || "未有 WhatsApp 號碼") + '</p></div></div>' +
+    return '<article class="people-mobile-card pending-student-card student-profile-trigger" data-student-id="' + id + '" tabindex="0" aria-label="查看' + escapeHtml(student.name) + '的學生資料"><div class="people-person-head">' + studentAvatarHtml(student) + '<div><h2>' + escapeHtml(studentCardName(student)) + '</h2>' + studentCardSummaryHtml(student) + '<p>' + escapeHtml(student.whatsapp || "未有 WhatsApp 號碼") + '</p></div></div>' +
       '<dl class="people-facts"><div><dt>年齡組別</dt><dd>' + escapeHtml(student.ageGroup || "未設定") + '</dd></div><div><dt>課堂地點</dt><dd>' + escapeHtml(locationNameForId(student.roomId, student.roomName) || "未設定") + '</dd></div></dl>' +
       '<div class="people-student-actions"><button class="mini-button" type="button" data-action="edit-student" data-id="' + id + '">修改學生資訊</button><button class="mini-button danger" type="button" data-action="delete-student" data-id="' + id + '">刪除</button></div></article>';
   }
@@ -1123,14 +1186,13 @@
     const course = latestEnrolledCourseForStudent(student);
     const nextDate = nextScheduledDate(student);
     const tutor = findById(state.suite.accounts, student.tutorId);
-    return '<article class="people-detail-card"><div class="people-person-head">' + studentAvatarHtml(student) + '<div><h2>' + escapeHtml(student.name) + '</h2><p>' + escapeHtml(course ? course.name : student.enrollmentStatus === "pending" ? "待確認，未付款" : "未指定課程") + '</p></div><button class="people-edit-button" type="button" data-action="edit-student" data-id="' + escapeHtml(student.id) + '" aria-label="編輯 ' + escapeHtml(student.name) + '">✎</button></div>' + studentStatusHtml(student) + '</article>' +
-      '<article class="people-detail-card"><h3>基本資料</h3><dl class="people-facts"><div><dt>學生狀態</dt><dd>' + escapeHtml(student.enrollmentStatus === "pending" ? "待確認，未付款" : student.enrollmentStatus === "paid" ? "已付款" : "舊資料") + '</dd></div><div><dt>學生編號</dt><dd>' + escapeHtml(student.studentNumber || "未編配") + '</dd></div><div><dt>年齡組別</dt><dd>' + escapeHtml(student.ageGroup || "未設定") + '</dd></div><div><dt>WhatsApp</dt><dd>' + escapeHtml(student.whatsapp || "未設定") + '</dd></div><div><dt>課堂地點</dt><dd>' + escapeHtml(locationNameForId(student.roomId, student.roomName) || "未設定") + '</dd></div><div><dt>課程</dt><dd>' + escapeHtml(course ? course.name : "未指定") + '</dd></div><div><dt>負責導師</dt><dd>' + escapeHtml(tutor ? tutor.name : "未指定") + '</dd></div>' + (student.enrollmentStatus === "pending" ? '' : '<div><dt>下一堂</dt><dd>' + escapeHtml(nextDate ? nextDate + " " + (student.nextTime || student.time) : "未編排") + '</dd></div><div><dt>剩餘堂數</dt><dd>' + student.remaining + ' 堂</dd></div>') + '</dl>' + studentActionsHtml(student) + '</article>';
+    return '<article class="people-detail-card student-profile-trigger" data-student-id="' + escapeHtml(student.id) + '" tabindex="0" aria-label="查看' + escapeHtml(student.name) + '的學生資料"><div class="people-person-head">' + studentAvatarHtml(student) + '<div><h2>' + escapeHtml(studentCardName(student)) + '</h2>' + studentCardSummaryHtml(student) + '</div><button class="people-edit-button" type="button" data-action="edit-student" data-id="' + escapeHtml(student.id) + '" aria-label="編輯 ' + escapeHtml(student.name) + '">✎</button></div>' + studentStatusHtml(student) + '</article>' +
+      '<article class="people-detail-card student-profile-trigger" data-student-id="' + escapeHtml(student.id) + '" tabindex="0" aria-label="查看' + escapeHtml(student.name) + '的學生資料"><h3>基本資料</h3><dl class="people-facts"><div><dt>學生狀態</dt><dd>' + escapeHtml(student.enrollmentStatus === "pending" ? "待確認，未付款" : student.enrollmentStatus === "paid" ? "已付款" : "舊資料") + '</dd></div><div><dt>學生編號</dt><dd>' + escapeHtml(student.studentNumber || "未編配") + '</dd></div><div><dt>年齡組別</dt><dd>' + escapeHtml(student.ageGroup || "未設定") + '</dd></div><div><dt>WhatsApp</dt><dd>' + escapeHtml(student.whatsapp || "未設定") + '</dd></div><div><dt>課堂地點</dt><dd>' + escapeHtml(locationNameForId(student.roomId, student.roomName) || "未設定") + '</dd></div><div><dt>課程</dt><dd>' + escapeHtml(course ? course.name : "未指定") + '</dd></div><div><dt>負責導師</dt><dd>' + escapeHtml(tutor ? tutor.name : "未指定") + '</dd></div>' + (student.enrollmentStatus === "pending" ? '' : '<div><dt>下一堂</dt><dd>' + escapeHtml(nextDate ? nextDate + " " + (student.nextTime || student.time) : "未編排") + '</dd></div><div><dt>剩餘堂數</dt><dd>' + student.remaining + ' 堂</dd></div>') + '</dl>' + studentActionsHtml(student) + '</article>';
   }
 
   function studentMobileCardHtml(student) {
-    const course = latestEnrolledCourseForStudent(student);
     const nextDate = nextScheduledDate(student);
-    return '<article class="people-mobile-card"><div class="people-person-head">' + studentAvatarHtml(student) + '<div><h2>' + escapeHtml(student.name) + '</h2><p>' + escapeHtml(course ? course.name : "未指定課程") + '</p><small>' + escapeHtml(student.enrollmentStatus === "pending" ? [student.whatsapp, student.ageGroup, locationNameForId(student.roomId, student.roomName)].filter(Boolean).join(" · ") : nextDate ? nextDate + " · " + (student.nextTime || student.time) : "未編排課堂") + '</small></div><button class="people-edit-button" type="button" data-action="edit-student" data-id="' + escapeHtml(student.id) + '" aria-label="編輯 ' + escapeHtml(student.name) + '">✎</button></div>' + studentStatusHtml(student) + '<details class="people-card-more"><summary>' + (student.enrollmentStatus === "pending" ? "跟進操作" : "課堂操作") + '</summary>' + studentActionsHtml(student) + '</details></article>';
+    return '<article class="people-mobile-card student-profile-trigger" data-student-id="' + escapeHtml(student.id) + '" tabindex="0" aria-label="查看' + escapeHtml(student.name) + '的學生資料"><div class="people-person-head">' + studentAvatarHtml(student) + '<div><h2>' + escapeHtml(studentCardName(student)) + '</h2>' + studentCardSummaryHtml(student) + '<small>' + escapeHtml(student.enrollmentStatus === "pending" ? [student.whatsapp, student.ageGroup].filter(Boolean).join(" · ") : nextDate ? nextDate + " · " + (student.nextTime || student.time) : "未編排課堂") + '</small></div><button class="people-edit-button" type="button" data-action="edit-student" data-id="' + escapeHtml(student.id) + '" aria-label="編輯 ' + escapeHtml(student.name) + '">✎</button></div>' + studentStatusHtml(student) + '<details class="people-card-more"><summary>' + (student.enrollmentStatus === "pending" ? "跟進操作" : "課堂操作") + '</summary>' + studentActionsHtml(student) + '</details></article>';
   }
 
   function studentTableHtml(students) {
@@ -1138,8 +1200,40 @@
       const course = latestEnrolledCourseForStudent(student);
       const tutor = findById(state.suite.accounts, student.tutorId);
       const nextDate = nextScheduledDate(student);
-      return '<tr><td>' + escapeHtml(student.name) + '</td><td>' + escapeHtml(course ? course.name : "—") + '</td><td>' + escapeHtml(tutor ? tutor.name : "—") + '</td><td>' + escapeHtml(student.enrollmentStatus === "pending" ? "待確認" : nextDate ? nextDate + " " + (student.nextTime || student.time) : "未編排") + '</td><td>' + student.remaining + '</td><td><button type="button" class="mini-button" data-action="edit-student" data-id="' + escapeHtml(student.id) + '">編輯</button></td></tr>';
+      return '<tr class="student-profile-trigger" data-student-id="' + escapeHtml(student.id) + '" tabindex="0" aria-label="查看' + escapeHtml(student.name) + '的學生資料"><td>' + escapeHtml(student.name) + '</td><td>' + escapeHtml(course ? course.name : "—") + '</td><td>' + escapeHtml(tutor ? tutor.name : "—") + '</td><td>' + escapeHtml(student.enrollmentStatus === "pending" ? "待確認" : nextDate ? nextDate + " " + (student.nextTime || student.time) : "未編排") + '</td><td>' + student.remaining + '</td><td><button type="button" class="mini-button" data-action="edit-student" data-id="' + escapeHtml(student.id) + '">編輯</button></td></tr>';
     }).join('') + '</tbody></table></div>';
+  }
+
+  function studentProfileSection(title, rows) {
+    return '<section class="student-profile-section"><h3>' + escapeHtml(title) + '</h3><table><tbody>' + rows.map(([label, value]) =>
+      '<tr><th scope="row">' + escapeHtml(label) + '</th><td>' + escapeHtml(value == null || value === "" ? "未設定" : String(value)) + '</td></tr>').join('') + '</tbody></table></section>';
+  }
+
+  function studentProfileAge(student) {
+    const month = Number(student.birthMonth || (student.birthDate || "").slice(5, 7));
+    const year = Number(student.birthYear || (student.birthDate || "").slice(0, 4));
+    const reference = student.recordDate || todayYmd();
+    const elapsed = (Number(reference.slice(0, 4)) - year) * 12 + Number(reference.slice(5, 7)) - month;
+    return month >= 1 && month <= 12 && year >= 1900 && elapsed >= 0 ? Math.floor(elapsed / 12) + " 歲 " + elapsed % 12 + " 個月" : "";
+  }
+
+  function openStudentProfile(student) {
+    if (!student) return;
+    const birthMonth = student.birthMonth || (student.birthDate || "").slice(5, 7);
+    const birthYear = student.birthYear || (student.birthDate || "").slice(0, 4);
+    const initialRoom = locationNameForId(student.initialRoomId || student.roomId, student.initialRoomName || student.roomName);
+    const currentRoom = locationNameForId(student.roomId, student.roomName);
+    const course = courseForStudent(student);
+    const enrollments = student.enrollments?.length ? student.enrollments : course ? [{ courseName: course.name, ageGroup: student.ageGroup, classSize: course.classSize, duration: course.duration, originalFee: course.fee }] : [];
+    const status = student.enrollmentStatus === "pending" ? "待確認，未付款" : student.enrollmentStatus === "paid" ? "已付款" : "舊資料";
+    elements.studentProfileContent.innerHTML = '<div class="student-profile-head">' + studentAvatarHtml(student) + '<strong>' + escapeHtml(studentCardName(student)) + '</strong></div>' +
+      studentProfileSection("基本資料", [["學生姓名", student.name], ["學生編號", student.studentNumber], ["年齡組別", student.ageGroup], ["出生月份", birthMonth ? Number(birthMonth) + " 月" : ""], ["出生年份", birthYear], ["學生年齡", studentProfileAge(student)], ["性別", student.gender], ["學生狀態", status], ["今日日期", student.recordDate ? formatStudentRecordDate(student.recordDate) : ""], ["學生加入年份", student.enrollmentYear ? student.enrollmentYear + " 年度" : ""]]) +
+      studentProfileSection("課堂與地區", [["初選泳池地區", initialRoom], ["現時課堂地點", currentRoom], ["負責導師", findById(state.suite.accounts, student.tutorId)?.name], ["下一堂日期", student.nextDate ? formatStudentRecordDate(student.nextDate) : ""], ["下一堂時間", student.nextDate ? student.nextTime || student.time : ""], ["預繳堂數", student.prepaid + " 堂"], ["剩餘堂數", student.remaining + " 堂"]]) +
+      (enrollments.length ? enrollments.map((row, index) => studentProfileSection("報讀課程 " + (index + 1), [["課程名稱", row.courseName], ["年齡組別", row.ageGroup || row.pricingAgeGroup], ["課程人數", row.classSize], ["首堂日期", row.firstDate ? formatStudentRecordDate(row.firstDate) : ""], ["課堂時間", row.duration ? row.duration + " 分鐘" : ""], ["課堂原價", row.originalFee == null ? "" : formatMoney(row.originalFee, 2)], ["折扣優惠", row.discount == null ? "" : formatMoney(row.discount, 2)], ["每堂費用", row.netFee == null ? "" : formatMoney(row.netFee, 2)]])).join("") : studentProfileSection("報讀課程", [["課程", "未有報讀課程"]])) +
+      studentProfileSection("聯絡與登入資料", [...(isMinorAge(student.ageGroup) ? [["家長姓名", student.guardianName]] : []), ["聯絡號碼（WhatsApp）", student.whatsapp], ["居住地點", student.homeMtr], ["學校地點", student.schoolMtr], ["工作地點", student.workMtr], ["電郵（稍後登入用）", student.email]]) +
+      '<p class="helper-text">電郵目前只保存在本機學生資料，尚未建立 Supabase 登入帳戶。</p>';
+    elements.studentProfileDialog.showModal();
+    document.body.classList.add("modal-open");
   }
 
   function studentGridHtml() {
@@ -1623,6 +1717,10 @@
         }).join("") + "</select></label>";
     }
     if (field.type === "textarea") return '<label class="' + classes + '">' + label + '<textarea name="' + field.name + '"' + attrs + '>' + escapeHtml(field.value || "") + "</textarea></label>";
+    if (field.type === "time") {
+      const id = "form-time-" + field.name;
+      return '<div class="' + classes + '">' + label + '<div class="quick-time-control form-time-control"><input id="' + id + '" name="' + field.name + '" type="text" inputmode="numeric" data-time-input value="' + escapeHtml(field.value || "") + '" placeholder="HH:MM" pattern="(?:[01]\\d|2[0-3]):[0-5]\\d"' + attrs + ' aria-label="' + escapeHtml(field.label) + '"><button type="button" data-action="pick-lesson-time" data-target="' + id + '" aria-label="選擇' + escapeHtml(field.label) + '">◷</button></div></div>';
+    }
     return '<label class="' + classes + '">' + label + '<input name="' + field.name + '" type="' + field.type + '" value="' + escapeHtml(field.value || "") + '"' + attrs + '>' +
       (field.help ? '<small class="helper-text">' + escapeHtml(field.help) + "</small>" : "") + "</label>";
   }
@@ -1689,7 +1787,7 @@
     if (item.roomId && item.roomId !== OTHER_POOL_OPTION && !roomOptions.some((option) => option.value === item.roomId)) roomOptions.push({ value: item.roomId, label: item.roomName || "舊有地點" });
     return '<input type="hidden" name="id" value="' + escapeHtml(item.id || "") + '">' +
       '<div class="student-photo-row"><span class="student-photo-preview" id="student-photo-preview">' + (item.photo ? '<img src="' + escapeHtml(item.photo) + '" alt="學生相片預覽">' : '<span aria-hidden="true">👤</span>') + '</span><label class="student-photo-upload"><input id="student-photo-file" class="sr-only" type="file" accept="image/png,image/jpeg,image/webp,image/gif">▣ 上載相片</label><small>PNG、JPG、WebP 或 GIF，最多 1MB</small></div>' +
-      studentFloatingField("name", "學生姓名(必填)", item.name || "", { required: true, requiredMarker: false, wide: true, maxlength: 60 }) +
+      studentFloatingField("name", "家長姓名/學生姓名(必填)", item.name || "", { required: true, requiredMarker: false, wide: true, maxlength: 60 }) +
       '<fieldset class="student-choice-group student-segmented student-age-group student-wide"><legend>年齡組別 <b>*</b></legend>' + studentChoices("ageGroup", ageOptions, age, !legacy, (value) => Boolean(item.studentNumber) && isMinorAge(value) !== isMinorAge(age)) + '</fieldset>' +
       '<div class="student-birth-fields student-wide" id="student-birth-fields"' + (isMinorAge(age) ? '' : ' hidden') + '>' +
       studentBirthSelectField("birthMonth", "出生月份", birthMonth, Array.from({ length: 12 }, (_, index) => ({ value: String(index + 1), label: (index + 1) + " 月" }))) +
@@ -1701,14 +1799,14 @@
       '<div class="student-number-section student-wide"><div class="student-number-panel student-number-year"><h3>學生加入年份</h3><div id="student-year-choices"></div><p id="student-number-hint"></p></div>' +
       '<div class="student-number-panel student-number-result"><h3>學生編號</h3><strong id="student-number-preview" aria-live="polite"></strong></div></div>' +
       '<section class="student-enrollments student-wide"><div class="student-section-heading"><div><h3>報讀課程</h3><p>每位學生最多可新增四個課堂。</p></div><button class="mini-button" type="button" data-action="student-add-course" id="student-add-course">新增</button></div><div id="student-course-list"></div></section>' +
-      studentFloatingField("guardianName", isMinorAge(age) ? "監護人" : "緊急聯絡人", item.guardianName || "") +
+      '<div id="student-guardian-field"' + (isMinorAge(age) ? '' : ' hidden') + '>' + studentFloatingField("guardianName", "家長姓名", item.guardianName || "") + '</div>' +
       studentFloatingField("whatsapp", "聯絡號碼 (WhatsApp)", item.whatsapp || "", { required: !legacy, type: "tel", inputmode: "tel", maxlength: 30 }) +
       studentFloatingField("homeMtr", "居住地點", item.homeMtr || "", { placeholder: "請填寫鄰近港鐵站", floatHintOnFocus: true }) +
       '<div id="student-school-field"' + (isMinorAge(age) ? '' : ' hidden') + '>' + studentFloatingField("schoolMtr", "學校地點", item.schoolMtr || "", { placeholder: "請填寫鄰近港鐵站", floatHintOnFocus: true }) + '</div>' +
       '<div id="student-work-field"' + (age && !isMinorAge(age) ? '' : ' hidden') + '>' + studentFloatingField("workMtr", "工作地點", item.workMtr || "", { placeholder: "請填寫鄰近港鐵站" }) + '</div>' +
       '<div class="student-location-stack">' + studentLocationPickerHtml(item.roomId || "", roomOptions) +
       '<div class="student-other-pool-field" id="student-other-pool-field"' + (item.roomId === OTHER_POOL_OPTION ? '' : ' hidden') + '>' + studentFloatingField("otherPoolName", "其他泳池 (請註明)", item.roomId === OTHER_POOL_OPTION ? item.roomName || "" : "", { maxlength: 120 }) + '</div></div>' +
-      '<label class="field student-wide"><span>電郵（稍後登入用）</span><input name="email" type="email" autocomplete="email" placeholder="name@example.com" value="' + escapeHtml(item.email || "") + '"></label>' +
+      '<div class="field student-wide student-email-field"><label for="student-email-local">電郵（稍後登入用）</label><div class="student-email-control"><input id="student-email-local" name="emailLocal" type="text" inputmode="email" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9._%+\\-]*" value="' + escapeHtml(item.email?.toLocaleLowerCase().endsWith("@gpswimming.com") && item.email.split("@")[0] !== item.studentNumber ? item.email.split("@")[0] : "") + '" aria-label="電郵名稱"><span>@gpswimming.com</span></div>' + (item.email && !item.email.toLocaleLowerCase().endsWith("@gpswimming.com") ? '<small class="helper-text">現有電郵：' + escapeHtml(item.email) + '。未輸入新名稱前會保留。</small>' : '') + '</div>' +
       '<label class="field student-wide"><span>密碼（接駁 Supabase 後設定）</span><input type="password" autocomplete="new-password" placeholder="目前未啟用" disabled><small class="helper-text">現時不會建立登入帳戶或儲存密碼。</small></label>';
   }
 
@@ -1794,9 +1892,7 @@
     updateStudentAge(form);
     document.querySelector("#student-school-field").hidden = !minor;
     document.querySelector("#student-work-field").hidden = !age || minor;
-    const contactLabel = form.elements.guardianName.closest(".student-floating").querySelector("span");
-    contactLabel.textContent = minor ? "監護人" : "緊急聯絡人";
-    form.elements.guardianName.placeholder = " ";
+    document.querySelector("#student-guardian-field").hidden = !minor;
     if (ageChanged) renderStudentEnrollments(form, studentEnrollmentDrafts(form).filter((row) =>
       !row.courseName || studentCoursesForAge(age).some((course) => sameCourseValue(course.name, row.courseName))));
     else document.querySelector("#student-add-course").disabled = studentEnrollmentDrafts(form).length >= 4;
@@ -1809,6 +1905,8 @@
     try { preview = existing && existing.studentNumber ? existing.studentNumber : !recordDate ? "請先修正今日日期" : paid && age ? nextStudentNumber(year, age).value : ""; }
     catch (error) { preview = error.message; }
     document.querySelector("#student-number-preview").textContent = preview;
+    const emailLocal = form.elements.emailLocal;
+    if (emailLocal && document.activeElement !== emailLocal) emailLocal.placeholder = /^[KA]\d{6}$/.test(preview) ? preview : "學生編號";
   }
 
   function validateStudentRecordDate(form, showError = false, normalize = false) {
@@ -1863,7 +1961,7 @@
 
   function openStudentForm(student) {
     const item = student || null;
-    openForm({ kicker: "個人資訊", title: student ? "修改學生資訊" : "新增學生", fields: [], onSubmit: (data, form) => saveStudentProfile(data, form) });
+    openForm({ kicker: "個人資訊", title: student ? "修改學生資訊" : "新增學生", submitLabel: student ? "確認修改" : "確認", fields: [], onSubmit: (data, form) => saveStudentProfile(data, form) });
     elements.formDialog.classList.add("student-dialog");
     elements.formFields.classList.add("student-form-fields");
     elements.formFields.innerHTML = studentFormHtml(item);
@@ -1912,6 +2010,11 @@
     });
     const first = enrollments[0];
     const assigned = paid && !(existing && existing.studentNumber) ? nextStudentNumber(year, ageGroup) : null;
+    const emailLocal = String(data.emailLocal || "").trim();
+    if (emailLocal && !/^[A-Za-z0-9][A-Za-z0-9._%+-]{0,63}$/.test(emailLocal)) throw new Error("電郵名稱只可使用英文字母、數字及 . _ % + -，最多 64 字元。");
+    const emailNumber = existing?.studentNumber || assigned?.value || "";
+    const preserveLegacyEmail = existing?.email && !existing.email.toLocaleLowerCase().endsWith("@gpswimming.com");
+    const email = emailLocal ? emailLocal + "@gpswimming.com" : preserveLegacyEmail ? existing.email : emailNumber ? emailNumber + "@gpswimming.com" : "";
     const dateValue = validDate(data.nextDate) ? data.nextDate : existing ? nextScheduledDate(existing) : "";
     const roomId = data.roomId || "";
     const otherPoolName = roomId === OTHER_POOL_OPTION ? String(data.otherPoolName || "").trim() : "";
@@ -1921,13 +2024,15 @@
       birthDate: isMinorAge(ageGroup) && existing && validDate(existing.birthDate) &&
         String(Number(existing.birthDate.slice(5, 7))) === String(data.birthMonth || "") && existing.birthDate.slice(0, 4) === String(data.birthYear || "") ? existing.birthDate : "",
       birthMonth: isMinorAge(ageGroup) ? String(data.birthMonth || "") : "", birthYear: isMinorAge(ageGroup) ? String(data.birthYear || "") : "",
-      guardianName: String(data.guardianName || "").trim(), whatsapp, email: String(data.email || "").trim(), homeMtr: String(data.homeMtr || "").trim(),
+      guardianName: isMinorAge(ageGroup) ? String(data.guardianName || "").trim() : existing?.guardianName || "", whatsapp, email, homeMtr: String(data.homeMtr || "").trim(),
       schoolMtr: isMinorAge(ageGroup) ? String(data.schoolMtr || "").trim() : "", workMtr: isMinorAge(ageGroup) ? "" : String(data.workMtr || "").trim(),
       photo: state.studentFormPhoto, enrollments, courseId: first ? first.courseId : existing?.courseId || "",
       tutorId: existing?.tutorId || "", weekday: existing?.weekday ?? 1, time: existing?.time || "18:00",
       nextTime: existing?.nextTime || existing?.time || "18:00", prepaid: existing?.prepaid ?? 0,
       remaining: existing?.remaining ?? 0, nextDate: existing?.bookingManaged ? existing.nextDate : paid || legacyIncomplete ? dateValue : "", roomId,
       roomName: roomId === OTHER_POOL_OPTION ? otherPoolName : locationNameForId(roomId, existing && existing.roomId === roomId ? existing.roomName : ""),
+      initialRoomId: existing ? existing.initialRoomId || existing.roomId || roomId : roomId,
+      initialRoomName: existing ? existing.initialRoomName || existing.roomName || otherPoolName : roomId === OTHER_POOL_OPTION ? otherPoolName : locationNameForId(roomId, ""),
       bookingManaged: existing?.bookingManaged || false, bookingFallbackDate: existing?.bookingFallbackDate || "",
       bookingFallbackTime: existing?.bookingFallbackTime || "",
       status: existing?.status || "active", history: existing?.history || [], createdAt: existing?.createdAt || new Date().toISOString() };
@@ -2374,6 +2479,8 @@
   }
 
   function submitQuickLesson() {
+    normalizeTimeInput(document.querySelector("#quick-lesson-start"));
+    normalizeTimeInput(document.querySelector("#quick-lesson-end"));
     const dateInput = document.querySelector("#quick-lesson-date");
     const date = studentRecordDateYmd(dateInput.value);
     const dateError = document.querySelector("#quick-lesson-date-error");
@@ -2389,8 +2496,7 @@
 
   function timePickerValues(unit) {
     const picker = state.timePicker;
-    const [open, close] = lessonOfficeBounds(picker.date);
-    const isEnd = picker.target === "quick-lesson-end" || picker.target.startsWith("booking-end-");
+    const { open, close, isEnd } = picker;
     const max = unit === "hour" ? isEnd ? 24 : 23 : 59;
     return Array.from({ length: max + 1 }, (_, value) => value).filter((value) => {
       const hour = unit === "hour" ? value : picker.hour;
@@ -2418,15 +2524,16 @@
     const input = document.getElementById(target);
     if (!input) return;
     const row = input.closest(".booking-date-row");
-    const rawDate = row ? row.dataset.date : studentRecordDateYmd(document.querySelector("#quick-lesson-date").value) || todayYmd();
-    const isEnd = target === "quick-lesson-end" || target.startsWith("booking-end-");
-    const fallback = isEnd ? "21:00" : "20:00";
-    const value = Number.isFinite(timeMinutes(input.value)) ? input.value : fallback;
-    const [open, close] = lessonOfficeBounds(rawDate);
-    const bounded = Math.max(open, Math.min(timeMinutes(value), close));
-    state.timePicker = { target, date: rawDate, hour: Math.floor(bounded / 60), minute: bounded % 60 };
+    const isEnd = input.dataset.timeEnd === "true";
+    const rawDate = row ? row.dataset.date : input.closest("#quick-lesson-dialog") ? studentRecordDateYmd(document.querySelector("#quick-lesson-date").value) || todayYmd() : todayYmd();
+    const [officeOpen, officeClose] = lessonOfficeBounds(rawDate);
+    const open = input.min ? timeMinutes(input.min) : officeOpen;
+    const close = input.max ? timeMinutes(input.max) : officeClose;
+    const value = normalizeEnteredTime(input.value, isEnd) || (isEnd ? "21:00" : "20:00");
+    const bounded = Math.max(open, Math.min(timeMinutes(value), close - (isEnd ? 0 : 1)));
+    state.timePicker = { target, date: rawDate, open, close, isEnd, hour: Math.floor(bounded / 60), minute: bounded % 60 };
     if (!isEnd && state.timePicker.hour === 24) { state.timePicker.hour = 23; state.timePicker.minute = 59; }
-    document.querySelector("#lesson-time-title").textContent = isEnd ? "結束" : "開始";
+    document.querySelector("#lesson-time-title").textContent = isEnd ? "結束" : target === "form-time-time" ? "時間" : "開始";
     document.querySelector("#lesson-time-error").textContent = "";
     renderTimePicker();
     elements.timePickerDialog.showModal();
@@ -2445,9 +2552,7 @@
 
   function normalizeTimePicker() {
     const picker = state.timePicker;
-    const [open, close] = lessonOfficeBounds(picker.date);
-    const isEnd = picker.target === "quick-lesson-end" || picker.target.startsWith("booking-end-");
-    const bounded = Math.max(open, Math.min(picker.hour * 60 + picker.minute, close - (isEnd ? 0 : 1)));
+    const bounded = Math.max(picker.open, Math.min(picker.hour * 60 + picker.minute, picker.close - (picker.isEnd ? 0 : 1)));
     picker.hour = Math.floor(bounded / 60);
     picker.minute = bounded % 60;
   }
@@ -2531,7 +2636,7 @@
     document.querySelector("#booking-selected-count").textContent = "已選日期 (" + dates.length + ")";
     document.querySelector("#booking-selected-dates").innerHTML = dates.map(([date, slot]) => {
       const label = (parseDate(date).getMonth() + 1) + "月" + parseDate(date).getDate() + "日";
-      return '<div class="booking-date-row" data-date="' + date + '"><strong>' + label + '</strong><input id="booking-start-' + date + '" type="text" inputmode="numeric" value="' + escapeHtml(slot.start) + '" placeholder="開始" aria-label="' + label + '開始時間"><span>→</span><input id="booking-end-' + date + '" type="text" inputmode="numeric" value="' + escapeHtml(slot.end) + '" placeholder="結束" aria-label="' + label + '結束時間"><button type="button" data-action="booking-date" data-date="' + date + '" aria-label="移除' + label + '">×</button></div>';
+      return '<div class="booking-date-row" data-date="' + date + '"><strong>' + label + '</strong><div class="booking-time-control"><input id="booking-start-' + date + '" type="text" inputmode="numeric" data-time-input value="' + escapeHtml(slot.start) + '" placeholder="開始" aria-label="' + label + '開始時間"><button type="button" data-action="pick-lesson-time" data-target="booking-start-' + date + '" aria-label="選擇' + label + '開始時間">◷</button></div><span>→</span><div class="booking-time-control"><input id="booking-end-' + date + '" type="text" inputmode="numeric" data-time-input data-time-end="true" value="' + escapeHtml(slot.end) + '" placeholder="結束" aria-label="' + label + '結束時間"><button type="button" data-action="pick-lesson-time" data-target="booking-end-' + date + '" aria-label="選擇' + label + '結束時間">◷</button></div><button class="booking-date-remove" type="button" data-action="booking-date" data-date="' + date + '" aria-label="移除' + label + '">×</button></div>';
     }).join('');
   }
 
@@ -2602,6 +2707,7 @@
 
   function saveBookingDraft() {
     const draft = state.bookingDraft;
+    document.querySelectorAll(".booking-date-row [data-time-input]").forEach(normalizeTimeInput);
     const errorNode = document.querySelector("#booking-error");
     errorNode.textContent = "";
     if (!draft.groups.length || draft.groups.length > 5) { errorNode.textContent = "同一時段最多可新增五個課堂。"; return; }
@@ -3347,6 +3453,11 @@
     if (!state.loggedIn) return;
     const button = event.target.closest("button");
     if (!button) {
+      const studentCard = event.target.closest(".student-profile-trigger");
+      if (state.currentModule === "people" && studentCard && !event.target.closest("summary, a, input, select, textarea, details[open]")) {
+        openStudentProfile(findById(state.students, studentCard.dataset.studentId));
+        return;
+      }
       const column = event.target.closest(".timeline-day-column");
       const card = column?.closest(".timeline-card");
       if (state.currentModule !== "schedule" || !card || Date.now() < suppressTimelineClickUntil) return;
@@ -3711,8 +3822,16 @@
     }
   });
 
+  document.addEventListener("keydown", (event) => {
+    if ((event.key === "Enter" || event.key === " ") && event.target.matches?.(".student-profile-trigger") && state.currentModule === "people") {
+      event.preventDefault();
+      openStudentProfile(findById(state.students, event.target.dataset.studentId));
+    }
+  });
+
   elements.dynamicForm.addEventListener("submit", async (event) => {
     event.preventDefault();
+    elements.dynamicForm.querySelectorAll("[data-time-input]").forEach(normalizeTimeInput);
     if (elements.formDialog.classList.contains("student-dialog")) validateStudentRecordDate(elements.dynamicForm, true, true);
     if (!elements.dynamicForm.reportValidity() || !state.formHandler) return;
     elements.formError.textContent = "";
@@ -3811,9 +3930,14 @@
 
   document.addEventListener("focusin", (event) => {
     if (event.target.matches?.("[data-course-discount]")) event.target.placeholder = "HK$";
+    if (event.target.id === "student-email-local") event.target.placeholder = "";
   });
   document.addEventListener("focusout", (event) => {
     if (event.target.matches?.("[data-course-discount]")) event.target.placeholder = "折扣優惠";
+    if (event.target.id === "student-email-local") {
+      const preview = document.querySelector("#student-number-preview")?.textContent || "";
+      event.target.placeholder = /^[KA]\d{6}$/.test(preview) ? preview : "學生編號";
+    }
     if (elements.tutorDialog.open && elements.tutorForm.contains(event.target) && ["email", "phone"].includes(event.target.name) && event.target.value.trim() && event.target.checkValidity()) {
       const existing = findById(state.suite.accounts, elements.tutorForm.elements.id.value);
       confirmTutorDuplicate(event.target.name, event.target.value.trim(), existing);
@@ -3936,6 +4060,7 @@
       setTimeout(() => confirmScheduleAddDate(date), 120);
       return;
     }
+    normalizeTimeInput(event.target);
     if (event.target.name === "recordDate" && elements.formDialog.open && elements.formDialog.classList.contains("student-dialog")) {
       validateStudentRecordDate(elements.dynamicForm, true, true);
     }
@@ -3949,6 +4074,11 @@
 
   document.addEventListener("change", (event) => {
     if (syncStudentDatePicker(event.target)) return;
+    if (event.target.id === "people-pool-filter") {
+      state.peoplePool = event.target.value;
+      document.querySelector("#people-results").innerHTML = peopleResultsHtml();
+      return;
+    }
     if (event.target.id === "quick-lesson-date-picker") {
       document.querySelector("#quick-lesson-date").value = formatStudentRecordDate(event.target.value);
       document.querySelector("#quick-lesson-date-error").textContent = "";
@@ -4077,6 +4207,14 @@
   document.addEventListener("touchmove", (event) => {
     if (state.currentModule === "schedule" && event.touches.length > 1) event.preventDefault();
   }, { passive: false });
+  elements.moduleContent.addEventListener("wheel", (event) => {
+    if (!event.ctrlKey || !event.deltaY || state.currentModule !== "schedule" || state.scheduleMode !== "week" || !event.target.closest(".timeline-card")) return;
+    event.preventDefault();
+    const next = Math.max(50, Math.min(200, state.scheduleZoom + (event.deltaY < 0 ? 10 : -10)));
+    if (next === state.scheduleZoom) return;
+    state.scheduleZoom = next;
+    renderModule();
+  }, { passive: false });
 
   elements.timePickerDialog.addEventListener("wheel", (event) => {
     const column = event.target.closest(".lesson-time-column");
@@ -4126,13 +4264,17 @@
   });
 
   document.querySelectorAll(".modal").forEach((dialog) => dialog.addEventListener("click", (event) => {
-    if (event.target === dialog) {
+    if (event.target === dialog && !dialog.classList.contains("student-dialog")) {
       dialog.close();
       document.body.classList.toggle("modal-open", elements.formDialog.open || elements.bookingDialog.open || elements.tutorDialog.open);
     }
   }));
   elements.studentBookingPromptDialog.addEventListener("close", () => {
     document.body.classList.toggle("modal-open", Boolean(document.querySelector("dialog[open]")));
+  });
+
+  elements.formDialog.addEventListener("cancel", (event) => {
+    if (elements.formDialog.classList.contains("student-dialog")) event.preventDefault();
   });
 
   window.AdminAuth?.setOnExpired(() => {

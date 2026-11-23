@@ -1012,6 +1012,7 @@ body[data-module="month-pass"] .month-pass-frame { height: calc(100dvh - env(saf
 .quick-time-control input { width: 100%; min-width: 0; height: 100%; padding: 0 15px; border: 0; outline: 0; color: var(--ink); background: transparent; font: inherit; font-size: 1rem; }
 .quick-time-control button { width: 50px; min-width: 50px; height: 100%; border: 0; color: var(--muted); background: transparent; font-size: 1.65rem; cursor: pointer; }
 .quick-time-control button:hover { color: var(--teal); }
+.form-time-control { width: 100%; }
 .quick-add-class { display: flex; width: 100%; min-height: 53px; align-items: center; justify-content: center; gap: 8px; margin-top: 12px; border: 0; border-radius: 999px; color: white; background: var(--teal); font: inherit; font-size: 1rem; font-weight: 800; cursor: pointer; }
 .quick-add-class:hover { background: var(--teal-dark); }
 .quick-add-class span { font-size: 1.35rem; }
@@ -1081,10 +1082,14 @@ body[data-module="month-pass"] .month-pass-frame { height: calc(100dvh - env(saf
 .booking-selected-dates { display: grid; gap: 8px; }
 .booking-date-row { display: grid; grid-template-columns: minmax(90px, 1fr) minmax(0, 112px) 18px minmax(0, 112px) 32px; align-items: center; gap: 8px; min-height: 54px; }
 .booking-date-row strong { font-size: .87rem; }
-.booking-date-row input { width: 100%; min-width: 0; height: 42px; padding: 0 10px; border: 1px solid #d4cec1; border-radius: 9px; color: var(--ink); background: var(--paper-strong); font: inherit; font-size: .88rem; }
+.booking-time-control { display: flex; min-width: 0; height: 42px; align-items: center; border: 1px solid #d4cec1; border-radius: 9px; background: var(--paper-strong); }
+.booking-time-control:focus-within { border-color: #2c7cae; outline: 2px solid #b9d9e8; }
+.booking-date-row .booking-time-control input { width: 100%; min-width: 0; height: 100%; padding: 0 4px 0 9px; border: 0; outline: 0; color: var(--ink); background: transparent; font: inherit; font-size: .85rem; }
+.booking-date-row .booking-time-control button { width: 30px; min-width: 30px; height: 100%; border: 0; color: var(--muted); background: transparent; font-size: 1.35rem; cursor: pointer; }
+.booking-date-row .booking-time-control button:hover { color: var(--teal); }
 .booking-date-row > span { text-align: center; color: var(--muted); }
-.booking-date-row button { width: 32px; height: 32px; border: 0; color: var(--muted); background: transparent; font-size: 1.3rem; cursor: pointer; }
-.booking-date-row button:hover { color: var(--coral); }
+.booking-date-row .booking-date-remove { width: 32px; height: 32px; border: 0; color: var(--muted); background: transparent; font-size: 1.3rem; cursor: pointer; }
+.booking-date-row .booking-date-remove:hover { color: var(--coral); }
 .modal.lesson-time-dialog { width: min(500px, calc(100% - 24px)); padding: 24px; border-radius: 20px; }
 .lesson-time-dialog .modal-header { margin-bottom: 10px; }
 .lesson-time-wheel { display: grid; grid-template-columns: 1fr 24px 1fr; align-items: center; gap: 6px; }
@@ -1468,6 +1473,8 @@ body[data-module="rooms"] .module-heading p { max-width: 78ch; line-height: 1.65
 .people-tools { display: flex; align-items: stretch; gap: 8px; margin-bottom: 20px; }
 .people-search { display: flex; min-width: 0; flex: 1; align-items: center; gap: 12px; min-height: 56px; padding: 0 18px; background: #f4f2ed; border: 1px solid #cbc5b8; border-radius: 12px; }
 .people-search span { font-size: 1.55rem; }.people-search input { width: 100%; min-width: 0; color: var(--ink); background: transparent; border: 0; outline: 0; }
+.people-pool-filter { display: flex; align-items: center; gap: 12px; margin: -4px 0 18px; color: var(--ink); font-weight: 700; }
+.people-pool-filter select { min-width: 0; width: min(100%, 420px); min-height: 48px; padding: 0 12px; border: 1px solid #cbc5b8; border-radius: 12px; color: var(--ink); background: var(--paper-strong); font: inherit; font-weight: 400; }
 .people-round-button { min-height: 56px; padding-inline: 15px; }
 .people-directory { display: grid; grid-template-columns: minmax(215px, 27%) minmax(0, 1fr); align-items: start; gap: 18px; }
 .people-name-list { padding: 7px; background: var(--paper); border: 1px solid var(--line); border-radius: 16px; }
@@ -1476,7 +1483,26 @@ body[data-module="rooms"] .module-heading p { max-width: 78ch; line-height: 1.65
 .people-avatar { display: grid; width: 39px; height: 39px; flex: 0 0 39px; place-items: center; color: #666; background: #e2e3e3; border-radius: 50%; font-weight: 700; }
 .people-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
 .people-selected-detail { display: grid; gap: 12px; }.people-detail-card, .people-mobile-card { padding: 18px; background: var(--paper); border: 1px solid var(--line); border-radius: 17px; box-shadow: var(--shadow); }
+.student-profile-trigger { cursor: pointer; }
+.student-profile-trigger:focus-visible { outline: 3px solid #2c7cae; outline-offset: 2px; }
+.student-profile-dialog { width: min(700px, calc(100% - 20px)); max-height: calc(100dvh - 24px); padding: 0; overflow: hidden; }
+.student-profile-dialog .modal-header { margin: 0; padding: 20px 20px 12px; }
+.student-profile-content { max-height: calc(100dvh - 155px); padding: 0 20px 18px; overflow-y: auto; overscroll-behavior: contain; }
+.student-profile-head { display: flex; align-items: center; gap: 12px; margin: 4px 0 20px; font-size: 1.15rem; }
+.student-profile-section { margin-bottom: 18px; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; }
+.student-profile-section h3 { margin: 0; padding: 12px 14px; background: var(--canvas); font-size: .95rem; }
+.student-profile-section table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.student-profile-section th, .student-profile-section td { padding: 10px 14px; border-top: 1px solid var(--line); text-align: left; vertical-align: top; overflow-wrap: anywhere; font-size: .84rem; }
+.student-profile-section th { width: 38%; color: var(--muted); font-weight: 600; }
+.student-profile-dialog .modal-actions { margin: 0; padding: 12px 20px 20px; border-top: 1px solid var(--line); }
+.student-profile-content > .helper-text { margin: 0 0 6px; }
+.student-email-control { display: flex; min-width: 0; align-items: center; gap: 8px; }
+.student-email-control input { width: 100%; min-width: 0; }
+.student-email-control > span { flex: 0 0 auto; color: var(--ink); white-space: nowrap; font-size: .9rem; }
 .people-person-head { display: flex; min-width: 0; align-items: center; gap: 13px; }.people-person-head > div { min-width: 0; flex: 1; }.people-person-head h2 { overflow: hidden; margin: 0 0 3px; font-size: 1.06rem; text-overflow: ellipsis; white-space: nowrap; }.people-person-head p, .people-person-head small { display: block; overflow: hidden; margin: 0; color: var(--muted); font-size: .75rem; text-overflow: ellipsis; white-space: nowrap; }
+.people-card-summary { display: grid; gap: 2px; margin: 4px 0; }
+.people-person-head .people-card-summary small { overflow: visible; overflow-wrap: anywhere; white-space: normal; text-overflow: clip; line-height: 1.4; }
+.student-email-field > label { font-size: .72rem; font-weight: 800; }
 .people-edit-button { flex: 0 0 35px; width: 35px; height: 35px; color: var(--muted); background: transparent; border: 0; border-radius: 9px; font-size: 1.2rem; }.people-edit-button:hover { background: var(--blue-soft); }
 .people-status { display: inline-flex; align-items: center; gap: 7px; margin-top: 12px; padding: 7px 11px; color: #185672; background: #dceef6; border-radius: 99px; font-size: .77rem; font-weight: 750; }.people-status.needs-payment { color: #9b5147; background: #f9e1db; }
 .people-detail-card h3 { margin: 0 0 12px; font-size: .9rem; }.people-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0; }.people-facts dt { color: var(--muted); font-size: .73rem; }.people-facts dd { overflow-wrap: anywhere; margin: 4px 0 0; font-size: .82rem; font-weight: 650; }
@@ -1906,9 +1932,10 @@ body[data-module="schedule"], body[data-module="schedule"] .module-view, body[da
   .booking-calendar { padding: 8px 3px; }
   .booking-calendar-days button { font-size: .82rem; }
   .booking-date-row { grid-template-columns: minmax(62px, 1fr) minmax(0, 72px) 12px minmax(0, 72px) 25px; gap: 3px; }
-  .booking-date-row input { padding-inline: 4px; font-size: .76rem; }
+  .booking-date-row .booking-time-control input { padding-inline: 4px; font-size: .76rem; }
+  .booking-date-row .booking-time-control button { display: none; }
   .booking-date-row strong { font-size: .72rem; }
-  .booking-date-row button { width: 25px; }
+  .booking-date-row .booking-date-remove { width: 25px; }
 }
 
 @media (max-width: 650px) {

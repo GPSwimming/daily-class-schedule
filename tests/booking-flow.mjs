@@ -30,7 +30,7 @@ let coarsePointer = false;
 const classList = () => ({ add() {}, remove() {}, toggle() {}, contains() { return false; } });
 const node = (selector) => {
   if (!nodes.has(selector)) nodes.set(selector, { value: "", innerHTML: "", textContent: "", hidden: false, classList: classList(),
-    addEventListener(name, handler) { this[`on${name}`] = handler; }, setAttribute() {}, querySelector() { return null; }, reportValidity() { return true; }, showModal() { this.open = true; }, close() { this.open = false; } });
+    addEventListener(name, handler) { this[`on${name}`] = handler; }, setAttribute() {}, querySelector() { return null; }, querySelectorAll() { return []; }, reportValidity() { return true; }, showModal() { this.open = true; }, close() { this.open = false; } });
   return nodes.get(selector);
 };
 const document = { documentElement: { dataset: {} }, body: { classList: classList(), dataset: {} }, querySelector: node,
@@ -44,7 +44,7 @@ const context = { document, FormData: class {
   getAll(name) { return formValues.filter(([key]) => key === name).map(([, value]) => value); }
 }, localStorage: { getItem: (key) => saved.get(key) ?? null, setItem: (key, value) => saved.set(key, value) },
   sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} }, window: { scrollTo() {}, confirm(message) { confirmationMessage = message; return confirmCancellation; }, AdminAuth: { signIn: async () => {}, signOut: async () => {}, check: async () => true, getCatalog: async () => catalog, setOnExpired() {} } }, crypto: { randomUUID },
-  setTimeout: (callback, delay) => { if (delay === 120) scheduledTimers.push(callback); return 1; }, clearTimeout() {}, console };
+  setTimeout: (callback, delay) => { if (delay === 120) scheduledTimers.push(callback); return 1; }, clearTimeout() {}, Event: class { constructor(type) { this.type = type; } }, console };
 context.window.matchMedia = () => ({ matches: coarsePointer });
 for (let index = 0; index < files.length; index += 1) vm.runInNewContext(files[index], context, { filename: ["location-import.js", "course-import.js", "app.js"][index] });
 node("#admin-login-form").elements = { email: { value: "admin@example.com" }, password: { value: "test-only" } };
@@ -98,6 +98,11 @@ scheduledTimers.shift()();
 assert.equal(node("#quick-lesson-dialog").open, true, "confirming the mobile calendar opens quick add after dismissal");
 assert.equal(node("#quick-lesson-date").value, "19-Nov-2026", "the confirmed mobile date reaches quick add");
 coarsePointer = false;
+for (const [typed, expected] of [["2", "02:00"], ["12", "12:00"], ["16", "16:00"], ["1230", "12:30"], ["2:5", "02:05"]]) {
+  const input = { value: typed, dataset: {}, matches: () => true, dispatchEvent() {}, name: "" };
+  handlers.get("focusout")({ target: input });
+  assert.equal(input.value, expected, `typed time ${typed} gains a valid colon`);
+}
 
 node("#quick-lesson-date").value = "31/12/2026";
 handlers.get("submit")({ target: { id: "quick-lesson-form" }, preventDefault() {} });

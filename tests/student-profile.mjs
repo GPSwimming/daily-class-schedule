@@ -46,11 +46,11 @@ const context = {
 };
 vm.runInNewContext(locationSource, context);
 vm.runInNewContext(courseSource, context);
-const instrumented = appSource.replace(/\n\}\)\(\);\s*$/, "\n  globalThis.studentTest = { fiscalYear, studentJoiningYears, latestEnrolledCourseForStudent, studentMobileCardHtml, isMinorAge, nextStudentNumber, studentAgeGroups, studentCoursesForAge, studentRecordDateYmd, formatStudentRecordDate, studentFormHtml, studentEnrollmentHtml, studentLocationPickerHtml, renderStudentYears, prepareStudentImport, saveStudentProfile, syncStudentDatePicker, lessonsForDate, renderPeople, state };\n})();");
+const instrumented = appSource.replace(/\n\}\)\(\);\s*$/, "\n  globalThis.studentTest = { fiscalYear, studentJoiningYears, latestEnrolledCourseForStudent, studentMobileCardHtml, studentCardName, studentCardSummaryHtml, isMinorAge, nextStudentNumber, studentAgeGroups, studentCoursesForAge, studentRecordDateYmd, formatStudentRecordDate, studentFormHtml, studentEnrollmentHtml, studentLocationPickerHtml, renderStudentYears, prepareStudentImport, saveStudentProfile, syncStudentDatePicker, lessonsForDate, renderPeople, state };\n})();");
 vm.runInNewContext(instrumented, context);
 node("#admin-login-form").elements = { email: { value: "admin@example.com" }, password: { value: "test-only" } };
 await node("#admin-login-form").onsubmit({ preventDefault() {} });
-const { fiscalYear, studentJoiningYears, latestEnrolledCourseForStudent, studentMobileCardHtml, isMinorAge, nextStudentNumber, studentAgeGroups, studentCoursesForAge, studentRecordDateYmd, formatStudentRecordDate, studentFormHtml, studentEnrollmentHtml, studentLocationPickerHtml, renderStudentYears, prepareStudentImport, saveStudentProfile, syncStudentDatePicker, lessonsForDate, renderPeople, state } = context.studentTest;
+const { fiscalYear, studentJoiningYears, latestEnrolledCourseForStudent, studentMobileCardHtml, studentCardName, studentCardSummaryHtml, isMinorAge, nextStudentNumber, studentAgeGroups, studentCoursesForAge, studentRecordDateYmd, formatStudentRecordDate, studentFormHtml, studentEnrollmentHtml, studentLocationPickerHtml, renderStudentYears, prepareStudentImport, saveStudentProfile, syncStudentDatePicker, lessonsForDate, renderPeople, state } = context.studentTest;
 
 assert.equal(fiscalYear("2026-03-31"), 2025);
 assert.equal(fiscalYear("2026-04-01"), 2026);
@@ -73,7 +73,7 @@ const pinky = { id: "pinky", name: "Pinky", enrollments: [
   { courseName: "進階游泳課程", firstDate: "2026-12-01" }
 ] };
 assert.equal(latestEnrolledCourseForStudent(pinky).name, "進階游泳課程", "latest starting enrollment supplies the student summary");
-assert.match(studentMobileCardHtml(pinky), /<h2>Pinky<\/h2><p>進階游泳課程<\/p>/, "mobile student card shows the latest course");
+assert.match(studentMobileCardHtml(pinky), /<h2>Pinky<\/h2>[\s\S]*最新報讀課程：進階游泳課程/, "mobile student card shows the latest course");
 const yearForm = { elements: { id: { value: "" }, recordDate: { value: "16-Nov-2026" } } };
 renderStudentYears(yearForm, 2025);
 assert.match(node("#student-year-choices").innerHTML, /name="enrollmentYear" value="2025" checked/, "2025 stays selected in the student form");
@@ -112,7 +112,10 @@ assert.match(oldBirthDateForm, /name="birthYear"[\s\S]*?<option value="2018" sel
 assert.match(studentFormHtml(null), /<label class="student-record-date-calendar"[^>]*>[\s\S]*?<input id="student-record-date-picker" type="date"/, "today date icon directly contains the native date input for mobile tapping");
 assert.doesNotMatch(studentFormHtml({ recordDate: "2026-11-17" }), /id="student-record-date-picker" type="date" value=/, "editing gives the native today picker an empty reset default");
 assert.doesNotMatch(studentFormHtml(null), /課堂排程、導師與堂數|student-legacy-fields/, "new student form omits the retired scheduling section");
-assert.match(studentFormHtml(null), /studentLocationPickerHtml|student-location-field[\s\S]*?電郵（稍後登入用）[\s\S]*?name="email" type="email"/, "student email appears below the lesson location");
+assert.match(studentFormHtml(null), /student-location-field[\s\S]*?電郵（稍後登入用）[\s\S]*?name="emailLocal"[\s\S]*?@gpswimming.com/, "student email has an editable local name and fixed domain below the lesson location");
+assert.match(studentFormHtml(null), /家長姓名\/學生姓名\(必填\)/, "the name field uses the requested label");
+assert.match(studentFormHtml({ ageGroup: "18 - 29" }), /id="student-guardian-field" hidden/, "adult learners do not see the parent field");
+assert.match(studentFormHtml({ ageGroup: "6 - 11" }), /id="student-guardian-field"><label[\s\S]*?家長姓名/, "child learners see the parent field");
 assert.match(studentFormHtml(null), /密碼（接駁 Supabase 後設定）[\s\S]*?type="password"[^>]*disabled/, "student password cannot be entered before Supabase is connected");
 assert.doesNotMatch(studentFormHtml(null), /name="password"/, "student password is not submitted or stored");
 assert.doesNotMatch(studentFormHtml(null), /data-action="student-record-date-calendar"/, "today date no longer relies on a scripted click of a hidden picker");
@@ -206,28 +209,36 @@ assert.equal(state.students[0].nextDate, "2026-10-30", "editing incomplete legac
 assert.equal(state.students[0].tutorId, "tutor-1", "editing student preserves the assigned tutor after removing legacy fields");
 assert.equal(state.students[0].weekday, 3, "editing student preserves the old lesson weekday");
 assert.equal(state.students[0].time, "17:30", "editing student preserves the old lesson time");
-saveStudentProfile({ name: "候補學生", ageGroup: "6 - 11", gender: "女", whatsapp: "91234567", email: " learner@example.com ", recordDate: "2026-10-30", enrollmentYear: "2026", enrollmentStatus: "待確認，未付款", birthMonth: "9", birthYear: "2018" }, emptyForm);
+saveStudentProfile({ name: "候補學生", ageGroup: "6 - 11", gender: "女", whatsapp: "91234567", emailLocal: "learner", recordDate: "2026-10-30", enrollmentYear: "2026", enrollmentStatus: "待確認，未付款", birthMonth: "9", birthYear: "2018" }, emptyForm);
 assert.equal(node("#student-booking-prompt-dialog").open, true, "new student save opens the add lesson question");
 await listeners.get("click")({ target: { closest: () => ({ dataset: { action: "student-booking-no" } }) } });
 assert.equal(node("#student-booking-prompt-dialog").open, false, "No closes the question");
 assert.equal(state.currentModule, "people", "No returns to personal information");
 assert.equal(node("#quick-lesson-dialog").open, false, "No does not start quick add");
 const pending = state.students.at(-1);
-assert.equal(pending.email, "learner@example.com", "student email is stored without surrounding spaces");
-assert.match(studentFormHtml(pending), /name="email" type="email"[^>]*value="learner@example.com"/, "student email appears when editing");
+assert.equal(pending.email, "learner@gpswimming.com", "custom email uses the fixed domain");
+assert.match(studentFormHtml(pending), /name="emailLocal"[^>]*value="learner"/, "custom email name appears when editing");
 assert.equal(pending.studentNumber, "", "pending student has no ID");
 assert.equal(pending.remaining, 0, "new student is not credited with lessons");
 assert.equal(pending.birthMonth, "9", "selected birth month is stored");
 assert.equal(pending.birthYear, "2018", "selected birth year is stored");
 state.peopleFilter = "pending";
 assert.match(renderPeople(), /候補學生[\s\S]*91234567[\s\S]*6 - 11[\s\S]*修改學生資訊[\s\S]*刪除/, "pending list exposes contact, age and follow-up actions");
-saveStudentProfile({ id: pending.id, name: pending.name, ageGroup: pending.ageGroup, gender: pending.gender, whatsapp: pending.whatsapp, email: pending.email, recordDate: pending.recordDate, enrollmentYear: "2026", enrollmentStatus: "已付款" }, emptyForm);
+saveStudentProfile({ id: pending.id, name: pending.name, ageGroup: pending.ageGroup, gender: pending.gender, whatsapp: pending.whatsapp, emailLocal: "learner", recordDate: pending.recordDate, enrollmentYear: "2026", enrollmentStatus: "已付款" }, emptyForm);
 assert.equal(pending.studentNumber, "K260013", "payment confirmation allocates the next unused child number");
-assert.equal(JSON.parse(saved.get("swim-class-balance.v1")).find((item) => item.id === pending.id).email, "learner@example.com", "student email survives a save and reload");
+assert.equal(JSON.parse(saved.get("swim-class-balance.v1")).find((item) => item.id === pending.id).email, "learner@gpswimming.com", "student email survives a save and reload");
 assert.doesNotMatch(renderPeople(), /候補學生/, "paid student leaves the pending list");
 assert.equal(JSON.parse(saved.get("swim-class-suite.v2")).studentNumberCounters.K26, 13, "allocated number is persisted");
 state.students = state.students.filter((item) => item.id !== pending.id);
 assert.equal(nextStudentNumber(2026, "6 - 11").value, "K260014", "deleted numbers are never reused");
+saveStudentProfile({ name: "成人學員", ageGroup: "18 - 29", gender: "男", whatsapp: "91234567", recordDate: "2026-11-05", enrollmentStatus: "已付款" }, emptyForm);
+const adult = state.students.at(-1);
+assert.equal(adult.email, adult.studentNumber + "@gpswimming.com", "blank email defaults to the assigned student number");
+assert.match(studentFormHtml(adult), /name="emailLocal"[^>]*value=""/, "default email is shown as a hint rather than editable text");
+await listeners.get("click")({ target: { closest: () => ({ dataset: { action: "student-booking-no" } }) } });
+const childPreview = { name: "小朋友", guardianName: "家長", ageGroup: "6 - 11", birthMonth: String(new Date().getMonth() + 1), birthYear: String(new Date().getFullYear() - 5), roomName: "荔枝角公園游泳池", enrollments: [{ courseName: "舊課程", firstDate: "2026-01-01" }, { courseName: "最新課程", firstDate: "2026-08-01" }] };
+assert.equal(studentCardName(childPreview), "家長", "child card shows the parent name above the summary");
+assert.match(studentCardSummaryHtml(childPreview), /學生姓名：小朋友[\s\S]*學生年齡：5 歲[\s\S]*最新報讀課程：最新課程[\s\S]*課堂地點：荔枝角公園游泳池/, "child card shows age in whole years and the course with the latest first lesson date");
 state.suite.studentNumberCounters.K26 = 9999;
 assert.throws(() => nextStudentNumber(2026, "6 - 11"), /已用完/, "yearly sequence stops at 9999");
 
