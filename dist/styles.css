@@ -1490,7 +1490,7 @@ body[data-module="rooms"] .module-heading p { max-width: 78ch; line-height: 1.65
 .student-profile-content { max-height: calc(100dvh - 155px); padding: 0 20px 18px; overflow-y: auto; overscroll-behavior: contain; }
 .student-profile-head { display: flex; align-items: center; gap: 12px; margin: 4px 0 20px; font-size: 1.15rem; }
 .student-profile-section { margin-bottom: 18px; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; }
-.student-profile-section h3 { margin: 0; padding: 12px 14px; background: var(--canvas); font-size: .95rem; }
+.student-profile-section h3 { margin: 0; padding: 12px 14px; background: #fff1b8; color: #4d4018; font-size: .95rem; }
 .student-profile-section table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .student-profile-section th, .student-profile-section td { padding: 10px 14px; border-top: 1px solid var(--line); text-align: left; vertical-align: top; overflow-wrap: anywhere; font-size: .84rem; }
 .student-profile-section th { width: 38%; color: var(--muted); font-weight: 600; }
@@ -1976,4 +1976,30 @@ body[data-module="schedule"], body[data-module="schedule"] .module-view, body[da
 @media (max-width: 400px) {
   .pool-location-form .modal-actions { flex-direction: row; justify-content: flex-end; }
   .pool-location-form .modal-actions .button { width: auto; min-width: 82px; }
+}
+
+.student-profile-dialog .modal-actions .button { min-width: 112px; min-height: 44px; }
+.student-profile-dialog { width: min(960px, calc(100% - 20px)); display: none; }
+.student-profile-dialog[open] { display: flex; flex-direction: column; }
+.student-profile-dialog .modal-header { padding: 14px 18px 8px; flex: 0 0 auto; }
+.student-profile-content { min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0 18px 12px; }
+.student-profile-head { grid-column: 1 / -1; margin: 0; gap: 10px; }
+.student-profile-head .people-avatar { width: 36px; height: 36px; flex-basis: 36px; }
+.student-profile-section { margin: 0; align-self: start; }
+.student-profile-section h3 { padding: 7px 10px; font-size: .88rem; }
+.student-profile-section th, .student-profile-section td { padding: 6px 10px; font-size: .82rem; line-height: 1.4; }
+.student-profile-contact { grid-column: 2; grid-row: 2 / 4; }
+.student-profile-location { grid-column: 1; }
+.student-profile-course tbody { display: grid; grid-template-columns: 1fr 1fr; }
+.student-profile-course tr { display: flex; flex-direction: column; border-top: 1px solid var(--line); padding: 5px 10px; }
+.student-profile-course th, .student-profile-course td { width: auto; padding: 0; border: 0; }
+.student-profile-course th { font-size: .72rem; }
+.student-profile-dialog .modal-actions { padding: 10px 18px; flex: 0 0 auto; flex-direction: row; gap: 10px; }
+@media (max-width: 600px) {
+  .student-profile-content { grid-template-columns: 1fr; gap: 6px; padding: 0 12px 8px; }
+  .student-profile-contact, .student-profile-location { grid-column: auto; grid-row: auto; }
+  .student-profile-section h3 { padding-block: 6px; }
+  .student-profile-section th, .student-profile-section td { padding: 4px 9px; }
+  .student-profile-course th, .student-profile-course td { padding: 0; }
+  .student-profile-dialog .modal-actions .button { flex: 1; min-width: 0; padding-inline: 10px; }
 }

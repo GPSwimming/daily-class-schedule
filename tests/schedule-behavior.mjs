@@ -15,7 +15,7 @@ const handlers = new Map();
 const nodeHandlers = new Map();
 const classList = () => ({ add() {}, remove() {}, toggle() {} });
 const node = (selector) => {
-  if (!nodes.has(selector)) nodes.set(selector, { innerHTML: "", textContent: "", hidden: false, classList: classList(), addEventListener(name, handler) { nodeHandlers.set(selector + ":" + name, handler); }, setAttribute() {}, showModal() { this.open = true; }, close() { this.open = false; } });
+  if (!nodes.has(selector)) nodes.set(selector, { dataset: {}, innerHTML: "", textContent: "", hidden: false, classList: classList(), addEventListener(name, handler) { nodeHandlers.set(selector + ":" + name, handler); }, setAttribute() {}, showModal() { this.open = true; }, close() { this.open = false; } });
   return nodes.get(selector);
 };
 const document = {

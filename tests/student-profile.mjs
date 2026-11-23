@@ -28,7 +28,7 @@ const windowListeners = new Map();
 let expireSession;
 let loginAttempts = 0;
 const node = (selector) => {
-  if (!nodes.has(selector)) nodes.set(selector, { innerHTML: "", textContent: "", hidden: false, classList: classList(), addEventListener(name, callback) { this[`on${name}`] = callback; }, setAttribute() {} });
+  if (!nodes.has(selector)) nodes.set(selector, { dataset: {}, innerHTML: "", textContent: "", hidden: false, classList: classList(), addEventListener(name, callback) { this[`on${name}`] = callback; }, setAttribute() {} });
   return nodes.get(selector);
 };
 const document = {
@@ -46,11 +46,11 @@ const context = {
 };
 vm.runInNewContext(locationSource, context);
 vm.runInNewContext(courseSource, context);
-const instrumented = appSource.replace(/\n\}\)\(\);\s*$/, "\n  globalThis.studentTest = { fiscalYear, studentJoiningYears, latestEnrolledCourseForStudent, studentMobileCardHtml, studentCardName, studentCardSummaryHtml, isMinorAge, nextStudentNumber, studentAgeGroups, studentCoursesForAge, studentRecordDateYmd, formatStudentRecordDate, studentFormHtml, studentEnrollmentHtml, studentLocationPickerHtml, renderStudentYears, prepareStudentImport, saveStudentProfile, syncStudentDatePicker, lessonsForDate, renderPeople, state };\n})();");
+const instrumented = appSource.replace(/\n\}\)\(\);\s*$/, "\n  globalThis.studentTest = { fiscalYear, studentJoiningYears, latestEnrolledCourseForStudent, studentMobileCardHtml, openStudentProfile, studentCardName, studentCardSummaryHtml, isMinorAge, nextStudentNumber, studentAgeGroups, studentCoursesForAge, studentRecordDateYmd, formatStudentRecordDate, studentFormHtml, studentEnrollmentHtml, studentLocationPickerHtml, renderStudentYears, prepareStudentImport, saveStudentProfile, syncStudentDatePicker, lessonsForDate, renderPeople, state };\n})();");
 vm.runInNewContext(instrumented, context);
 node("#admin-login-form").elements = { email: { value: "admin@example.com" }, password: { value: "test-only" } };
 await node("#admin-login-form").onsubmit({ preventDefault() {} });
-const { fiscalYear, studentJoiningYears, latestEnrolledCourseForStudent, studentMobileCardHtml, studentCardName, studentCardSummaryHtml, isMinorAge, nextStudentNumber, studentAgeGroups, studentCoursesForAge, studentRecordDateYmd, formatStudentRecordDate, studentFormHtml, studentEnrollmentHtml, studentLocationPickerHtml, renderStudentYears, prepareStudentImport, saveStudentProfile, syncStudentDatePicker, lessonsForDate, renderPeople, state } = context.studentTest;
+const { fiscalYear, studentJoiningYears, latestEnrolledCourseForStudent, studentMobileCardHtml, openStudentProfile, studentCardName, studentCardSummaryHtml, isMinorAge, nextStudentNumber, studentAgeGroups, studentCoursesForAge, studentRecordDateYmd, formatStudentRecordDate, studentFormHtml, studentEnrollmentHtml, studentLocationPickerHtml, renderStudentYears, prepareStudentImport, saveStudentProfile, syncStudentDatePicker, lessonsForDate, renderPeople, state } = context.studentTest;
 
 assert.equal(fiscalYear("2026-03-31"), 2025);
 assert.equal(fiscalYear("2026-04-01"), 2026);
@@ -113,7 +113,7 @@ assert.match(studentFormHtml(null), /<label class="student-record-date-calendar"
 assert.doesNotMatch(studentFormHtml({ recordDate: "2026-11-17" }), /id="student-record-date-picker" type="date" value=/, "editing gives the native today picker an empty reset default");
 assert.doesNotMatch(studentFormHtml(null), /課堂排程、導師與堂數|student-legacy-fields/, "new student form omits the retired scheduling section");
 assert.match(studentFormHtml(null), /student-location-field[\s\S]*?電郵（稍後登入用）[\s\S]*?name="emailLocal"[\s\S]*?@gpswimming.com/, "student email has an editable local name and fixed domain below the lesson location");
-assert.match(studentFormHtml(null), /家長姓名\/學生姓名\(必填\)/, "the name field uses the requested label");
+assert.match(studentFormHtml(null), /學生姓名\(必填\)/, "the name field uses the requested label");
 assert.match(studentFormHtml({ ageGroup: "18 - 29" }), /id="student-guardian-field" hidden/, "adult learners do not see the parent field");
 assert.match(studentFormHtml({ ageGroup: "6 - 11" }), /id="student-guardian-field"><label[\s\S]*?家長姓名/, "child learners see the parent field");
 assert.match(studentFormHtml(null), /密碼（接駁 Supabase 後設定）[\s\S]*?type="password"[^>]*disabled/, "student password cannot be entered before Supabase is connected");
@@ -238,6 +238,29 @@ assert.match(studentFormHtml(adult), /name="emailLocal"[^>]*value=""/, "default 
 await listeners.get("click")({ target: { closest: () => ({ dataset: { action: "student-booking-no" } }) } });
 const childPreview = { name: "小朋友", guardianName: "家長", ageGroup: "6 - 11", birthMonth: String(new Date().getMonth() + 1), birthYear: String(new Date().getFullYear() - 5), roomName: "荔枝角公園游泳池", enrollments: [{ courseName: "舊課程", firstDate: "2026-01-01" }, { courseName: "最新課程", firstDate: "2026-08-01" }] };
 assert.equal(studentCardName(childPreview), "家長", "child card shows the parent name above the summary");
+const profileStudent = { ...childPreview, id: "profile-preview", studentNumber: "K260010", gender: "女", guardianName: "陳太", whatsapp: "91234567", homeMtr: "堅尼地城", schoolMtr: "堅尼地城", email: "K260010@gpswimming.com", enrollments: [{ courseName: "感統改良課程", classSize: "1:3", firstDate: "2026-07-27", netFee: 220 }, { courseName: "進階游泳課程", classSize: "1:3–4", firstDate: "2026-08-31", netFee: 190 }] };
+node("#student-profile-dialog").showModal = function () { this.open = true; };
+node("#student-profile-dialog").close = function () { this.open = false; };
+openStudentProfile(profileStudent);
+let profileHtml = node("#student-profile-content").innerHTML;
+assert.match(profileHtml, /<strong>陳太<\/strong>/, "minor profile heading uses the parent");
+assert.doesNotMatch(profileHtml, /年齡組別|學生年齡|學生狀態|今日日期|學生加入年份|現時課堂地點|負責導師|下一堂|預繳堂數|剩餘堂數|課堂時間|課堂原價|折扣優惠|工作地點/, "profile omits crossed-out items");
+assert.doesNotMatch(studentMobileCardHtml(profileStudent), /people-edit-button/, "student pencil shortcut is removed");
+openStudentProfile({ ...profileStudent, name: "成人學員", ageGroup: "18 - 29" });
+assert.match(node("#student-profile-content").innerHTML, /聯絡人<\/th><td>成人學員/, "adult contact is the learner");
+state.students.push(profileStudent);
+openStudentProfile(profileStudent);
+node("#form-dialog").showModal = function () { this.open = true; };
+node("#form-fields").querySelector = () => null;
+node("#dynamic-form").elements.otherPoolName = {};
+const oldProfileQuery = node("#dynamic-form").querySelector;
+node("#dynamic-form").querySelector = (selector) => selector === "#student-other-pool-field" ? node(selector) : oldProfileQuery?.(selector);
+context.requestAnimationFrame = () => {};
+await listeners.get("click")({ target: { closest: () => ({ dataset: { action: "edit-student-profile" } }) } });
+assert.equal(node("#student-profile-dialog").open, false, "edit closes the read-only profile");
+assert.equal(node("#form-title").textContent, "修改學生資訊", "edit opens the selected student's form");
+node("#form-dialog").open = false;
+state.students = state.students.filter((student) => student.id !== profileStudent.id);
 assert.match(studentCardSummaryHtml(childPreview), /學生姓名：小朋友[\s\S]*學生年齡：5 歲[\s\S]*最新報讀課程：最新課程[\s\S]*課堂地點：荔枝角公園游泳池/, "child card shows age in whole years and the course with the latest first lesson date");
 state.suite.studentNumberCounters.K26 = 9999;
 assert.throws(() => nextStudentNumber(2026, "6 - 11"), /已用完/, "yearly sequence stops at 9999");

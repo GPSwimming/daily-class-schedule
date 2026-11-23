@@ -1124,14 +1124,14 @@
       if (state.peopleFilter === "low" && (student.enrollmentStatus === "pending" || student.remaining > lowBalance())) return false;
       if (state.peopleFilter === "unassigned" && (student.enrollmentStatus === "pending" || nextScheduledDate(student))) return false;
       const course = latestEnrolledCourseForStudent(student);
-      return !search || [student.name, student.whatsapp, student.ageGroup, student.roomName, course && course.name].some((value) => String(value || "").toLocaleLowerCase().includes(search));
+      return !search || [student.name, student.guardianName, student.whatsapp, student.ageGroup, student.roomName, course && course.name].some((value) => String(value || "").toLocaleLowerCase().includes(search));
     }).sort((a, b) => a.name.localeCompare(b.name, "zh-Hant"));
     if (!students.length) return emptyHtml("👤", "沒有符合條件的學生", "可以調整搜尋或篩選條件。");
     if (state.peopleFilter === "pending") return '<div class="pending-student-list">' + students.map(pendingStudentHtml).join("") + '</div>';
     if (state.peopleLayout === "table") return studentTableHtml(students);
     const selected = students.find((student) => student.id === state.selectedStudentId) || students[0];
     return '<div class="people-directory"><div class="people-name-list" aria-label="學生名單">' + students.map((student) =>
-      '<button type="button" class="people-name-item' + (student.id === selected.id ? ' is-selected' : '') + '" data-action="people-select-student" data-id="' + escapeHtml(student.id) + '">' + studentAvatarHtml(student) + '<span><strong>' + escapeHtml(student.name) + '</strong><small>' + escapeHtml((latestEnrolledCourseForStudent(student) || {}).name || (student.enrollmentStatus === "pending" ? "待確認，未付款" : "未指定課程")) + '</small></span></button>').join('') + '</div><div class="people-selected-detail">' + studentDetailHtml(selected) + '</div></div>' +
+      '<button type="button" class="people-name-item' + (student.id === selected.id ? ' is-selected' : '') + '" data-action="people-select-student" data-id="' + escapeHtml(student.id) + '">' + studentAvatarHtml(student) + '<span><strong>' + escapeHtml(studentCardName(student)) + '</strong><small>' + escapeHtml((latestEnrolledCourseForStudent(student) || {}).name || (student.enrollmentStatus === "pending" ? "待確認，未付款" : "未指定課程")) + '</small></span></button>').join('') + '</div><div class="people-selected-detail">' + studentDetailHtml(selected) + '</div></div>' +
       '<div class="people-mobile-cards">' + students.map(studentMobileCardHtml).join('') + '</div>';
   }
 
@@ -1140,7 +1140,7 @@
   }
 
   function studentCardName(student) {
-    return isMinorAge(student.ageGroup) ? student.guardianName || student.name : student.name;
+    return isMinorAge(student.ageGroup) ? String(student.guardianName || "").trim() || "未設定家長姓名" : student.name;
   }
 
   function studentCardAge(student) {
@@ -1186,13 +1186,13 @@
     const course = latestEnrolledCourseForStudent(student);
     const nextDate = nextScheduledDate(student);
     const tutor = findById(state.suite.accounts, student.tutorId);
-    return '<article class="people-detail-card student-profile-trigger" data-student-id="' + escapeHtml(student.id) + '" tabindex="0" aria-label="查看' + escapeHtml(student.name) + '的學生資料"><div class="people-person-head">' + studentAvatarHtml(student) + '<div><h2>' + escapeHtml(studentCardName(student)) + '</h2>' + studentCardSummaryHtml(student) + '</div><button class="people-edit-button" type="button" data-action="edit-student" data-id="' + escapeHtml(student.id) + '" aria-label="編輯 ' + escapeHtml(student.name) + '">✎</button></div>' + studentStatusHtml(student) + '</article>' +
+    return '<article class="people-detail-card student-profile-trigger" data-student-id="' + escapeHtml(student.id) + '" tabindex="0" aria-label="查看' + escapeHtml(student.name) + '的學生資料"><div class="people-person-head">' + studentAvatarHtml(student) + '<div><h2>' + escapeHtml(studentCardName(student)) + '</h2>' + studentCardSummaryHtml(student) + '</div></div>' + studentStatusHtml(student) + '</article>' +
       '<article class="people-detail-card student-profile-trigger" data-student-id="' + escapeHtml(student.id) + '" tabindex="0" aria-label="查看' + escapeHtml(student.name) + '的學生資料"><h3>基本資料</h3><dl class="people-facts"><div><dt>學生狀態</dt><dd>' + escapeHtml(student.enrollmentStatus === "pending" ? "待確認，未付款" : student.enrollmentStatus === "paid" ? "已付款" : "舊資料") + '</dd></div><div><dt>學生編號</dt><dd>' + escapeHtml(student.studentNumber || "未編配") + '</dd></div><div><dt>年齡組別</dt><dd>' + escapeHtml(student.ageGroup || "未設定") + '</dd></div><div><dt>WhatsApp</dt><dd>' + escapeHtml(student.whatsapp || "未設定") + '</dd></div><div><dt>課堂地點</dt><dd>' + escapeHtml(locationNameForId(student.roomId, student.roomName) || "未設定") + '</dd></div><div><dt>課程</dt><dd>' + escapeHtml(course ? course.name : "未指定") + '</dd></div><div><dt>負責導師</dt><dd>' + escapeHtml(tutor ? tutor.name : "未指定") + '</dd></div>' + (student.enrollmentStatus === "pending" ? '' : '<div><dt>下一堂</dt><dd>' + escapeHtml(nextDate ? nextDate + " " + (student.nextTime || student.time) : "未編排") + '</dd></div><div><dt>剩餘堂數</dt><dd>' + student.remaining + ' 堂</dd></div>') + '</dl>' + studentActionsHtml(student) + '</article>';
   }
 
   function studentMobileCardHtml(student) {
     const nextDate = nextScheduledDate(student);
-    return '<article class="people-mobile-card student-profile-trigger" data-student-id="' + escapeHtml(student.id) + '" tabindex="0" aria-label="查看' + escapeHtml(student.name) + '的學生資料"><div class="people-person-head">' + studentAvatarHtml(student) + '<div><h2>' + escapeHtml(studentCardName(student)) + '</h2>' + studentCardSummaryHtml(student) + '<small>' + escapeHtml(student.enrollmentStatus === "pending" ? [student.whatsapp, student.ageGroup].filter(Boolean).join(" · ") : nextDate ? nextDate + " · " + (student.nextTime || student.time) : "未編排課堂") + '</small></div><button class="people-edit-button" type="button" data-action="edit-student" data-id="' + escapeHtml(student.id) + '" aria-label="編輯 ' + escapeHtml(student.name) + '">✎</button></div>' + studentStatusHtml(student) + '<details class="people-card-more"><summary>' + (student.enrollmentStatus === "pending" ? "跟進操作" : "課堂操作") + '</summary>' + studentActionsHtml(student) + '</details></article>';
+    return '<article class="people-mobile-card student-profile-trigger" data-student-id="' + escapeHtml(student.id) + '" tabindex="0" aria-label="查看' + escapeHtml(student.name) + '的學生資料"><div class="people-person-head">' + studentAvatarHtml(student) + '<div><h2>' + escapeHtml(studentCardName(student)) + '</h2>' + studentCardSummaryHtml(student) + '<small>' + escapeHtml(student.enrollmentStatus === "pending" ? [student.whatsapp, student.ageGroup].filter(Boolean).join(" · ") : nextDate ? nextDate + " · " + (student.nextTime || student.time) : "未編排課堂") + '</small></div></div>' + studentStatusHtml(student) + '<details class="people-card-more"><summary>' + (student.enrollmentStatus === "pending" ? "跟進操作" : "課堂操作") + '</summary>' + studentActionsHtml(student) + '</details></article>';
   }
 
   function studentTableHtml(students) {
@@ -1205,7 +1205,7 @@
   }
 
   function studentProfileSection(title, rows) {
-    return '<section class="student-profile-section"><h3>' + escapeHtml(title) + '</h3><table><tbody>' + rows.map(([label, value]) =>
+    return '<section class="student-profile-section' + (title.startsWith("報讀課程") ? ' student-profile-course' : title === "聯絡與登入資料" ? ' student-profile-contact' : title === "課堂與地區" ? ' student-profile-location' : '') + '"><h3>' + escapeHtml(title) + '</h3><table><tbody>' + rows.map(([label, value]) =>
       '<tr><th scope="row">' + escapeHtml(label) + '</th><td>' + escapeHtml(value == null || value === "" ? "未設定" : String(value)) + '</td></tr>').join('') + '</tbody></table></section>';
   }
 
@@ -1222,16 +1222,15 @@
     const birthMonth = student.birthMonth || (student.birthDate || "").slice(5, 7);
     const birthYear = student.birthYear || (student.birthDate || "").slice(0, 4);
     const initialRoom = locationNameForId(student.initialRoomId || student.roomId, student.initialRoomName || student.roomName);
-    const currentRoom = locationNameForId(student.roomId, student.roomName);
     const course = courseForStudent(student);
-    const enrollments = student.enrollments?.length ? student.enrollments : course ? [{ courseName: course.name, ageGroup: student.ageGroup, classSize: course.classSize, duration: course.duration, originalFee: course.fee }] : [];
-    const status = student.enrollmentStatus === "pending" ? "待確認，未付款" : student.enrollmentStatus === "paid" ? "已付款" : "舊資料";
+    const enrollments = student.enrollments?.length ? student.enrollments : course ? [{ courseName: course.name, classSize: course.classSize, netFee: course.fee }] : [];
+    const minor = isMinorAge(student.ageGroup);
+    elements.studentProfileDialog.dataset.studentId = student.id;
     elements.studentProfileContent.innerHTML = '<div class="student-profile-head">' + studentAvatarHtml(student) + '<strong>' + escapeHtml(studentCardName(student)) + '</strong></div>' +
-      studentProfileSection("基本資料", [["學生姓名", student.name], ["學生編號", student.studentNumber], ["年齡組別", student.ageGroup], ["出生月份", birthMonth ? Number(birthMonth) + " 月" : ""], ["出生年份", birthYear], ["學生年齡", studentProfileAge(student)], ["性別", student.gender], ["學生狀態", status], ["今日日期", student.recordDate ? formatStudentRecordDate(student.recordDate) : ""], ["學生加入年份", student.enrollmentYear ? student.enrollmentYear + " 年度" : ""]]) +
-      studentProfileSection("課堂與地區", [["初選泳池地區", initialRoom], ["現時課堂地點", currentRoom], ["負責導師", findById(state.suite.accounts, student.tutorId)?.name], ["下一堂日期", student.nextDate ? formatStudentRecordDate(student.nextDate) : ""], ["下一堂時間", student.nextDate ? student.nextTime || student.time : ""], ["預繳堂數", student.prepaid + " 堂"], ["剩餘堂數", student.remaining + " 堂"]]) +
-      (enrollments.length ? enrollments.map((row, index) => studentProfileSection("報讀課程 " + (index + 1), [["課程名稱", row.courseName], ["年齡組別", row.ageGroup || row.pricingAgeGroup], ["課程人數", row.classSize], ["首堂日期", row.firstDate ? formatStudentRecordDate(row.firstDate) : ""], ["課堂時間", row.duration ? row.duration + " 分鐘" : ""], ["課堂原價", row.originalFee == null ? "" : formatMoney(row.originalFee, 2)], ["折扣優惠", row.discount == null ? "" : formatMoney(row.discount, 2)], ["每堂費用", row.netFee == null ? "" : formatMoney(row.netFee, 2)]])).join("") : studentProfileSection("報讀課程", [["課程", "未有報讀課程"]])) +
-      studentProfileSection("聯絡與登入資料", [...(isMinorAge(student.ageGroup) ? [["家長姓名", student.guardianName]] : []), ["聯絡號碼（WhatsApp）", student.whatsapp], ["居住地點", student.homeMtr], ["學校地點", student.schoolMtr], ["工作地點", student.workMtr], ["電郵（稍後登入用）", student.email]]) +
-      '<p class="helper-text">電郵目前只保存在本機學生資料，尚未建立 Supabase 登入帳戶。</p>';
+      studentProfileSection("基本資料", [["學生姓名", student.name], ["學生編號", student.studentNumber], ["出生月份", birthMonth ? Number(birthMonth) + " 月" : ""], ["出生年份", birthYear], ["性別", student.gender]]) +
+      studentProfileSection("課堂與地區", [["初選泳池地區", initialRoom]]) +
+      (enrollments.length ? enrollments.map((row, index) => studentProfileSection("報讀課程 " + (index + 1), [["課程名稱", row.courseName], ["課程人數", row.classSize], ["首堂日期", row.firstDate ? formatStudentRecordDate(row.firstDate) : ""], ["每堂費用", row.netFee == null ? "" : formatMoney(row.netFee, 2)]])).join("") : studentProfileSection("報讀課程", [["課程", "未有報讀課程"]])) +
+      studentProfileSection("聯絡與登入資料", [[minor ? "家長姓名" : "聯絡人", minor ? student.guardianName : student.name], ["聯絡號碼（WhatsApp）", student.whatsapp], ["居住地點", student.homeMtr], [minor ? "學校地點" : "工作地點", minor ? student.schoolMtr : student.workMtr], ["電郵（稍後登入用）", student.email]]);
     elements.studentProfileDialog.showModal();
     document.body.classList.add("modal-open");
   }
@@ -1787,7 +1786,7 @@
     if (item.roomId && item.roomId !== OTHER_POOL_OPTION && !roomOptions.some((option) => option.value === item.roomId)) roomOptions.push({ value: item.roomId, label: item.roomName || "舊有地點" });
     return '<input type="hidden" name="id" value="' + escapeHtml(item.id || "") + '">' +
       '<div class="student-photo-row"><span class="student-photo-preview" id="student-photo-preview">' + (item.photo ? '<img src="' + escapeHtml(item.photo) + '" alt="學生相片預覽">' : '<span aria-hidden="true">👤</span>') + '</span><label class="student-photo-upload"><input id="student-photo-file" class="sr-only" type="file" accept="image/png,image/jpeg,image/webp,image/gif">▣ 上載相片</label><small>PNG、JPG、WebP 或 GIF，最多 1MB</small></div>' +
-      studentFloatingField("name", "家長姓名/學生姓名(必填)", item.name || "", { required: true, requiredMarker: false, wide: true, maxlength: 60 }) +
+      studentFloatingField("name", "學生姓名(必填)", item.name || "", { required: true, requiredMarker: false, wide: true, maxlength: 60 }) +
       '<fieldset class="student-choice-group student-segmented student-age-group student-wide"><legend>年齡組別 <b>*</b></legend>' + studentChoices("ageGroup", ageOptions, age, !legacy, (value) => Boolean(item.studentNumber) && isMinorAge(value) !== isMinorAge(age)) + '</fieldset>' +
       '<div class="student-birth-fields student-wide" id="student-birth-fields"' + (isMinorAge(age) ? '' : ' hidden') + '>' +
       studentBirthSelectField("birthMonth", "出生月份", birthMonth, Array.from({ length: 12 }, (_, index) => ({ value: String(index + 1), label: (index + 1) + " 月" }))) +
@@ -3494,6 +3493,12 @@
     }
 
     const action = button.dataset.action;
+    if (action === "edit-student-profile") {
+      const student = findById(state.students, elements.studentProfileDialog.dataset.studentId);
+      if (!student) return;
+      elements.studentProfileDialog.close();
+      return openStudentForm(student);
+    }
     const id = button.dataset.id;
     if (action === "student-booking-no" || action === "student-booking-yes") {
       elements.studentBookingPromptDialog.close();
