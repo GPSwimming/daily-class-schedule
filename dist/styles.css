@@ -2003,3 +2003,12 @@ body[data-module="schedule"], body[data-module="schedule"] .module-view, body[da
   .student-profile-course th, .student-profile-course td { padding: 0; }
   .student-profile-dialog .modal-actions .button { flex: 1; min-width: 0; padding-inline: 10px; }
 }
+
+.student-overview-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
+.student-overview-footer .people-status { margin: 0; }
+.student-overview-buttons { display: flex; gap: 10px; margin-left: auto; }
+.student-overview-buttons .button { min-height: 44px; min-width: 124px; padding: 10px 14px; font-size: .85rem; }
+@media (max-width: 600px) {
+  .student-overview-buttons { width: 100%; margin-left: 0; }
+  .student-overview-buttons .button { flex: 1; min-width: 0; padding-inline: 8px; }
+}

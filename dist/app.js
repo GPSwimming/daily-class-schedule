@@ -1182,17 +1182,21 @@
       '<button class="mini-button danger" type="button" data-action="delete-student" data-id="' + id + '">刪除</button></div>';
   }
 
+  function studentOverviewFooterHtml(student) {
+    return '<div class="student-overview-footer">' + studentStatusHtml(student) + '<div class="student-overview-buttons"><button type="button" class="button button-secondary" aria-disabled="true">歷史課堂資訊</button><button type="button" class="button button-primary" aria-disabled="true">安排付款</button></div></div>';
+  }
+
   function studentDetailHtml(student) {
     const course = latestEnrolledCourseForStudent(student);
     const nextDate = nextScheduledDate(student);
     const tutor = findById(state.suite.accounts, student.tutorId);
-    return '<article class="people-detail-card student-profile-trigger" data-student-id="' + escapeHtml(student.id) + '" tabindex="0" aria-label="查看' + escapeHtml(student.name) + '的學生資料"><div class="people-person-head">' + studentAvatarHtml(student) + '<div><h2>' + escapeHtml(studentCardName(student)) + '</h2>' + studentCardSummaryHtml(student) + '</div></div>' + studentStatusHtml(student) + '</article>' +
+    return '<article class="people-detail-card student-profile-trigger" data-student-id="' + escapeHtml(student.id) + '" tabindex="0" aria-label="查看' + escapeHtml(student.name) + '的學生資料"><div class="people-person-head">' + studentAvatarHtml(student) + '<div><h2>' + escapeHtml(studentCardName(student)) + '</h2>' + studentCardSummaryHtml(student) + '</div></div>' + studentOverviewFooterHtml(student) + '</article>' +
       '<article class="people-detail-card student-profile-trigger" data-student-id="' + escapeHtml(student.id) + '" tabindex="0" aria-label="查看' + escapeHtml(student.name) + '的學生資料"><h3>基本資料</h3><dl class="people-facts"><div><dt>學生狀態</dt><dd>' + escapeHtml(student.enrollmentStatus === "pending" ? "待確認，未付款" : student.enrollmentStatus === "paid" ? "已付款" : "舊資料") + '</dd></div><div><dt>學生編號</dt><dd>' + escapeHtml(student.studentNumber || "未編配") + '</dd></div><div><dt>年齡組別</dt><dd>' + escapeHtml(student.ageGroup || "未設定") + '</dd></div><div><dt>WhatsApp</dt><dd>' + escapeHtml(student.whatsapp || "未設定") + '</dd></div><div><dt>課堂地點</dt><dd>' + escapeHtml(locationNameForId(student.roomId, student.roomName) || "未設定") + '</dd></div><div><dt>課程</dt><dd>' + escapeHtml(course ? course.name : "未指定") + '</dd></div><div><dt>負責導師</dt><dd>' + escapeHtml(tutor ? tutor.name : "未指定") + '</dd></div>' + (student.enrollmentStatus === "pending" ? '' : '<div><dt>下一堂</dt><dd>' + escapeHtml(nextDate ? nextDate + " " + (student.nextTime || student.time) : "未編排") + '</dd></div><div><dt>剩餘堂數</dt><dd>' + student.remaining + ' 堂</dd></div>') + '</dl>' + studentActionsHtml(student) + '</article>';
   }
 
   function studentMobileCardHtml(student) {
     const nextDate = nextScheduledDate(student);
-    return '<article class="people-mobile-card student-profile-trigger" data-student-id="' + escapeHtml(student.id) + '" tabindex="0" aria-label="查看' + escapeHtml(student.name) + '的學生資料"><div class="people-person-head">' + studentAvatarHtml(student) + '<div><h2>' + escapeHtml(studentCardName(student)) + '</h2>' + studentCardSummaryHtml(student) + '<small>' + escapeHtml(student.enrollmentStatus === "pending" ? [student.whatsapp, student.ageGroup].filter(Boolean).join(" · ") : nextDate ? nextDate + " · " + (student.nextTime || student.time) : "未編排課堂") + '</small></div></div>' + studentStatusHtml(student) + '<details class="people-card-more"><summary>' + (student.enrollmentStatus === "pending" ? "跟進操作" : "課堂操作") + '</summary>' + studentActionsHtml(student) + '</details></article>';
+    return '<article class="people-mobile-card student-profile-trigger" data-student-id="' + escapeHtml(student.id) + '" tabindex="0" aria-label="查看' + escapeHtml(student.name) + '的學生資料"><div class="people-person-head">' + studentAvatarHtml(student) + '<div><h2>' + escapeHtml(studentCardName(student)) + '</h2>' + studentCardSummaryHtml(student) + '<small>' + escapeHtml(student.enrollmentStatus === "pending" ? [student.whatsapp, student.ageGroup].filter(Boolean).join(" · ") : nextDate ? nextDate + " · " + (student.nextTime || student.time) : "未編排課堂") + '</small></div></div>' + studentOverviewFooterHtml(student) + '<details class="people-card-more"><summary>' + (student.enrollmentStatus === "pending" ? "跟進操作" : "課堂操作") + '</summary>' + studentActionsHtml(student) + '</details></article>';
   }
 
   function studentTableHtml(students) {
@@ -1225,12 +1229,14 @@
     const course = courseForStudent(student);
     const enrollments = student.enrollments?.length ? student.enrollments : course ? [{ courseName: course.name, classSize: course.classSize, netFee: course.fee }] : [];
     const minor = isMinorAge(student.ageGroup);
+    const gender = ({ "男": "M", "女": "F", "M": "M", "F": "F" })[student.gender];
+    const studentName = student.name + (gender ? " (" + gender + ")" : "");
+    const birthDate = [birthYear ? birthYear + " 年" : "", birthMonth ? Number(birthMonth) + " 月" : ""].filter(Boolean).join(" ");
     elements.studentProfileDialog.dataset.studentId = student.id;
     elements.studentProfileContent.innerHTML = '<div class="student-profile-head">' + studentAvatarHtml(student) + '<strong>' + escapeHtml(studentCardName(student)) + '</strong></div>' +
-      studentProfileSection("基本資料", [["學生姓名", student.name], ["學生編號", student.studentNumber], ["出生月份", birthMonth ? Number(birthMonth) + " 月" : ""], ["出生年份", birthYear], ["性別", student.gender]]) +
-      studentProfileSection("課堂與地區", [["初選泳池地區", initialRoom]]) +
+      studentProfileSection("基本資料", [["學生姓名", studentName], ["學生編號", student.studentNumber], ["出生日期", birthDate], ["學校地點", student.schoolMtr]]) +
       (enrollments.length ? enrollments.map((row, index) => studentProfileSection("報讀課程 " + (index + 1), [["課程名稱", row.courseName], ["課程人數", row.classSize], ["首堂日期", row.firstDate ? formatStudentRecordDate(row.firstDate) : ""], ["每堂費用", row.netFee == null ? "" : formatMoney(row.netFee, 2)]])).join("") : studentProfileSection("報讀課程", [["課程", "未有報讀課程"]])) +
-      studentProfileSection("聯絡與登入資料", [[minor ? "家長姓名" : "聯絡人", minor ? student.guardianName : student.name], ["聯絡號碼（WhatsApp）", student.whatsapp], ["居住地點", student.homeMtr], [minor ? "學校地點" : "工作地點", minor ? student.schoolMtr : student.workMtr], ["電郵（稍後登入用）", student.email]]);
+      studentProfileSection("聯絡與登入資料", [[minor ? "家長姓名" : "聯絡人", minor ? student.guardianName : student.name], ["聯絡號碼（WhatsApp）", student.whatsapp], ["居住地點", student.homeMtr], ["初選泳池", initialRoom], ...(!minor ? [["工作地點", student.workMtr]] : []), ["電郵（稍後登入用）", student.email]]);
     elements.studentProfileDialog.showModal();
     document.body.classList.add("modal-open");
   }
