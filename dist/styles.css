@@ -1095,10 +1095,10 @@ body[data-module="month-pass"] .month-pass-frame { height: calc(100dvh - env(saf
 .lesson-time-wheel { display: grid; grid-template-columns: 1fr 24px 1fr; align-items: center; gap: 6px; }
 .lesson-time-column { min-width: 0; text-align: center; }
 .lesson-time-column > span { display: block; margin-bottom: 8px; color: var(--muted); font-size: .76rem; }
-.lesson-time-values { display: grid; gap: 2px; }
-.lesson-time-values button { height: 42px; border: 0; border-radius: 6px; color: var(--muted); background: transparent; font: inherit; font-size: 1rem; cursor: pointer; }
+.lesson-time-values { display: flex; flex-direction: column; height: 210px; padding-block: 84px; overflow-y: auto; overscroll-behavior-y: contain; touch-action: pan-y; -webkit-overflow-scrolling: touch; scroll-snap-type: y mandatory; scrollbar-width: none; }
+.lesson-time-values::-webkit-scrollbar { display: none; }
+.lesson-time-values button { flex: 0 0 42px; width: 100%; height: 42px; padding: 0; scroll-snap-align: center; scroll-snap-stop: normal; border: 0; border-radius: 6px; color: var(--muted); background: transparent; font: inherit; font-size: 1rem; cursor: pointer; }
 .lesson-time-values button.is-selected { color: #1677ad; background: var(--paper-strong); border-block: 1px solid var(--line); font-size: 1.25rem; font-weight: 800; }
-.lesson-time-blank { height: 42px; }
 .lesson-time-wheel > b { align-self: center; margin-top: 25px; text-align: center; font-size: 1.25rem; }
 .lesson-time-dialog .modal-actions { margin-top: 12px; }
 

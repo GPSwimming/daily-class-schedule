@@ -2512,17 +2512,37 @@
     });
   }
 
+  const timeWheelChoices = { hour: [], minute: [] };
+  const timeWheelRowHeight = 42;
+
+  function renderTimePickerColumn(unit) {
+    const container = document.querySelector(unit === "hour" ? "#lesson-time-hours" : "#lesson-time-minutes");
+    const choices = timePickerValues(unit);
+    timeWheelChoices[unit] = choices;
+    container.innerHTML = choices.map((value) => '<button type="button" data-action="select-lesson-time" data-unit="' + unit + '" data-value="' + value + '" class="' + (value === state.timePicker[unit] ? 'is-selected' : '') + '" aria-pressed="' + (value === state.timePicker[unit]) + '">' + String(value).padStart(2, "0") + '</button>').join("");
+    container.scrollTop = Math.max(0, choices.indexOf(state.timePicker[unit])) * timeWheelRowHeight;
+  }
+
   function renderTimePicker() {
-    const picker = state.timePicker;
-    for (const [unit, container] of [["hour", "#lesson-time-hours"], ["minute", "#lesson-time-minutes"]]) {
-      const choices = timePickerValues(unit);
-      const current = unit === "hour" ? picker.hour : picker.minute;
-      const index = choices.indexOf(current);
-      document.querySelector(container).innerHTML = Array.from({ length: 5 }, (_, offset) => {
-        const value = choices[index + offset - 2];
-        return value == null ? '<span class="lesson-time-blank"></span>' : '<button type="button" data-action="select-lesson-time" data-unit="' + unit + '" data-value="' + value + '" class="' + (value === current ? 'is-selected' : '') + '">' + String(value).padStart(2, "0") + '</button>';
-      }).join("");
-    }
+    renderTimePickerColumn("hour");
+    renderTimePickerColumn("minute");
+  }
+
+  function syncTimePickerScroll(unit) {
+    if (!state.timePicker || !elements.timePickerDialog.open) return;
+    const container = document.querySelector(unit === "hour" ? "#lesson-time-hours" : "#lesson-time-minutes");
+    const choices = timeWheelChoices[unit];
+    const index = Math.max(0, Math.min(choices.length - 1, Math.round(container.scrollTop / timeWheelRowHeight)));
+    if (choices[index] == null) return;
+    state.timePicker[unit] = choices[index];
+    normalizeTimePicker();
+    // Keep the scrolling column intact so a finger flick retains native momentum.
+    container.querySelectorAll("button").forEach((button) => {
+      const selected = Number(button.dataset.value) === state.timePicker[unit];
+      button.classList.toggle("is-selected", selected);
+      button.setAttribute("aria-pressed", String(selected));
+    });
+    if (unit === "hour" && timePickerValues("minute").join(",") !== timeWheelChoices.minute.join(",")) renderTimePickerColumn("minute");
   }
 
   function openTimePicker(target) {
@@ -2540,18 +2560,7 @@
     if (!isEnd && state.timePicker.hour === 24) { state.timePicker.hour = 23; state.timePicker.minute = 59; }
     document.querySelector("#lesson-time-title").textContent = isEnd ? "結束" : target === "form-time-time" ? "時間" : "開始";
     document.querySelector("#lesson-time-error").textContent = "";
-    renderTimePicker();
     elements.timePickerDialog.showModal();
-  }
-
-  function shiftTimePicker(unit, delta) {
-    const choices = timePickerValues(unit);
-    const current = unit === "hour" ? state.timePicker.hour : state.timePicker.minute;
-    const index = choices.indexOf(current);
-    const next = choices[Math.max(0, Math.min(choices.length - 1, index + delta))];
-    if (next == null) return;
-    state.timePicker[unit] = next;
-    normalizeTimePicker();
     renderTimePicker();
   }
 
@@ -2563,6 +2572,8 @@
   }
 
   function confirmTimePicker() {
+    syncTimePickerScroll("hour");
+    syncTimePickerScroll("minute");
     const picker = state.timePicker;
     const value = minutesText(picker.hour * 60 + picker.minute);
     const input = document.getElementById(picker.target);
@@ -4227,24 +4238,10 @@
     renderModule();
   }, { passive: false });
 
-  elements.timePickerDialog.addEventListener("wheel", (event) => {
-    const column = event.target.closest(".lesson-time-column");
-    if (!column || !state.timePicker) return;
-    event.preventDefault();
-    shiftTimePicker(column.dataset.unit, event.deltaY > 0 ? 1 : -1);
-  }, { passive: false });
-
-  let lessonTouchY = 0;
-  elements.timePickerDialog.addEventListener("touchstart", (event) => {
-    if (event.target.closest(".lesson-time-column")) lessonTouchY = event.touches[0].clientY;
-  }, { passive: true });
-  elements.timePickerDialog.addEventListener("touchend", (event) => {
-    const column = event.target.closest(".lesson-time-column");
-    if (!column || !state.timePicker || !lessonTouchY) return;
-    const distance = lessonTouchY - event.changedTouches[0].clientY;
-    if (Math.abs(distance) > 15) shiftTimePicker(column.dataset.unit, distance > 0 ? 1 : -1);
-    lessonTouchY = 0;
-  }, { passive: true });
+  for (const unit of ["hour", "minute"]) {
+    document.querySelector(unit === "hour" ? "#lesson-time-hours" : "#lesson-time-minutes")
+      .addEventListener("scroll", () => syncTimePickerScroll(unit), { passive: true });
+  }
 
   elements.themeToggle.addEventListener("click", () => {
     state.suite.settings.theme = state.suite.settings.theme === "dark" ? "light" : "dark";
